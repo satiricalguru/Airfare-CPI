@@ -1,0 +1,21 @@
+{
+  "name": "airfare-cpi",
+  "version": "1.0.0",
+  "description": "Real-Time Airfare Price Index for MoSPI (SIH26056)",
+  "scripts": {
+    "start": "./start.sh",
+    "test": "cd backend && python3 -m pytest tests/ -v",
+    "dev:backend": "cd backend && python3 -m uvicorn api.main:app --reload --port 8000",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "keywords": [
+    "airfare",
+    "cpi",
+    "sih26056",
+    "mospi",
+    "inflation",
+    "jevons"
+  ],
+  "author": "SIH Team",
+  "license": "MIT"
+}

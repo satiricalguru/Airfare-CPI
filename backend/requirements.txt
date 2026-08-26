@@ -1,0 +1,39 @@
+# FastAPI & Web
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Database
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.1
+
+# Scraping
+playwright==1.49.1
+playwright-stealth==1.0.6
+httpx==0.28.1
+
+# Scheduling
+apscheduler==3.10.4
+
+# Statistical / Data
+numpy==2.2.1
+pandas==2.2.3
+scipy==1.15.0
+
+# Report Generation
+weasyprint==63.1
+jinja2==3.1.5
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+
+# Utilities
+python-dateutil==2.9.0
+pytz==2024.2
+loguru==0.7.3

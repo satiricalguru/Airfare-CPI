@@ -1,0 +1,46 @@
+{
+    "horizons": [
+        {
+            "days": 0,
+            "label": "T+0 (Same-day)",
+            "description": "Walk-up / emergency fares — highest prices",
+            "advance_purchase_category": "last_minute",
+            "expected_price_multiplier": 2.5,
+            "statistical_rationale": "Captures distressed/urgent travel demand; essential for CPI accuracy as these fares reflect maximum willingness to pay"
+        },
+        {
+            "days": 3,
+            "label": "T+3 (3-day advance)",
+            "description": "Short-notice business travel threshold",
+            "advance_purchase_category": "short_notice",
+            "expected_price_multiplier": 2.0,
+            "statistical_rationale": "Brackets the 3-day advance purchase boundary commonly used in airline revenue management systems"
+        },
+        {
+            "days": 7,
+            "label": "T+7 (1-week advance)",
+            "description": "7-day advance purchase boundary",
+            "advance_purchase_category": "advance_7",
+            "expected_price_multiplier": 1.5,
+            "statistical_rationale": "The 7-day boundary is a key revenue management threshold; prices typically step down significantly after this point"
+        },
+        {
+            "days": 15,
+            "label": "T+15 (2-week advance)",
+            "description": "14/21-day advance purchase region",
+            "advance_purchase_category": "advance_14",
+            "expected_price_multiplier": 1.2,
+            "statistical_rationale": "Captures the 14-day and 21-day advance purchase fare classes that represent planned business and early leisure bookings"
+        },
+        {
+            "days": 30,
+            "label": "T+30 (1-month advance)",
+            "description": "Planned leisure travel — lowest regular prices",
+            "advance_purchase_category": "advance_30",
+            "expected_price_multiplier": 1.0,
+            "statistical_rationale": "Represents baseline planned-travel pricing; serves as the anchor for booking-window analysis and price discrimination measurement"
+        }
+    ],
+    "weighting_strategy": "equal",
+    "weighting_note": "All booking horizons receive equal weight in the combined index. Production version could weight by actual booking pattern distribution from airline data."
+}

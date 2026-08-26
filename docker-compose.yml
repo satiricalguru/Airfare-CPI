@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: airfare_cpi_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airfare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airfare}
+      POSTGRES_DB: ${POSTGRES_DB:-airfare_cpi}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./backend/database/seed_routes.sql:/docker-entrypoint-initdb.d/02-seed-routes.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airfare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airfare_cpi_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://airfare:airfare@db:5432/airfare_cpi
+      DATABASE_URL_SYNC: postgresql://airfare:airfare@db:5432/airfare_cpi
+      SCRAPER_MODE: mock
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+volumes:
+  pgdata:
