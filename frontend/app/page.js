@@ -92,25 +92,20 @@ export default function AppleAirfareCPI() {
         </div>
       </header>
 
-      {/* ── 1. HERO SECTION (Clean, Minimalist Apple Stage with 3D Aircraft) ── */}
-      <section id="overview" className="apple-hero">
+      {/* ── 1. HERO SECTION (Minimalist Headline with 3D Airbus A320 Flying Straight) ── */}
+      <section id="overview" className="apple-hero" style={{ height: "92vh", minHeight: 650, paddingTop: 100 }}>
         {/* 3D Straight-Flying Airplane Canvas in Background */}
         <div className="aircraft-bg-stage">
           <HeroAircraft />
         </div>
 
-        {/* Minimalist Foreground Content Layer */}
-        <div className="container hero-content-wrap">
-          <div className="apple-eyebrow hero-interactive">
-            <span>🏛️</span>
-            <span>MINISTRY OF STATISTICS & PROGRAMME IMPLEMENTATION</span>
-          </div>
-
-          <h1 className="apple-heading">
+        {/* Minimalist Foreground Content */}
+        <div className="container hero-content-wrap" style={{ marginTop: -40 }}>
+          <h1 className="apple-heading" style={{ fontSize: 72, fontWeight: 900, letterSpacing: "-0.04em" }}>
             The Price of Flight.
           </h1>
 
-          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginTop: 12, marginBottom: 28 }}>
+          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginTop: 12 }}>
             <a href="#index" className="apple-btn-primary">
               <span>Explore Live Index</span>
               <span>➔</span>
@@ -119,35 +114,37 @@ export default function AppleAirfareCPI() {
               How It Works
             </a>
           </div>
-
-          {/* Apple Live Status Ribbon */}
-          <div className="apple-ribbon hero-interactive">
-            <div className="apple-ribbon-item">
-              <span style={{ color: "#0071e3" }}>⚡</span>
-              <span style={{ color: "#86868b" }}>BASKET:</span>
-              <strong style={{ color: "#1d1d1f" }}>25 / 25 Routes</strong>
-            </div>
-            <div className="apple-ribbon-item">
-              <span className="live-green-dot" />
-              <span style={{ color: "#86868b" }}>HEALTH:</span>
-              <strong style={{ color: "#34c759" }}>HEALTHY</strong>
-            </div>
-            <div className="apple-ribbon-item">
-              <span style={{ color: "#ff9500" }}>⏱</span>
-              <span style={{ color: "#86868b" }}>UPDATED:</span>
-              <strong style={{ color: "#1d1d1f" }}>{STATISTICAL_CONSTANTS.lastUpdate}</strong>
-            </div>
-            <div className="apple-ribbon-item">
-              <span style={{ color: "#0071e3" }}>📐</span>
-              <span style={{ color: "#86868b" }}>ENGINE:</span>
-              <strong style={{ color: "#0071e3" }}>ONLINE (Jevons)</strong>
-            </div>
-          </div>
         </div>
       </section>
 
+      {/* ── SYSTEM STATUS RIBBON (Placed cleanly below hero) ── */}
+      <div style={{ display: "flex", justifyContent: "center", marginTop: -32, position: "relative", zIndex: 20 }}>
+        <div className="apple-ribbon">
+          <div className="apple-ribbon-item">
+            <span style={{ color: "#0071e3" }}>⚡</span>
+            <span style={{ color: "#86868b" }}>BASKET:</span>
+            <strong style={{ color: "#1d1d1f" }}>25 / 25 Routes</strong>
+          </div>
+          <div className="apple-ribbon-item">
+            <span className="live-green-dot" />
+            <span style={{ color: "#86868b" }}>HEALTH:</span>
+            <strong style={{ color: "#34c759" }}>HEALTHY</strong>
+          </div>
+          <div className="apple-ribbon-item">
+            <span style={{ color: "#ff9500" }}>⏱</span>
+            <span style={{ color: "#86868b" }}>UPDATED:</span>
+            <strong style={{ color: "#1d1d1f" }}>{STATISTICAL_CONSTANTS.lastUpdate}</strong>
+          </div>
+          <div className="apple-ribbon-item">
+            <span style={{ color: "#0071e3" }}>📐</span>
+            <span style={{ color: "#86868b" }}>ENGINE:</span>
+            <strong style={{ color: "#0071e3" }}>ONLINE (Jevons)</strong>
+          </div>
+        </div>
+      </div>
+
       {/* ── 2. AIRFARE VOLATILITY SECTION (DEL ➔ BOM) ── */}
-      <section id="volatility" className="section-wrap" style={{ backgroundColor: "#fbfbfd" }}>
+      <section id="volatility" className="section-wrap" style={{ backgroundColor: "#fbfbfd", marginTop: 40 }}>
         <div className="container">
           <div className="apple-section-header">
             <div className="apple-section-eyebrow">Booking Horizon Dynamics</div>
