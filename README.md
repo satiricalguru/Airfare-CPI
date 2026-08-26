@@ -1,13 +1,19 @@
-# ✈️ Real-Time Airfare Consumer Price Index (Airfare CPI)
-### *Automated Price Collection, Econometric Modeling & CPI Augmentation for MoSPI*
+<div align="center">
 
-[![Smart India Hackathon](https://img.shields.io/badge/SIH-2026-orange.svg?style=for-the-badge&logo=target)](https://sih.gov.in)
-[![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![Tests](https://img.shields.io/badge/Tests-30%2F30%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](https://pytest.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+  <img src="docs/assets/logo.png" alt="Airfare CPI - Real-Time Indian Aviation Price Index Logo" width="220" style="border-radius: 24px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);" />
+
+  # ✈️ Real-Time Airfare Consumer Price Index (Airfare CPI)
+  ### *Automated Price Collection, Econometric Modeling & CPI Augmentation for MoSPI*
+
+  [![Smart India Hackathon](https://img.shields.io/badge/SIH-2026-orange.svg?style=for-the-badge&logo=target)](https://sih.gov.in)
+  [![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+  [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+  [![Tests](https://img.shields.io/badge/Tests-30%2F30%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](https://pytest.org)
+  [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+</div>
 
 ---
 
