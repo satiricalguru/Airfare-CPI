@@ -66,6 +66,10 @@ export default function HeroAircraft() {
     bottomBounce.position.set(0, -4, 2);
     scene.add(bottomBounce);
 
+    // Dynamic Localized Touch Probe Light (Illuminates ONLY the exact touched spot on the plane)
+    const touchProbeLight = new THREE.PointLight(0x0071e3, 0, 2.8, 2);
+    scene.add(touchProbeLight);
+
     // 4. Soft Contact Shadow Plane
     const shadowGeo = new THREE.PlaneGeometry(28, 28);
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.06 });
@@ -136,7 +140,7 @@ export default function HeroAircraft() {
               });
 
               // Part metadata for hover HUD
-              let partName = "Airbus A320 Commercial Airframe";
+              let partName = "Airbus A320 Airframe";
               let desc = "Passenger cabin monitoring 25 high-density DGCA city pairs";
 
               if (nameLower.includes("wing") || nameLower.includes("aileron") || nameLower.includes("flap") || nameLower.includes("slat") || nameLower.includes("wingtip")) {
@@ -184,7 +188,8 @@ export default function HeroAircraft() {
     let targetPosX = 0;
     let targetPosY = basePosY;
 
-    let currentlyHovered = null;
+    let currentlyHoveredMesh = null;
+    let targetTouchIntensity = 0;
 
     const onMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
@@ -210,7 +215,7 @@ export default function HeroAircraft() {
     let animId;
 
     const highlightColor = new THREE.Color(0x0071e3); // Apple Electric Blue
-    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Glow
+    const highlightEmissive = new THREE.Color(0x003599); // Focused Luminous Glow
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
@@ -231,29 +236,34 @@ export default function HeroAircraft() {
         fan.rotation.y += 0.25;
       });
 
-      // Raycast detection
+      // Raycast detection for precision touch area
       raycaster.setFromCamera(mouseVec, camera);
       const intersects = raycaster.intersectObjects(interactiveMeshes, true);
 
       if (intersects.length > 0) {
-        const hit = intersects[0].object;
-        if (currentlyHovered !== hit) {
-          currentlyHovered = hit;
-          setHoveredPart(hit.userData);
-        }
+        const hit = intersects[0];
+        currentlyHoveredMesh = hit.object; // STRICT: Only the exact mesh being touched
+        setHoveredPart(hit.object.userData);
+
+        // Position localized probe light directly on the surface touch point
+        touchProbeLight.position.copy(hit.point);
+        targetTouchIntensity = 5.0;
       } else {
-        if (currentlyHovered) {
-          currentlyHovered = null;
-          setHoveredPart(null);
-        }
+        currentlyHoveredMesh = null;
+        setHoveredPart(null);
+        targetTouchIntensity = 0.0;
       }
 
-      // Smooth slow color-transition animation for each mesh
+      // Smooth lerp of the localized touch light probe
+      touchProbeLight.intensity += (targetTouchIntensity - touchProbeLight.intensity) * 0.12;
+
+      // Smooth color-transition ONLY on the exact touched mesh piece
       interactiveMeshes.forEach((mesh) => {
         const matState = originalMaterialsMap.get(mesh);
         if (!matState || !mesh.material) return;
 
-        const isHit = currentlyHovered === mesh || (currentlyHovered && mesh.parent === currentlyHovered.parent && currentlyHovered.parent !== planeModel);
+        // STRICT: Only the single mesh that is directly touched changes color
+        const isHit = currentlyHoveredMesh === mesh;
 
         if (isHit) {
           matState.targetColor.copy(highlightColor);
@@ -263,12 +273,12 @@ export default function HeroAircraft() {
           matState.targetEmissive.copy(matState.emissive);
         }
 
-        // Slow smooth lerp (0.07 per frame = silky luxury transition)
+        // Slow smooth lerp
         if (mesh.material.color) {
-          mesh.material.color.lerp(matState.targetColor, 0.07);
+          mesh.material.color.lerp(matState.targetColor, 0.08);
         }
         if (mesh.material.emissive) {
-          mesh.material.emissive.lerp(matState.targetEmissive, 0.07);
+          mesh.material.emissive.lerp(matState.targetEmissive, 0.08);
         }
       });
 
