@@ -66,10 +66,6 @@ export default function HeroAircraft() {
     bottomBounce.position.set(0, -4, 2);
     scene.add(bottomBounce);
 
-    // Dynamic Localized Touch Probe Light (Illuminates ONLY the exact touched spot on the plane)
-    const touchProbeLight = new THREE.PointLight(0x0071e3, 0, 2.8, 2);
-    scene.add(touchProbeLight);
-
     // 4. Soft Contact Shadow Plane
     const shadowGeo = new THREE.PlaneGeometry(28, 28);
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.06 });
@@ -86,7 +82,13 @@ export default function HeroAircraft() {
     let planeModel = null;
     const rotatingFans = [];
     const interactiveMeshes = [];
-    const originalMaterialsMap = new Map();
+
+    // Global Dynamic Touch Uniforms (Strictly localized to cursor contact point)
+    const touchUniforms = {
+      uTouchPos: { value: new THREE.Vector3(0, 0, 0) },
+      uTouchRadius: { value: 0.85 }, // Radius of localized color glow
+      uTouchIntensity: { value: 0.0 }, // 0.0 when untouched, 1.0 when touched
+    };
 
     // 6. Load Airbus A320 Commercial Jet Airliner via GLTFLoader
     const loader = new GLTFLoader();
@@ -111,7 +113,7 @@ export default function HeroAircraft() {
           -center.z * targetScale
         );
 
-        // Traverse A320 parts & setup interactive shaders
+        // Traverse A320 parts & inject localized surface shader
         planeModel.traverse((child) => {
           if (child.isMesh) {
             child.castShadow = true;
@@ -127,17 +129,44 @@ export default function HeroAircraft() {
 
             if (child.material) {
               child.material = child.material.clone();
-              const origColor = child.material.color ? child.material.color.clone() : new THREE.Color(0xffffff);
-              const origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000);
 
-              originalMaterialsMap.set(child, {
-                color: origColor,
-                emissive: origEmissive,
-                currentColor: origColor.clone(),
-                targetColor: origColor.clone(),
-                currentEmissive: origEmissive.clone(),
-                targetEmissive: origEmissive.clone(),
-              });
+              // Inject localized touch-proximity shader into material
+              child.material.onBeforeCompile = (shader) => {
+                shader.uniforms.uTouchPos = touchUniforms.uTouchPos;
+                shader.uniforms.uTouchRadius = touchUniforms.uTouchRadius;
+                shader.uniforms.uTouchIntensity = touchUniforms.uTouchIntensity;
+
+                shader.vertexShader = shader.vertexShader.replace(
+                  `#include <common>`,
+                  `#include <common>
+                   varying vec3 vWorldTouchPos;`
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                  `#include <worldpos_vertex>`,
+                  `#include <worldpos_vertex>
+                   vWorldTouchPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                );
+
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  `#include <common>`,
+                  `#include <common>
+                   uniform vec3 uTouchPos;
+                   uniform float uTouchRadius;
+                   uniform float uTouchIntensity;
+                   varying vec3 vWorldTouchPos;`
+                );
+
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  `#include <dithering_fragment>`,
+                  `#include <dithering_fragment>
+                   if (uTouchIntensity > 0.001) {
+                     float dist = distance(vWorldTouchPos, uTouchPos);
+                     float touchFactor = smoothstep(uTouchRadius, 0.0, dist) * uTouchIntensity;
+                     vec3 electricBlue = vec3(0.0, 0.443, 0.89); // Apple Electric Blue #0071e3
+                     gl_FragColor.rgb = mix(gl_FragColor.rgb, electricBlue + vec3(0.1, 0.25, 0.5), touchFactor * 0.92);
+                   }`
+                );
+              };
 
               // Part metadata for hover HUD
               let partName = "Airbus A320 Airframe";
@@ -188,8 +217,7 @@ export default function HeroAircraft() {
     let targetPosX = 0;
     let targetPosY = basePosY;
 
-    let currentlyHoveredMesh = null;
-    let targetTouchIntensity = 0;
+    let targetIntensity = 0;
 
     const onMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
@@ -214,9 +242,6 @@ export default function HeroAircraft() {
     let clock = new THREE.Clock();
     let animId;
 
-    const highlightColor = new THREE.Color(0x0071e3); // Apple Electric Blue
-    const highlightEmissive = new THREE.Color(0x003599); // Focused Luminous Glow
-
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
@@ -236,51 +261,23 @@ export default function HeroAircraft() {
         fan.rotation.y += 0.25;
       });
 
-      // Raycast detection for precision touch area
+      // Raycast detection strictly for the exact surface point touched by cursor
       raycaster.setFromCamera(mouseVec, camera);
       const intersects = raycaster.intersectObjects(interactiveMeshes, true);
 
       if (intersects.length > 0) {
         const hit = intersects[0];
-        currentlyHoveredMesh = hit.object; // STRICT: Only the exact mesh being touched
+        // Update the 3D world coordinate where cursor is touching
+        touchUniforms.uTouchPos.value.lerp(hit.point, 0.3);
+        targetIntensity = 1.0;
         setHoveredPart(hit.object.userData);
-
-        // Position localized probe light directly on the surface touch point
-        touchProbeLight.position.copy(hit.point);
-        targetTouchIntensity = 5.0;
       } else {
-        currentlyHoveredMesh = null;
+        targetIntensity = 0.0;
         setHoveredPart(null);
-        targetTouchIntensity = 0.0;
       }
 
-      // Smooth lerp of the localized touch light probe
-      touchProbeLight.intensity += (targetTouchIntensity - touchProbeLight.intensity) * 0.12;
-
-      // Smooth color-transition ONLY on the exact touched mesh piece
-      interactiveMeshes.forEach((mesh) => {
-        const matState = originalMaterialsMap.get(mesh);
-        if (!matState || !mesh.material) return;
-
-        // STRICT: Only the single mesh that is directly touched changes color
-        const isHit = currentlyHoveredMesh === mesh;
-
-        if (isHit) {
-          matState.targetColor.copy(highlightColor);
-          matState.targetEmissive.copy(highlightEmissive);
-        } else {
-          matState.targetColor.copy(matState.color);
-          matState.targetEmissive.copy(matState.emissive);
-        }
-
-        // Slow smooth lerp
-        if (mesh.material.color) {
-          mesh.material.color.lerp(matState.targetColor, 0.08);
-        }
-        if (mesh.material.emissive) {
-          mesh.material.emissive.lerp(matState.targetEmissive, 0.08);
-        }
-      });
+      // Smooth lerp of touch intensity: glows on contact, fades smoothly when cursor moves away
+      touchUniforms.uTouchIntensity.value += (targetIntensity - touchUniforms.uTouchIntensity.value) * 0.08;
 
       renderer.render(scene, camera);
     };
