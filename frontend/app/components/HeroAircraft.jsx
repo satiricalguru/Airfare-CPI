@@ -16,16 +16,16 @@ export default function HeroAircraft() {
 
     // 1. Scene & Camera Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff); // Pure Apple White
-    scene.fog = new THREE.Fog(0xffffff, 15, 35);
+    scene.background = new THREE.Color(0xffffff); // Pure Apple White Studio
+    scene.fog = new THREE.Fog(0xffffff, 16, 36);
 
     const camera = new THREE.PerspectiveCamera(
-      38,
+      36,
       container.clientWidth / container.clientHeight,
       0.1,
       100
     );
-    camera.position.set(0, 0.6, 7.5);
+    camera.position.set(0, 0.4, 7.8);
 
     // 2. High-Performance Renderer
     const renderer = new THREE.WebGLRenderer({
@@ -38,40 +38,40 @@ export default function HeroAircraft() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
     // 3. Apple Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 1.8);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 2.0);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
-    keyLight.position.set(6, 10, 8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    keyLight.position.set(7, 12, 8);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.4);
-    fillLight.position.set(-6, 6, 6);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.6);
+    fillLight.position.set(-7, 6, 6);
     scene.add(fillLight);
 
-    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 2.2);
+    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 2.4);
     blueRimLight.position.set(-8, 3, -6);
     scene.add(blueRimLight);
 
-    const bottomBounce = new THREE.PointLight(0xf1f5f9, 1.5, 25);
+    const bottomBounce = new THREE.PointLight(0xf1f5f9, 1.6, 25);
     bottomBounce.position.set(0, -5, 0);
     scene.add(bottomBounce);
 
     // 4. Soft Contact Shadow Ground Plane
     const shadowGeo = new THREE.PlaneGeometry(24, 24);
-    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.07 });
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.08 });
     const groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
     groundShadow.rotation.x = -Math.PI / 2;
-    groundShadow.position.y = -1.8;
+    groundShadow.position.y = -1.7;
     groundShadow.receiveShadow = true;
     scene.add(groundShadow);
 
@@ -80,102 +80,100 @@ export default function HeroAircraft() {
     scene.add(airplaneFlightGroup);
 
     let planeModel = null;
+    const rotatingFans = [];
     const interactiveMeshes = [];
     const originalMaterialsMap = new Map();
 
-    // 6. Load High-Quality 3D Real Model via GLTFLoader
+    // 6. Load Authentic Airbus A320 Commercial Jet Airliner via GLTFLoader
     const loader = new GLTFLoader();
     const modelUrl = "/models/airplane.glb";
 
-    const setupModel = (gltf) => {
-      planeModel = gltf.scene;
-
-      // Compute bounding box to normalize scale and center model
-      const box = new THREE.Box3().setFromObject(planeModel);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const targetScale = 4.8 / (maxDim || 1);
-
-      planeModel.scale.set(targetScale, targetScale, targetScale);
-      planeModel.position.set(
-        -center.x * targetScale,
-        -center.y * targetScale,
-        -center.z * targetScale
-      );
-
-      // Inspect and register meshes
-      let meshIndex = 0;
-      planeModel.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          interactiveMeshes.push(child);
-
-          // Clone material for smooth independent color transitions
-          if (child.material) {
-            child.material = child.material.clone();
-            const origColor = child.material.color ? child.material.color.clone() : new THREE.Color(0xffffff);
-            const origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000);
-
-            originalMaterialsMap.set(child, {
-              color: origColor,
-              emissive: origEmissive,
-              currentColor: origColor.clone(),
-              targetColor: origColor.clone(),
-              currentEmissive: origEmissive.clone(),
-              targetEmissive: origEmissive.clone(),
-            });
-
-            // Name parts intelligently for telemetry display
-            const nameLower = (child.name || "").toLowerCase();
-            let partName = "Commercial Airframe Fuselage";
-            let desc = "Monitors 25 high-density DGCA domestic corridors";
-
-            if (nameLower.includes("wing") || meshIndex === 1) {
-              partName = "High-Lift Supercritical Wing";
-              desc = "Passenger capacity weighting (15.3M Pax/month)";
-            } else if (nameLower.includes("prop") || nameLower.includes("engine") || meshIndex === 2) {
-              partName = "High-Bypass Turbofan Propulsion";
-              desc = "Jevons Geometric Micro-Index Computing Core";
-            } else if (nameLower.includes("gear") || nameLower.includes("wheel")) {
-              partName = "Aerospace Landing Telemetry";
-              desc = "Rolling IQR Statistical Anomaly Fencing";
-            } else if (nameLower.includes("glass") || nameLower.includes("cockpit")) {
-              partName = "Cockpit Flight Management Avionics";
-              desc = "Real-time automated price ingestion engine";
-            }
-
-            child.userData = { partName, desc };
-            meshIndex++;
-          }
-        }
-      });
-
-      airplaneFlightGroup.add(planeModel);
-      setIsLoaded(true);
-    };
-
-    // Attempt loading primary model with graceful fallback
     loader.load(
       modelUrl,
-      setupModel,
+      (gltf) => {
+        planeModel = gltf.scene;
+
+        // Auto-center and normalize scale
+        const box = new THREE.Box3().setFromObject(planeModel);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetScale = 5.2 / (maxDim || 1);
+
+        planeModel.scale.set(targetScale, targetScale, targetScale);
+        planeModel.position.set(
+          -center.x * targetScale,
+          -center.y * targetScale,
+          -center.z * targetScale
+        );
+
+        // Traverse A320 parts & setup interactive shaders
+        planeModel.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            interactiveMeshes.push(child);
+
+            const nameLower = (child.name || "").toLowerCase();
+
+            // Track turbine fan blades for rotation animation
+            if (nameLower.includes("blade") || nameLower.includes("fanwheel") || nameLower.includes("cone")) {
+              rotatingFans.push(child);
+            }
+
+            if (child.material) {
+              child.material = child.material.clone();
+              const origColor = child.material.color ? child.material.color.clone() : new THREE.Color(0xffffff);
+              const origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000);
+
+              originalMaterialsMap.set(child, {
+                color: origColor,
+                emissive: origEmissive,
+                currentColor: origColor.clone(),
+                targetColor: origColor.clone(),
+                currentEmissive: origEmissive.clone(),
+                targetEmissive: origEmissive.clone(),
+              });
+
+              // Intelligent part tagging for live telemetry HUD
+              let partName = "Airbus A320 Commercial Fuselage";
+              let desc = "Passenger cabin monitoring 25 high-density DGCA city pairs";
+
+              if (nameLower.includes("wing") || nameLower.includes("aileron") || nameLower.includes("flap") || nameLower.includes("slat") || nameLower.includes("wingtip")) {
+                partName = "Supercritical Swept Wing";
+                desc = "DGCA Passenger Volume Weighted (15.3M Pax/Month)";
+              } else if (nameLower.includes("engine") || nameLower.includes("nacelle") || nameLower.includes("intake") || nameLower.includes("pylon") || nameLower.includes("blade") || nameLower.includes("fanwheel")) {
+                partName = "CFM LEAP-1A Turbofan Propulsion";
+                desc = "Jevons Geometric Micro-Index Computing Core";
+              } else if (nameLower.includes("cockpit") || nameLower.includes("window") || nameLower.includes("nose")) {
+                partName = "Fly-By-Wire Flight Deck & Avionics";
+                desc = "Real-time automated price ingestion stream";
+              } else if (nameLower.includes("vstab") || nameLower.includes("hstab") || nameLower.includes("rudder") || nameLower.includes("elevator")) {
+                partName = "Empennage & Tail Stabilizer";
+                desc = "MoSPI Headline CPI Dissemination Gateway";
+              }
+
+              child.userData = { partName, desc };
+            }
+          }
+        });
+
+        airplaneFlightGroup.add(planeModel);
+        setIsLoaded(true);
+      },
       undefined,
-      (err) => {
-        console.warn("Primary model load error, loading fallback:", err);
-        loader.load("/models/airplane_mapbox.glb", setupModel);
-      }
+      (err) => console.error("Error loading A320 model:", err)
     );
 
-    // Initial 3/4 Front Beauty Flight Angle
+    // Initial 3/4 Front Beauty Flight Angle (Nose pointing forward-left toward camera)
     airplaneFlightGroup.position.set(0, 0.1, 0);
-    airplaneFlightGroup.rotation.set(0.05, -0.65, 0.08);
+    airplaneFlightGroup.rotation.set(0.12, -0.65, 0.08);
 
     // 7. Mouse & Raycasting Setup
     const raycaster = new THREE.Raycaster();
     const mouseVec = new THREE.Vector2(-100, -100);
 
-    let targetRotX = 0.05;
+    let targetRotX = 0.12;
     let targetRotY = -0.65;
     let targetRotZ = 0.08;
     let targetPosX = 0;
@@ -194,7 +192,7 @@ export default function HeroAircraft() {
 
       // Smooth flight banking and attitude response
       targetRotY = -0.65 + x * 0.65;
-      targetRotX = 0.05 - y * 0.35;
+      targetRotX = 0.12 - y * 0.35;
       targetRotZ = 0.08 - x * 0.3;
       targetPosX = x * 0.45;
       targetPosY = 0.1 + y * 0.25;
@@ -202,26 +200,31 @@ export default function HeroAircraft() {
 
     window.addEventListener("mousemove", onMouseMove);
 
-    // 8. Continuous Flight Animation Loop
+    // 8. Continuous Aerodynamic Flight Animation Loop
     let clock = new THREE.Clock();
     let animId;
 
     const highlightColor = new THREE.Color(0x0071e3); // Apple Electric Blue
-    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Glow
+    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Blue Glow
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      // Continuous flight dynamics (aerodynamic turbulence + mouse banking)
-      const turbulence = Math.sin(elapsedTime * 1.6) * 0.06;
-      const bankWobble = Math.cos(elapsedTime * 1.2) * 0.03;
+      // Continuous flight dynamics (turbulence, bank roll, pitch)
+      const turbulence = Math.sin(elapsedTime * 1.5) * 0.05;
+      const bankWobble = Math.cos(elapsedTime * 1.1) * 0.03;
 
       airplaneFlightGroup.rotation.x += (targetRotX + turbulence - airplaneFlightGroup.rotation.x) * 0.05;
       airplaneFlightGroup.rotation.y += (targetRotY - airplaneFlightGroup.rotation.y) * 0.05;
       airplaneFlightGroup.rotation.z += (targetRotZ + bankWobble - airplaneFlightGroup.rotation.z) * 0.05;
       airplaneFlightGroup.position.x += (targetPosX - airplaneFlightGroup.position.x) * 0.05;
-      airplaneFlightGroup.position.y += (targetPosY + Math.sin(elapsedTime * 2.2) * 0.08 - airplaneFlightGroup.position.y) * 0.05;
+      airplaneFlightGroup.position.y += (targetPosY + Math.sin(elapsedTime * 2.0) * 0.08 - airplaneFlightGroup.position.y) * 0.05;
+
+      // Rotate jet engine turbine blades
+      rotatingFans.forEach((fan) => {
+        fan.rotation.y += 0.25;
+      });
 
       // Raycast detection
       raycaster.setFromCamera(mouseVec, camera);
