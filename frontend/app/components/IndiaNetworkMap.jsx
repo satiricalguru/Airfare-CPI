@@ -1,33 +1,231 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ROUTE_NETWORK_HUBS, NETWORK_ROUTES } from "../data/mockData";
+
+// Enhanced Geographically Balanced Coordinates (800x540 viewport)
+const HUBS_800 = [
+  { code: "DEL", city: "New Delhi", x: 370, y: 100, pax: 1200000, cpi: 106.0, labelPos: "top" },
+  { code: "AMD", city: "Ahmedabad", x: 220, y: 220, pax: 370000, cpi: 106.2, labelPos: "left" },
+  { code: "CCU", city: "Kolkata", x: 650, y: 225, pax: 740000, cpi: 108.2, labelPos: "right" },
+  { code: "BOM", city: "Mumbai", x: 235, y: 305, pax: 870000, cpi: 107.4, labelPos: "left" },
+  { code: "PNQ", city: "Pune", x: 290, y: 335, pax: 390000, cpi: 105.4, labelPos: "bottom" },
+  { code: "HYD", city: "Hyderabad", x: 420, y: 320, pax: 780000, cpi: 105.8, labelPos: "right" },
+  { code: "GOI", city: "Goa", x: 255, y: 405, pax: 450000, cpi: 109.1, labelPos: "left" },
+  { code: "BLR", city: "Bengaluru", x: 365, y: 430, pax: 950000, cpi: 107.5, labelPos: "bottom" },
+  { code: "MAA", city: "Chennai", x: 470, y: 435, pax: 600000, cpi: 106.8, labelPos: "right" },
+  { code: "COK", city: "Kochi", x: 330, y: 490, pax: 230000, cpi: 104.5, labelPos: "left" },
+];
 
 export default function IndiaNetworkMap() {
   const [selectedRoute, setSelectedRoute] = useState(NETWORK_ROUTES[0]);
   const [hoveredHub, setHoveredHub] = useState(null);
+  const [hoveredRoute, setHoveredRoute] = useState(null);
+  const canvasRef = useRef(null);
 
-  const hubLookup = {};
-  ROUTE_NETWORK_HUBS.forEach((h) => {
-    hubLookup[h.code] = h;
+  const hubMap = {};
+  HUBS_800.forEach((h) => {
+    hubMap[h.code] = h;
   });
+
+  // 60FPS High-Performance Canvas Particle & Flight Stream Animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let animId;
+    let width = (canvas.width = canvas.offsetWidth * 2);
+    let height = (canvas.height = canvas.offsetHeight * 2);
+    ctx.scale(2, 2);
+
+    const onResize = () => {
+      if (!canvas) return;
+      width = canvas.width = canvas.offsetWidth * 2;
+      height = canvas.height = canvas.offsetHeight * 2;
+      ctx.scale(2, 2);
+    };
+
+    window.addEventListener("resize", onResize);
+
+    // Flight particles for all routes
+    const particles = NETWORK_ROUTES.map((route, i) => ({
+      route,
+      progress: (i * 0.13) % 1,
+      speed: 0.0035 + (i % 3) * 0.0008,
+      size: 3.5,
+    }));
+
+    // Quadratic Bezier interpolation helper
+    const getBezierPoint = (p0, p1, p2, t) => {
+      const invT = 1 - t;
+      const x = invT * invT * p0.x + 2 * invT * t * p1.x + t * t * p2.x;
+      const y = invT * invT * p0.y + 2 * invT * t * p1.y + t * t * p2.y;
+      return { x, y };
+    };
+
+    const getControlPoint = (h1, h2) => {
+      const dx = h2.x - h1.x;
+      const dy = h2.y - h1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Curve outward based on corridor vector
+      const curvature = Math.min(dist * 0.22, 60);
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      return {
+        x: (h1.x + h2.x) / 2 + nx * curvature,
+        y: (h1.y + h2.y) / 2 + ny * curvature,
+      };
+    };
+
+    let time = 0;
+
+    const render = () => {
+      time += 0.016;
+      ctx.clearRect(0, 0, width / 2, height / 2);
+
+      const renderScaleX = (canvas.offsetWidth || 800) / 800;
+      const renderScaleY = (canvas.offsetHeight || 540) / 540;
+
+      // 1. Draw Flight Paths
+      NETWORK_ROUTES.forEach((route) => {
+        const from = hubMap[route.from];
+        const to = hubMap[route.to];
+        if (!from || !to) return;
+
+        const isSelected =
+          (selectedRoute?.from === route.from && selectedRoute?.to === route.to) ||
+          (selectedRoute?.from === route.to && selectedRoute?.to === route.from);
+        const isHovered = hoveredRoute === route;
+
+        const h1 = { x: from.x * renderScaleX, y: from.y * renderScaleY };
+        const h2 = { x: to.x * renderScaleX, y: to.y * renderScaleY };
+        const cp = getControlPoint(h1, h2);
+
+        // Draw Arc
+        ctx.beginPath();
+        ctx.moveTo(h1.x, h1.y);
+        ctx.quadraticCurveTo(cp.x, cp.y, h2.x, h2.y);
+
+        if (isSelected) {
+          // Glow Outer Beam
+          ctx.strokeStyle = "rgba(0, 113, 227, 0.25)";
+          ctx.lineWidth = 6;
+          ctx.setLineDash([]);
+          ctx.stroke();
+
+          // Solid Core Beam
+          ctx.strokeStyle = "#0071e3";
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        } else if (isHovered) {
+          ctx.strokeStyle = "rgba(0, 113, 227, 0.6)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = "rgba(142, 142, 147, 0.25)";
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+        }
+      });
+
+      // 2. Animate Cruising Particle Flights (Ultra-smooth 60fps)
+      particles.forEach((p) => {
+        p.progress += p.speed;
+        if (p.progress > 1) p.progress -= 1;
+
+        const from = hubMap[p.route.from];
+        const to = hubMap[p.route.to];
+        if (!from || !to) return;
+
+        const isSelected =
+          (selectedRoute?.from === p.route.from && selectedRoute?.to === p.route.to) ||
+          (selectedRoute?.from === p.route.to && selectedRoute?.to === p.route.from);
+
+        const h1 = { x: from.x * renderScaleX, y: from.y * renderScaleY };
+        const h2 = { x: to.x * renderScaleX, y: to.y * renderScaleY };
+        const cp = getControlPoint(h1, h2);
+
+        const pt = getBezierPoint(h1, cp, h2, p.progress);
+        const trailPt = getBezierPoint(h1, cp, h2, Math.max(0, p.progress - 0.04));
+
+        // Vapor Trail
+        ctx.beginPath();
+        ctx.moveTo(trailPt.x, trailPt.y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.strokeStyle = isSelected ? "rgba(0, 113, 227, 0.4)" : "rgba(0, 113, 227, 0.2)";
+        ctx.lineWidth = isSelected ? 3 : 1.5;
+        ctx.stroke();
+
+        // Cruising Beacon / Plane Dot
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, isSelected ? 4.5 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? "#0071e3" : "#0071e3";
+        ctx.shadowColor = "#0071e3";
+        ctx.shadowBlur = isSelected ? 12 : 4;
+        ctx.fill();
+        ctx.shadowBlur = 0; // Reset
+      });
+
+      // 3. Draw Radar Pulses on Active Hubs
+      HUBS_800.forEach((hub) => {
+        const isFrom = selectedRoute?.from === hub.code;
+        const isTo = selectedRoute?.to === hub.code;
+        const isConnected = isFrom || isTo;
+
+        if (isConnected) {
+          const hx = hub.x * renderScaleX;
+          const hy = hub.y * renderScaleY;
+          const pulseR = 6 + (Math.sin(time * 3) + 1) * 6;
+
+          ctx.beginPath();
+          ctx.arc(hx, hy, pulseR, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(0, 113, 227, 0.35)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      });
+
+      animId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [selectedRoute, hoveredRoute]);
 
   return (
     <div
       style={{
         position: "relative",
         width: "100%",
-        height: 500,
-        backgroundColor: "#fbfbfd",
-        border: "1px solid rgba(0, 0, 0, 0.06)",
+        height: 540,
+        backgroundColor: "#ffffff",
         borderRadius: 20,
         overflow: "hidden",
+        border: "1px solid rgba(0, 0, 0, 0.06)",
+        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
       }}
     >
-      {/* Background SVG Grid & Indian Aviation Corridors */}
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
+      {/* Background Decorative Spatial Grid */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: "radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* 60FPS Ultra-Smooth Canvas Animation Layer */}
+      <canvas
+        ref={canvasRef}
         style={{
           position: "absolute",
           inset: 0,
@@ -35,84 +233,121 @@ export default function IndiaNetworkMap() {
           height: "100%",
           pointerEvents: "none",
         }}
+      />
+
+      {/* SVG Interactive Hub Overlay & Non-Overlapping Labels */}
+      <svg
+        viewBox="0 0 800 540"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
       >
-        <defs>
-          <filter id="appleGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="0.8" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-
-        {/* Minimalist Radar Rings */}
-        <circle cx="42" cy="58" r="18" fill="none" stroke="rgba(0, 0, 0, 0.04)" strokeDasharray="1,2" />
-        <circle cx="42" cy="58" r="32" fill="none" stroke="rgba(0, 0, 0, 0.03)" strokeDasharray="2,3" />
-
-        {/* Flight Path Arcs */}
+        {/* Invisible Clickable Corridors */}
         {NETWORK_ROUTES.map((route, idx) => {
-          const fromHub = hubLookup[route.from];
-          const toHub = hubLookup[route.to];
-          if (!fromHub || !toHub) return null;
+          const from = hubMap[route.from];
+          const to = hubMap[route.to];
+          if (!from || !to) return null;
 
-          const isSelected =
-            selectedRoute?.from === route.from && selectedRoute?.to === route.to;
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const curvature = Math.min(dist * 0.22, 60);
+          const nx = -dy / dist;
+          const ny = dx / dist;
+          const cpx = (from.x + to.x) / 2 + nx * curvature;
+          const cpy = (from.y + to.y) / 2 + ny * curvature;
 
-          // Curved bezier arc
-          const midX = (fromHub.x + toHub.x) / 2 - (fromHub.y - toHub.y) * 0.15;
-          const midY = (fromHub.y + toHub.y) / 2 + (fromHub.x - toHub.x) * 0.15;
-          const pathD = `M ${fromHub.x} ${fromHub.y} Q ${midX} ${midY} ${toHub.x} ${toHub.y}`;
+          const pathD = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${to.x} ${to.y}`;
 
           return (
-            <g key={idx} style={{ cursor: "pointer", pointerEvents: "auto" }} onClick={() => setSelectedRoute(route)}>
-              <path
-                d={pathD}
-                fill="none"
-                stroke={isSelected ? "#0071e3" : "rgba(0, 0, 0, 0.15)"}
-                strokeWidth={isSelected ? 1.6 : 0.8}
-                filter={isSelected ? "url(#appleGlow)" : undefined}
-                strokeDasharray={isSelected ? "none" : "2,2"}
-              />
-
-              {/* Animated Cruising Aircraft */}
-              {isSelected && (
-                <circle r="1.4" fill="#0071e3">
-                  <animateMotion path={pathD} dur="2.8s" repeatCount="indefinite" />
-                </circle>
-              )}
-            </g>
+            <path
+              key={idx}
+              d={pathD}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={24}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHoveredRoute(route)}
+              onMouseLeave={() => setHoveredRoute(null)}
+              onClick={() => setSelectedRoute(route)}
+            />
           );
         })}
 
-        {/* City Nodes */}
-        {ROUTE_NETWORK_HUBS.map((hub) => {
+        {/* Airport Hub Nodes with Clean Spacing */}
+        {HUBS_800.map((hub) => {
           const isFrom = selectedRoute?.from === hub.code;
           const isTo = selectedRoute?.to === hub.code;
           const isConnected = isFrom || isTo;
+          const isHovered = hoveredHub?.code === hub.code;
+
+          // Label offsets
+          let labelX = hub.x;
+          let labelY = hub.y;
+          let textAnchor = "middle";
+
+          if (hub.labelPos === "top") {
+            labelY -= 14;
+          } else if (hub.labelPos === "bottom") {
+            labelY += 20;
+          } else if (hub.labelPos === "left") {
+            labelX -= 16;
+            labelY += 4;
+            textAnchor = "end";
+          } else if (hub.labelPos === "right") {
+            labelX += 16;
+            labelY += 4;
+            textAnchor = "start";
+          }
 
           return (
             <g
               key={hub.code}
-              transform={`translate(${hub.x}, ${hub.y})`}
+              style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredHub(hub)}
               onMouseLeave={() => setHoveredHub(null)}
-              style={{ cursor: "pointer", pointerEvents: "auto" }}
+              onClick={() => {
+                const connectedRoute = NETWORK_ROUTES.find((r) => r.from === hub.code || r.to === hub.code);
+                if (connectedRoute) setSelectedRoute(connectedRoute);
+              }}
             >
+              {/* Outer Glow Ring */}
               <circle
-                r={isConnected ? 3.0 : 1.8}
+                cx={hub.x}
+                cy={hub.y}
+                r={isConnected || isHovered ? 11 : 6}
                 fill={isConnected ? "rgba(0, 113, 227, 0.15)" : "#ffffff"}
-                stroke={isConnected ? "#0071e3" : "rgba(0, 0, 0, 0.2)"}
-                strokeWidth="0.6"
+                stroke={isConnected ? "#0071e3" : "rgba(0, 0, 0, 0.18)"}
+                strokeWidth={isConnected ? 2 : 1}
+                style={{ transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
               />
+
+              {/* Center Core Dot */}
               <circle
-                r={isConnected ? 1.4 : 0.9}
+                cx={hub.x}
+                cy={hub.y}
+                r={isConnected ? 4.5 : 2.8}
                 fill={isConnected ? "#0071e3" : "#1d1d1f"}
+                style={{ transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
               />
+
+              {/* Hub Code Label */}
               <text
-                x="2.4"
-                y="0.8"
+                x={labelX}
+                y={labelY}
+                textAnchor={textAnchor}
                 fill={isConnected ? "#0071e3" : "#1d1d1f"}
-                fontSize="2.8"
-                fontFamily="var(--font-sans, sans-serif)"
-                fontWeight={isConnected ? "700" : "500"}
+                fontSize={isConnected ? "13" : "11"}
+                fontFamily="var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif)"
+                fontWeight={isConnected ? "800" : "600"}
+                letterSpacing="0.04em"
+                style={{
+                  transition: "all 0.25s ease",
+                  userSelect: "none",
+                }}
               >
                 {hub.code}
               </text>
@@ -121,16 +356,17 @@ export default function IndiaNetworkMap() {
         })}
       </svg>
 
-      {/* Selected Corridor Apple Floating Pill */}
+      {/* Selected Corridor Apple Floating Glass Pill */}
       {selectedRoute && (
         <div
           style={{
             position: "absolute",
-            bottom: 24,
-            left: 24,
-            right: 24,
+            bottom: 20,
+            left: 20,
+            right: 20,
             background: "rgba(255, 255, 255, 0.92)",
-            backdropFilter: "blur(20px)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
             border: "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: 16,
             padding: "16px 24px",
@@ -139,66 +375,74 @@ export default function IndiaNetworkMap() {
             alignItems: "center",
             justifyContent: "space-between",
             gap: 16,
-            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.06)",
+            boxShadow: "0 10px 32px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
+            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
           <div>
-            <div style={{ fontSize: 11, color: "#86868b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <div style={{ fontSize: 10, color: "#86868b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Active Aviation Corridor
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
               <span>{selectedRoute.from}</span>
-              <span style={{ fontSize: 14, color: "#86868b" }}>➔</span>
+              <span style={{ fontSize: 13, color: "#0071e3" }}>➔</span>
               <span>{selectedRoute.to}</span>
               <span
                 style={{
-                  fontSize: 11,
-                  padding: "2px 8px",
+                  fontSize: 10,
+                  padding: "3px 8px",
                   borderRadius: 100,
                   backgroundColor: selectedRoute.status === "Surging" ? "rgba(255, 59, 48, 0.1)" : "rgba(52, 199, 89, 0.1)",
                   color: selectedRoute.status === "Surging" ? "#ff3b30" : "#34c759",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   marginLeft: 6,
+                  fontFamily: "var(--font-mono)",
                 }}
               >
-                {selectedRoute.status}
+                {selectedRoute.status.toUpperCase()}
               </span>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 28 }}>
+          <div style={{ display: "flex", gap: 32 }}>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Jevons Index</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#0071e3", fontFamily: "var(--font-mono)" }}>{selectedRoute.cpi}</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: "#0071e3", fontFamily: "var(--font-mono)" }}>{selectedRoute.cpi}</div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Average Fare</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#1d1d1f", fontFamily: "var(--font-mono)" }}>{selectedRoute.fare}</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: "#1d1d1f", fontFamily: "var(--font-mono)" }}>{selectedRoute.fare}</div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>MoM Movement</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#34c759", fontFamily: "var(--font-mono)" }}>{selectedRoute.change}</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: "#34c759", fontFamily: "var(--font-mono)" }}>{selectedRoute.change}</div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Hub Hover Popover Tooltip */}
       {hoveredHub && (
         <div
           style={{
             position: "absolute",
             top: 20,
-            right: 24,
+            right: 20,
             background: "#ffffff",
             border: "1px solid rgba(0, 0, 0, 0.08)",
-            borderRadius: 10,
-            padding: "8px 14px",
-            fontSize: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            borderRadius: 12,
+            padding: "10px 16px",
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+            zIndex: 30,
+            pointerEvents: "none",
           }}
         >
-          <span style={{ color: "#0071e3", fontWeight: 700 }}>{hoveredHub.city} ({hoveredHub.code})</span>
-          <div style={{ color: "#86868b", fontSize: 11, marginTop: 2 }}>Monthly Traffic: {(hoveredHub.pax / 1000000).toFixed(2)}M Passengers</div>
+          <div style={{ color: "#0071e3", fontWeight: 800, fontSize: 13 }}>
+            {hoveredHub.city} ({hoveredHub.code})
+          </div>
+          <div style={{ color: "#86868b", fontSize: 11, marginTop: 2, fontFamily: "var(--font-mono)" }}>
+            Monthly Traffic: <strong>{(hoveredHub.pax / 1000000).toFixed(2)}M Pax</strong> · CPI: <strong style={{ color: "#0071e3" }}>{hoveredHub.cpi}</strong>
+          </div>
         </div>
       )}
     </div>
