@@ -2,285 +2,186 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export default function HeroAircraft() {
   const mountRef = useRef(null);
   const [hoveredPart, setHoveredPart] = useState(null);
   const [hudPos, setHudPos] = useState({ x: 0, y: 0 });
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Scene & Camera
+    // 1. Scene & Camera Setup
     const scene = new THREE.Scene();
-    // Pure clean Apple white studio background
-    scene.background = new THREE.Color(0xffffff);
-    scene.fog = new THREE.Fog(0xffffff, 12, 28);
+    scene.background = new THREE.Color(0xffffff); // Pure Apple White
+    scene.fog = new THREE.Fog(0xffffff, 15, 35);
 
     const camera = new THREE.PerspectiveCamera(
-      42,
+      38,
       container.clientWidth / container.clientHeight,
       0.1,
       100
     );
-    camera.position.set(0, 1.2, 8.5);
+    camera.position.set(0, 0.6, 7.5);
 
-    // 2. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    // 2. High-Performance Renderer
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
     // 3. Apple Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 1.4);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 1.8);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
-    keyLight.position.set(6, 12, 8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    keyLight.position.set(6, 10, 8);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
 
-    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 1.8);
-    blueRimLight.position.set(-8, 4, -6);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.4);
+    fillLight.position.set(-6, 6, 6);
+    scene.add(fillLight);
+
+    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 2.2);
+    blueRimLight.position.set(-8, 3, -6);
     scene.add(blueRimLight);
 
-    const warmBounceLight = new THREE.PointLight(0xfff7ed, 1.2, 20);
-    warmBounceLight.position.set(0, -4, 2);
-    scene.add(warmBounceLight);
+    const bottomBounce = new THREE.PointLight(0xf1f5f9, 1.5, 25);
+    bottomBounce.position.set(0, -5, 0);
+    scene.add(bottomBounce);
 
-    // 4. Soft Ground Shadow Plane
-    const shadowGeo = new THREE.PlaneGeometry(30, 30);
-    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.08 });
+    // 4. Soft Contact Shadow Ground Plane
+    const shadowGeo = new THREE.PlaneGeometry(24, 24);
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.07 });
     const groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
     groundShadow.rotation.x = -Math.PI / 2;
-    groundShadow.position.y = -2.2;
+    groundShadow.position.y = -1.8;
     groundShadow.receiveShadow = true;
     scene.add(groundShadow);
 
-    // 5. Realistic Commercial Aircraft Hierarchy
-    const airplaneGroup = new THREE.Group();
-    scene.add(airplaneGroup);
+    // 5. Plane Container Group
+    const airplaneFlightGroup = new THREE.Group();
+    scene.add(airplaneFlightGroup);
 
-    // Interactive Mesh Registry
+    let planeModel = null;
     const interactiveMeshes = [];
+    const originalMaterialsMap = new Map();
 
-    // Shared Base Materials (Apple Pristine Pearlescent White & Metallic Alloys)
-    const createAircraftMaterial = (name, baseColor = 0xf8fafc, metalness = 0.4, roughness = 0.25) => {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: baseColor,
-        metalness: metalness,
-        roughness: roughness,
-        clearcoat: 0.8,
-        clearcoatRoughness: 0.15,
-        reflectivity: 0.8,
+    // 6. Load High-Quality 3D Real Model via GLTFLoader
+    const loader = new GLTFLoader();
+    const modelUrl = "/models/airplane.glb";
+
+    const setupModel = (gltf) => {
+      planeModel = gltf.scene;
+
+      // Compute bounding box to normalize scale and center model
+      const box = new THREE.Box3().setFromObject(planeModel);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const targetScale = 4.8 / (maxDim || 1);
+
+      planeModel.scale.set(targetScale, targetScale, targetScale);
+      planeModel.position.set(
+        -center.x * targetScale,
+        -center.y * targetScale,
+        -center.z * targetScale
+      );
+
+      // Inspect and register meshes
+      let meshIndex = 0;
+      planeModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          interactiveMeshes.push(child);
+
+          // Clone material for smooth independent color transitions
+          if (child.material) {
+            child.material = child.material.clone();
+            const origColor = child.material.color ? child.material.color.clone() : new THREE.Color(0xffffff);
+            const origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000);
+
+            originalMaterialsMap.set(child, {
+              color: origColor,
+              emissive: origEmissive,
+              currentColor: origColor.clone(),
+              targetColor: origColor.clone(),
+              currentEmissive: origEmissive.clone(),
+              targetEmissive: origEmissive.clone(),
+            });
+
+            // Name parts intelligently for telemetry display
+            const nameLower = (child.name || "").toLowerCase();
+            let partName = "Commercial Airframe Fuselage";
+            let desc = "Monitors 25 high-density DGCA domestic corridors";
+
+            if (nameLower.includes("wing") || meshIndex === 1) {
+              partName = "High-Lift Supercritical Wing";
+              desc = "Passenger capacity weighting (15.3M Pax/month)";
+            } else if (nameLower.includes("prop") || nameLower.includes("engine") || meshIndex === 2) {
+              partName = "High-Bypass Turbofan Propulsion";
+              desc = "Jevons Geometric Micro-Index Computing Core";
+            } else if (nameLower.includes("gear") || nameLower.includes("wheel")) {
+              partName = "Aerospace Landing Telemetry";
+              desc = "Rolling IQR Statistical Anomaly Fencing";
+            } else if (nameLower.includes("glass") || nameLower.includes("cockpit")) {
+              partName = "Cockpit Flight Management Avionics";
+              desc = "Real-time automated price ingestion engine";
+            }
+
+            child.userData = { partName, desc };
+            meshIndex++;
+          }
+        }
       });
-      mat.userData = { originalColor: new THREE.Color(baseColor), name };
-      return mat;
+
+      airplaneFlightGroup.add(planeModel);
+      setIsLoaded(true);
     };
 
-    const liveryBlueMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0071e3,
-      metalness: 0.6,
-      roughness: 0.2,
-    });
+    // Attempt loading primary model with graceful fallback
+    loader.load(
+      modelUrl,
+      setupModel,
+      undefined,
+      (err) => {
+        console.warn("Primary model load error, loading fallback:", err);
+        loader.load("/models/airplane_mapbox.glb", setupModel);
+      }
+    );
 
-    const glassMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x111827,
-      metalness: 0.9,
-      roughness: 0.05,
-      transmission: 0.3,
-      reflectivity: 1.0,
-      clearcoat: 1.0,
-    });
+    // Initial 3/4 Front Beauty Flight Angle
+    airplaneFlightGroup.position.set(0, 0.1, 0);
+    airplaneFlightGroup.rotation.set(0.05, -0.65, 0.08);
 
-    const chromeMaterial = new THREE.MeshStandardMaterial({
-      color: 0xcfd8dc,
-      metalness: 0.95,
-      roughness: 0.1,
-    });
-
-    // ── FUSELAGE ──
-    const fuselageMat = createAircraftMaterial("Fuselage (Airframe Body)", 0xffffff, 0.2, 0.2);
-    // Smooth aerodynamic fuselage using Spline Extrusion / Lathe
-    const fuselagePoints = [];
-    fuselagePoints.push(new THREE.Vector2(0, 2.6)); // Nose tip
-    fuselagePoints.push(new THREE.Vector2(0.22, 2.4));
-    fuselagePoints.push(new THREE.Vector2(0.48, 2.0));
-    fuselagePoints.push(new THREE.Vector2(0.55, 1.4));
-    fuselagePoints.push(new THREE.Vector2(0.55, -1.8)); // Main cabin
-    fuselagePoints.push(new THREE.Vector2(0.48, -2.4));
-    fuselagePoints.push(new THREE.Vector2(0.24, -3.0));
-    fuselagePoints.push(new THREE.Vector2(0.04, -3.4)); // Tail cone
-    fuselagePoints.push(new THREE.Vector2(0, -3.45));
-
-    const fuselageGeo = new THREE.LatheGeometry(fuselagePoints, 48);
-    const fuselageMesh = new THREE.Mesh(fuselageGeo, fuselageMat);
-    fuselageMesh.castShadow = true;
-    fuselageMesh.receiveShadow = true;
-    fuselageMesh.rotation.x = Math.PI / 2;
-    fuselageMesh.userData = { partName: "Fuselage & Main Passenger Cabin", desc: "Monitors 25 high-density DGCA city pairs across India" };
-    airplaneGroup.add(fuselageMesh);
-    interactiveMeshes.push(fuselageMesh);
-
-    // ── COCKPIT WINDSHIELD ──
-    const cockpitGeo = new THREE.SphereGeometry(0.38, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
-    cockpitGeo.scale(0.7, 0.35, 1.4);
-    const cockpitMesh = new THREE.Mesh(cockpitGeo, glassMaterial);
-    cockpitMesh.position.set(0, 0.34, 1.35);
-    cockpitMesh.rotation.x = -0.15;
-    cockpitMesh.userData = { partName: "Cockpit Avionics & Telemetry", desc: "Real-time automated price ingestion engine" };
-    airplaneGroup.add(cockpitMesh);
-    interactiveMeshes.push(cockpitMesh);
-
-    // ── WINGS (Swept Supercritical Aerofoil with Dihedral) ──
-    const wingMat = createAircraftMaterial("Supercritical Wings", 0xf1f5f9, 0.3, 0.2);
-
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, 0.6);
-    wingShape.lineTo(4.4, -2.4); // Swept wing tip
-    wingShape.lineTo(4.2, -2.9);
-    wingShape.lineTo(0, -1.4);
-    wingShape.closePath();
-
-    const wingExtrude = { depth: 0.08, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.03, bevelThickness: 0.03 };
-    const wingGeo = new THREE.ExtrudeGeometry(wingShape, wingExtrude);
-
-    // Right Wing
-    const rightWing = new THREE.Mesh(wingGeo, wingMat);
-    rightWing.position.set(0, -0.05, 0.1);
-    rightWing.rotation.x = Math.PI / 2;
-    rightWing.rotation.y = 0.06; // Dihedral angle
-    rightWing.castShadow = true;
-    rightWing.receiveShadow = true;
-    rightWing.userData = { partName: "High-Lift Supercritical Wing", desc: "Represents DGCA passenger volume weighting (15.3M Pax/mo)" };
-    airplaneGroup.add(rightWing);
-    interactiveMeshes.push(rightWing);
-
-    // Left Wing
-    const leftWing = rightWing.clone();
-    leftWing.scale.x = -1;
-    leftWing.position.set(0, -0.05, 0.1);
-    leftWing.rotation.y = -0.06;
-    leftWing.castShadow = true;
-    leftWing.receiveShadow = true;
-    leftWing.userData = { partName: "High-Lift Supercritical Wing", desc: "Represents DGCA passenger volume weighting (15.3M Pax/mo)" };
-    airplaneGroup.add(leftWing);
-    interactiveMeshes.push(leftWing);
-
-    // Blended Winglets (Upward Angled)
-    const wingletGeo = new THREE.BoxGeometry(0.06, 0.5, 0.6);
-    const rightWinglet = new THREE.Mesh(wingletGeo, liveryBlueMaterial);
-    rightWinglet.position.set(4.35, 0.22, -2.55);
-    rightWinglet.rotation.z = -0.3;
-    airplaneGroup.add(rightWinglet);
-
-    const leftWinglet = rightWinglet.clone();
-    leftWinglet.position.x = -4.35;
-    leftWinglet.rotation.z = 0.3;
-    airplaneGroup.add(leftWinglet);
-
-    // ── HIGH-BYPASS TURBOFAN ENGINES ──
-    const engineMat = createAircraftMaterial("Turbofan Jet Engines", 0xe2e8f0, 0.7, 0.15);
-    const engineNacelleGeo = new THREE.CylinderGeometry(0.36, 0.42, 1.8, 32);
-    
-    // Right Engine
-    const rightEngine = new THREE.Mesh(engineNacelleGeo, engineMat);
-    rightEngine.position.set(1.4, -0.38, -0.4);
-    rightEngine.rotation.x = Math.PI / 2;
-    rightEngine.castShadow = true;
-    rightEngine.userData = { partName: "High-Bypass Turbofan Engine", desc: "Jevons Geometric Micro-Index Computing Core" };
-    airplaneGroup.add(rightEngine);
-    interactiveMeshes.push(rightEngine);
-
-    // Engine Chrome Intake Ring
-    const intakeRingGeo = new THREE.TorusGeometry(0.38, 0.04, 16, 32);
-    const rightIntake = new THREE.Mesh(intakeRingGeo, chromeMaterial);
-    rightIntake.position.set(1.4, -0.38, 0.5);
-    airplaneGroup.add(rightIntake);
-
-    // Engine Fan Spinner
-    const spinnerGeo = new THREE.ConeGeometry(0.12, 0.3, 16);
-    const rightSpinner = new THREE.Mesh(spinnerGeo, chromeMaterial);
-    rightSpinner.position.set(1.4, -0.38, 0.45);
-    rightSpinner.rotation.x = Math.PI / 2;
-    airplaneGroup.add(rightSpinner);
-
-    // Left Engine
-    const leftEngine = rightEngine.clone();
-    leftEngine.position.x = -1.4;
-    leftEngine.userData = { partName: "High-Bypass Turbofan Engine", desc: "Jevons Geometric Micro-Index Computing Core" };
-    airplaneGroup.add(leftEngine);
-    interactiveMeshes.push(leftEngine);
-
-    const leftIntake = rightIntake.clone();
-    leftIntake.position.x = -1.4;
-    leftIntake.position.y = -0.38;
-    leftIntake.position.z = 0.5;
-    airplaneGroup.add(leftIntake);
-
-    const leftSpinner = rightSpinner.clone();
-    leftSpinner.position.x = -1.4;
-    airplaneGroup.add(leftSpinner);
-
-    // ── TAIL SECTION (Vertical Fin & Stabilizers) ──
-    const tailFinShape = new THREE.Shape();
-    tailFinShape.moveTo(0, 0);
-    tailFinShape.lineTo(0.04, 1.8);
-    tailFinShape.lineTo(0.8, 1.8);
-    tailFinShape.lineTo(1.6, 0);
-    tailFinShape.closePath();
-
-    const tailFinGeo = new THREE.ExtrudeGeometry(tailFinShape, { depth: 0.06, bevelEnabled: true, bevelSegments: 2, bevelSize: 0.02, bevelThickness: 0.02 });
-    const tailFin = new THREE.Mesh(tailFinGeo, liveryBlueMaterial);
-    tailFin.position.set(-0.03, 0.35, -1.8);
-    tailFin.rotation.y = -Math.PI / 2;
-    tailFin.castShadow = true;
-    tailFin.userData = { partName: "Vertical Stabilizer & Fin", desc: "MoSPI National CPI Dissemination Gateway" };
-    airplaneGroup.add(tailFin);
-    interactiveMeshes.push(tailFin);
-
-    // Horizontal Stabilizers
-    const horizStabShape = new THREE.Shape();
-    horizStabShape.moveTo(0, 0);
-    horizStabShape.lineTo(1.6, -1.0);
-    horizStabShape.lineTo(1.4, -1.3);
-    horizStabShape.lineTo(0, -0.6);
-    horizStabShape.closePath();
-    const horizStabGeo = new THREE.ExtrudeGeometry(horizStabShape, { depth: 0.04, bevelEnabled: true, bevelSegments: 2, bevelSize: 0.01, bevelThickness: 0.01 });
-
-    const rightStab = new THREE.Mesh(horizStabGeo, wingMat);
-    rightStab.position.set(0, 0.15, -2.6);
-    rightStab.rotation.x = Math.PI / 2;
-    airplaneGroup.add(rightStab);
-
-    const leftStab = rightStab.clone();
-    leftStab.scale.x = -1;
-    airplaneGroup.add(leftStab);
-
-    // Set initial pose
-    airplaneGroup.position.set(0, 0.2, 0);
-    airplaneGroup.rotation.set(-0.12, 0.45, 0.08);
-
-    // 6. Dynamic Raycasting on Mouse Move
+    // 7. Mouse & Raycasting Setup
     const raycaster = new THREE.Raycaster();
     const mouseVec = new THREE.Vector2(-100, -100);
 
-    let targetRotX = -0.12;
-    let targetRotY = 0.45;
+    let targetRotX = 0.05;
+    let targetRotY = -0.65;
     let targetRotZ = 0.08;
     let targetPosX = 0;
-    let targetPosY = 0.2;
+    let targetPosY = 0.1;
 
-    let currentHoveredMesh = null;
+    let currentlyHovered = null;
 
     const onMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
@@ -289,72 +190,79 @@ export default function HeroAircraft() {
 
       mouseVec.x = x;
       mouseVec.y = y;
-
       setHudPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
 
-      // Spring flight response
-      targetRotY = 0.45 + x * 0.75;
-      targetRotX = -0.12 - y * 0.45;
-      targetRotZ = 0.08 - x * 0.35;
-      targetPosX = x * 0.5;
-      targetPosY = 0.2 + y * 0.3;
+      // Smooth flight banking and attitude response
+      targetRotY = -0.65 + x * 0.65;
+      targetRotX = 0.05 - y * 0.35;
+      targetRotZ = 0.08 - x * 0.3;
+      targetPosX = x * 0.45;
+      targetPosY = 0.1 + y * 0.25;
     };
 
     window.addEventListener("mousemove", onMouseMove);
 
-    // 7. Animation Loop
+    // 8. Continuous Flight Animation Loop
     let clock = new THREE.Clock();
     let animId;
+
+    const highlightColor = new THREE.Color(0x0071e3); // Apple Electric Blue
+    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Glow
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      // Smooth flight interpolation (lerp)
-      airplaneGroup.rotation.x += (targetRotX - airplaneGroup.rotation.x) * 0.06;
-      airplaneGroup.rotation.y += (targetRotY - airplaneGroup.rotation.y) * 0.06;
-      airplaneGroup.rotation.z += (targetRotZ - airplaneGroup.rotation.z) * 0.06;
-      airplaneGroup.position.x += (targetPosX - airplaneGroup.position.x) * 0.06;
-      airplaneGroup.position.y += (targetPosY + Math.sin(elapsedTime * 2.0) * 0.08 - airplaneGroup.position.y) * 0.06;
+      // Continuous flight dynamics (aerodynamic turbulence + mouse banking)
+      const turbulence = Math.sin(elapsedTime * 1.6) * 0.06;
+      const bankWobble = Math.cos(elapsedTime * 1.2) * 0.03;
 
-      // Engine fan rotation
-      rightSpinner.rotation.z = elapsedTime * 20;
-      leftSpinner.rotation.z = elapsedTime * 20;
+      airplaneFlightGroup.rotation.x += (targetRotX + turbulence - airplaneFlightGroup.rotation.x) * 0.05;
+      airplaneFlightGroup.rotation.y += (targetRotY - airplaneFlightGroup.rotation.y) * 0.05;
+      airplaneFlightGroup.rotation.z += (targetRotZ + bankWobble - airplaneFlightGroup.rotation.z) * 0.05;
+      airplaneFlightGroup.position.x += (targetPosX - airplaneFlightGroup.position.x) * 0.05;
+      airplaneFlightGroup.position.y += (targetPosY + Math.sin(elapsedTime * 2.2) * 0.08 - airplaneFlightGroup.position.y) * 0.05;
 
       // Raycast detection
       raycaster.setFromCamera(mouseVec, camera);
-      const intersects = raycaster.intersectObjects(interactiveMeshes, false);
+      const intersects = raycaster.intersectObjects(interactiveMeshes, true);
 
       if (intersects.length > 0) {
         const hit = intersects[0].object;
-        if (currentHoveredMesh !== hit) {
-          // Reset previous mesh color
-          if (currentHoveredMesh && currentHoveredMesh.material.userData?.originalColor) {
-            currentHoveredMesh.material.color.copy(currentHoveredMesh.material.userData.originalColor);
-            if (currentHoveredMesh.material.emissive) currentHoveredMesh.material.emissive.setHex(0x000000);
-          }
-
-          // Highlight new hovered mesh with Apple Electric Blue / Shimmer
-          currentHoveredMesh = hit;
-          if (hit.material.color) {
-            hit.material.color.setHex(0x0071e3); // Apple Electric Blue
-            if (hit.material.emissive) {
-              hit.material.emissive.setHex(0x0051ba);
-              hit.material.emissiveIntensity = 0.35;
-            }
-          }
+        if (currentlyHovered !== hit) {
+          currentlyHovered = hit;
           setHoveredPart(hit.userData);
         }
       } else {
-        if (currentHoveredMesh) {
-          if (currentHoveredMesh.material.userData?.originalColor) {
-            currentHoveredMesh.material.color.copy(currentHoveredMesh.material.userData.originalColor);
-            if (currentHoveredMesh.material.emissive) currentHoveredMesh.material.emissive.setHex(0x000000);
-          }
-          currentHoveredMesh = null;
+        if (currentlyHovered) {
+          currentlyHovered = null;
           setHoveredPart(null);
         }
       }
+
+      // Smooth slow color-transition animation for each mesh
+      interactiveMeshes.forEach((mesh) => {
+        const matState = originalMaterialsMap.get(mesh);
+        if (!matState || !mesh.material) return;
+
+        const isHit = currentlyHovered === mesh || (currentlyHovered && mesh.parent === currentlyHovered.parent && currentlyHovered.parent !== planeModel);
+
+        if (isHit) {
+          matState.targetColor.copy(highlightColor);
+          matState.targetEmissive.copy(highlightEmissive);
+        } else {
+          matState.targetColor.copy(matState.color);
+          matState.targetEmissive.copy(matState.emissive);
+        }
+
+        // Slow smooth lerp (0.07 per frame = silky luxury transition)
+        if (mesh.material.color) {
+          mesh.material.color.lerp(matState.targetColor, 0.07);
+        }
+        if (mesh.material.emissive) {
+          mesh.material.emissive.lerp(matState.targetEmissive, 0.07);
+        }
+      });
 
       renderer.render(scene, camera);
     };
@@ -387,39 +295,39 @@ export default function HeroAircraft() {
       style={{
         width: "100%",
         height: "100%",
-        cursor: "crosshair",
+        cursor: "grab",
         position: "relative",
       }}
     >
-      {/* Floating Apple Telemetry HUD when hovering plane components */}
+      {/* Real-time Hover Telemetry Card */}
       {hoveredPart && (
         <div
           style={{
             position: "absolute",
-            top: Math.min(Math.max(hudPos.y - 60, 20), 400),
-            left: Math.min(Math.max(hudPos.x + 20, 20), 800),
+            top: Math.min(Math.max(hudPos.y - 70, 16), 380),
+            left: Math.min(Math.max(hudPos.x + 24, 16), 760),
             background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(0, 113, 227, 0.3)",
-            borderRadius: 12,
-            padding: "12px 18px",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.08), 0 0 15px rgba(0,113,227,0.15)",
+            backdropFilter: "blur(24px)",
+            border: "1px solid rgba(0, 113, 227, 0.35)",
+            borderRadius: 14,
+            padding: "14px 20px",
+            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.08), 0 0 20px rgba(0, 113, 227, 0.15)",
             pointerEvents: "none",
             zIndex: 100,
-            transition: "opacity 0.2s ease",
+            transition: "opacity 0.25s ease",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#0071e3" }} />
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#0071e3", textTransform: "uppercase" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#0071e3", boxShadow: "0 0 8px #0071e3" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "#0071e3", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               {hoveredPart.partName}
             </span>
           </div>
           <div style={{ fontSize: 13, color: "#1d1d1f", fontWeight: 600, marginTop: 4 }}>
             {hoveredPart.desc}
           </div>
-          <div style={{ fontSize: 10, color: "#86868b", marginTop: 2, fontFamily: "var(--font-mono)" }}>
-            ⚡ Real-time Telemetry Active
+          <div style={{ fontSize: 11, color: "#34c759", marginTop: 4, fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+            ● Active Ingestion Stream
           </div>
         </div>
       )}
