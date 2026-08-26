@@ -24,8 +24,8 @@ export default function HeroAircraft() {
       0.1,
       100
     );
-    // Camera positioned with optimal elevation to view plane behind headline
-    camera.position.set(0, 0.45, 8.4);
+    // Camera positioned with optimal clearance beneath top headline
+    camera.position.set(0, 0.1, 8.5);
 
     // 2. High-Performance WebGL Renderer
     const renderer = new THREE.WebGLRenderer({
@@ -165,12 +165,12 @@ export default function HeroAircraft() {
       (err) => console.error("Error loading A320 model:", err)
     );
 
-    // Elevated Left-to-Right Flight Attitude (Shifted upwards to sit directly behind headline text)
+    // Positioned Beneath the Top Headline (Leaves ample headroom for "The Price of Flight." above)
     const baseRotY = 0.05; // Tail on left, nose on right
     const baseRotX = 0.04; // Level horizontal pitch
     const baseRotZ = 0.0; // Level horizontal wings
 
-    const basePosY = 0.42; // Elevated upwards
+    const basePosY = -0.42; // Positioned in lower center beneath headline text
     airplaneFlightGroup.position.set(0, basePosY, 0);
     airplaneFlightGroup.rotation.set(baseRotX, baseRotY, baseRotZ);
 

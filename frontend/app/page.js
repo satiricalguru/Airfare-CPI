@@ -92,20 +92,20 @@ export default function AppleAirfareCPI() {
         </div>
       </header>
 
-      {/* ── 1. HERO SECTION (Minimalist Headline with 3D Airbus A320 Flying Straight) ── */}
-      <section id="overview" className="apple-hero" style={{ height: "92vh", minHeight: 650, paddingTop: 100 }}>
+      {/* ── 1. HERO SECTION (Headline clearly above the cruising Airbus A320) ── */}
+      <section id="overview" className="apple-hero" style={{ height: "92vh", minHeight: 680, paddingTop: 130, justifyContent: "flex-start" }}>
         {/* 3D Straight-Flying Airplane Canvas in Background */}
         <div className="aircraft-bg-stage">
           <HeroAircraft />
         </div>
 
-        {/* Minimalist Foreground Content */}
-        <div className="container hero-content-wrap" style={{ marginTop: -40 }}>
-          <h1 className="apple-heading" style={{ fontSize: 72, fontWeight: 900, letterSpacing: "-0.04em" }}>
+        {/* Minimalist Top Foreground Content */}
+        <div className="container hero-content-wrap" style={{ zIndex: 10, marginTop: 0 }}>
+          <h1 className="apple-heading" style={{ fontSize: 72, fontWeight: 900, letterSpacing: "-0.04em", marginBottom: 16 }}>
             The Price of Flight.
           </h1>
 
-          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginTop: 12 }}>
+          <div className="hero-interactive" style={{ display: "flex", gap: 14 }}>
             <a href="#index" className="apple-btn-primary">
               <span>Explore Live Index</span>
               <span>➔</span>
