@@ -35,40 +35,42 @@ Air transport is one of the most volatile and complex consumer service categorie
 
 ## 🏛️ System Architecture
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                DATA INGESTION LAYER                                    │
-│   IndiGo (6E) · Air India (AI) · SpiceJet (SG) · Vistara (UK) · Akasa (QP) · OTAs      │
-└──────────────────────────────────────────┬─────────────────────────────────────────────┘
-                                           │
-                                           ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                             SCRAPING & VALIDATION ENGINE                               │
-│  - Playwright Headless Driver + Stealth Anti-Detection (XHR / Network Interception)     │
-│  - robots.txt & Rate-Limiting Governance (2.0s - 5.0s randomized delays)               │
-│  - FareValidator: Hard Exclusions (₹0, <₹500, >₹80k) + Soft IQR Anomaly Fencing        │
-│  - Advance-Purchase Stratification: T+0, T+3, T+7, T+15, T+30 horizons                 │
-└──────────────────────────────────────────┬─────────────────────────────────────────────┘
-                                           │
-                                           ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                          ECONOMETRIC COMPUTATION ENGINE                                │
-│                                                                                        │
-│   1. Route-Level Micro-Index (Jevons Elementary Aggregate):                            │
-│      I(r, t) = [ Π (p_i,t / p_i,0) ] ^ (1/n)  ==> Log-space calculation with Winsor    │
-│                                                                                        │
-│   2. Upper-Level National Aggregator (Laspeyres / Young):                              │
-│      CPI(t) = Σ [ w_r × I(r, t) ] × 100  where w_r = DGCA_Pax_r / Σ DGCA_Pax          │
-└──────────────────────────────────────────┬─────────────────────────────────────────────┘
-                                           │
-                     ┌─────────────────────┴─────────────────────┐
-                     ▼                                           ▼
-┌──────────────────────────────────────────┐┌────────────────────────────────────────────┐
-│          FASTAPI BACKEND (PORT 8000)     ││          OUTPUTS & VISUALIZATION           │
-│  - 13 Async High-Performance Endpoints   ││  - Next.js 16 Glassmorphism Dashboard     │
-│  - In-Memory + PostgreSQL 16 Data Store  ││  - Real-Time Route Heatmap & Trends       │
-│  - Live Scrape Trigger & Anomaly Feed    ││  - MoSPI Monthly Press Release Bulletin    │
-└──────────────────────────────────────────┘└────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph S1["1. DATA INGESTION LAYER"]
+        A["✈️ Scheduled Airline & OTA Portals<br/><b>IndiGo (6E) · Air India (AI) · SpiceJet (SG) · Vistara (UK) · Akasa (QP) · MakeMyTrip</b>"]
+    end
+
+    subgraph S2["2. SCRAPING & VALIDATION PIPELINE"]
+        B1["🛡️ Playwright Engine + Stealth Anti-Detection<br/><i>XHR / Network Response Interception & Rate-Limiting Governance</i>"]
+        B2["🔍 FareValidator Quality Gate<br/><i>Hard Exclusions (INR 0, Out-of-Range) + Rolling IQR Anomaly Fencing</i>"]
+        B3["⏱️ Advance-Purchase Stratification<br/><i>T+0, T+3, T+7, T+15, T+30 Booking Horizons</i>"]
+    end
+
+    subgraph S3["3. ECONOMETRIC COMPUTATION ENGINE"]
+        C1["📐 Route-Level Micro-Index (Jevons Elementary Aggregate)<br/><b>I(r, t) = [ ∏ (p_i,t / p_i,0) ]^(1/n)</b><br/><i>Log-space calculation with Winsorization</i>"]
+        C2["🇮🇳 National Upper-Level Aggregator (Laspeyres / Young)<br/><b>CPI(t) = ∑ [ w_r × I(r, t) ] × 100</b><br/><i>Weighted by DGCA City-Pair Monthly Passenger Traffic Volume</i>"]
+    end
+
+    subgraph S4["4. API & OUTPUT DISTRIBUTION"]
+        D1["⚡ FastAPI High-Performance Backend<br/><i>13 Async REST Endpoints · In-Memory & PostgreSQL 16 Store</i>"]
+        D2["📊 Next.js 16 Glassmorphism Dashboard<br/><i>Real-time CPI Trendlines, Route Heatmaps & Interactive Trigger</i>"]
+        D3["🏛️ Official MoSPI Statistical Bulletin<br/><i>Publication-ready Monthly Press Release</i>"]
+    end
+
+    A --> B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> C1
+    C1 --> C2
+    C2 --> D1
+    D1 --> D2
+    D1 --> D3
+
+    style S1 fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
+    style S2 fill:#0f172a,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc
+    style S3 fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc
+    style S4 fill:#0f172a,stroke:#f59e0b,stroke-width:2px,color:#f8fafc
 ```
 
 ---
