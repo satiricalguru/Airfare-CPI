@@ -16,21 +16,21 @@ export default function HeroAircraft() {
 
     // 1. Scene & Camera Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff); // Pure Apple White Studio
-    scene.fog = new THREE.Fog(0xffffff, 16, 36);
+    scene.background = null; // Transparent so it seamlessly blends behind hero text
 
     const camera = new THREE.PerspectiveCamera(
-      36,
+      34,
       container.clientWidth / container.clientHeight,
       0.1,
       100
     );
-    camera.position.set(0, 0.4, 7.8);
+    // Camera positioned straight in front of the flying aircraft
+    camera.position.set(0, 0.2, 8.2);
 
-    // 2. High-Performance Renderer
+    // 2. High-Performance WebGL Renderer with Alpha Support
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: false,
+      alpha: true,
       powerPreference: "high-performance",
     });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -42,36 +42,36 @@ export default function HeroAircraft() {
     container.appendChild(renderer.domElement);
 
     // 3. Apple Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 2.0);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 2.2);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
-    keyLight.position.set(7, 12, 8);
+    keyLight.position.set(6, 12, 10);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.6);
-    fillLight.position.set(-7, 6, 6);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 1.8);
+    fillLight.position.set(-6, 6, 8);
     scene.add(fillLight);
 
-    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 2.4);
-    blueRimLight.position.set(-8, 3, -6);
+    const blueRimLight = new THREE.DirectionalLight(0x0071e3, 2.6);
+    blueRimLight.position.set(0, 4, -8);
     scene.add(blueRimLight);
 
-    const bottomBounce = new THREE.PointLight(0xf1f5f9, 1.6, 25);
-    bottomBounce.position.set(0, -5, 0);
+    const bottomBounce = new THREE.PointLight(0xf1f5f9, 1.8, 25);
+    bottomBounce.position.set(0, -4, 2);
     scene.add(bottomBounce);
 
-    // 4. Soft Contact Shadow Ground Plane
+    // 4. Soft Contact Shadow Plane
     const shadowGeo = new THREE.PlaneGeometry(24, 24);
-    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.08 });
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.06 });
     const groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
     groundShadow.rotation.x = -Math.PI / 2;
-    groundShadow.position.y = -1.7;
+    groundShadow.position.y = -1.8;
     groundShadow.receiveShadow = true;
     scene.add(groundShadow);
 
@@ -84,7 +84,7 @@ export default function HeroAircraft() {
     const interactiveMeshes = [];
     const originalMaterialsMap = new Map();
 
-    // 6. Load Authentic Airbus A320 Commercial Jet Airliner via GLTFLoader
+    // 6. Load Airbus A320 Commercial Jet Airliner via GLTFLoader
     const loader = new GLTFLoader();
     const modelUrl = "/models/airplane.glb";
 
@@ -98,7 +98,7 @@ export default function HeroAircraft() {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const targetScale = 5.2 / (maxDim || 1);
+        const targetScale = 6.2 / (maxDim || 1); // Large prominent presence behind text
 
         planeModel.scale.set(targetScale, targetScale, targetScale);
         planeModel.position.set(
@@ -165,19 +165,19 @@ export default function HeroAircraft() {
       (err) => console.error("Error loading A320 model:", err)
     );
 
-    // Initial 3/4 Front Beauty Flight Angle (Nose pointing forward-left toward camera)
-    airplaneFlightGroup.position.set(0, 0.1, 0);
-    airplaneFlightGroup.rotation.set(0.12, -0.65, 0.08);
+    // Initial Straight Forward Flight Attitude (Flying straight level toward camera/horizon)
+    airplaneFlightGroup.position.set(0, 0, -0.4);
+    airplaneFlightGroup.rotation.set(0.04, 0.0, 0.0);
 
     // 7. Mouse & Raycasting Setup
     const raycaster = new THREE.Raycaster();
     const mouseVec = new THREE.Vector2(-100, -100);
 
-    let targetRotX = 0.12;
-    let targetRotY = -0.65;
-    let targetRotZ = 0.08;
+    let targetRotX = 0.04;
+    let targetRotY = 0.0;
+    let targetRotZ = 0.0;
     let targetPosX = 0;
-    let targetPosY = 0.1;
+    let targetPosY = 0;
 
     let currentlyHovered = null;
 
@@ -190,38 +190,38 @@ export default function HeroAircraft() {
       mouseVec.y = y;
       setHudPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
 
-      // Smooth flight banking and attitude response
-      targetRotY = -0.65 + x * 0.65;
-      targetRotX = 0.12 - y * 0.35;
-      targetRotZ = 0.08 - x * 0.3;
-      targetPosX = x * 0.45;
-      targetPosY = 0.1 + y * 0.25;
+      // Subtle, straight level flight steering with slight banking
+      targetRotY = x * 0.25; // Gentle yaw
+      targetRotX = 0.04 - y * 0.15; // Gentle pitch
+      targetRotZ = -x * 0.18; // Level aerodynamic bank roll
+      targetPosX = x * 0.35;
+      targetPosY = y * 0.2;
     };
 
     window.addEventListener("mousemove", onMouseMove);
 
-    // 8. Continuous Aerodynamic Flight Animation Loop
+    // 8. Continuous Level Flight Animation Loop
     let clock = new THREE.Clock();
     let animId;
 
     const highlightColor = new THREE.Color(0x0071e3); // Apple Electric Blue
-    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Blue Glow
+    const highlightEmissive = new THREE.Color(0x0040aa); // Luminous Glow
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      // Continuous flight dynamics (turbulence, bank roll, pitch)
-      const turbulence = Math.sin(elapsedTime * 1.5) * 0.05;
-      const bankWobble = Math.cos(elapsedTime * 1.1) * 0.03;
+      // Continuous straight level flight dynamics (gentle aerodynamic float)
+      const turbulence = Math.sin(elapsedTime * 1.4) * 0.02;
+      const altitudeFloat = Math.sin(elapsedTime * 1.8) * 0.06;
 
       airplaneFlightGroup.rotation.x += (targetRotX + turbulence - airplaneFlightGroup.rotation.x) * 0.05;
       airplaneFlightGroup.rotation.y += (targetRotY - airplaneFlightGroup.rotation.y) * 0.05;
-      airplaneFlightGroup.rotation.z += (targetRotZ + bankWobble - airplaneFlightGroup.rotation.z) * 0.05;
+      airplaneFlightGroup.rotation.z += (targetRotZ - airplaneFlightGroup.rotation.z) * 0.05;
       airplaneFlightGroup.position.x += (targetPosX - airplaneFlightGroup.position.x) * 0.05;
-      airplaneFlightGroup.position.y += (targetPosY + Math.sin(elapsedTime * 2.0) * 0.08 - airplaneFlightGroup.position.y) * 0.05;
+      airplaneFlightGroup.position.y += (targetPosY + altitudeFloat - airplaneFlightGroup.position.y) * 0.05;
 
-      // Rotate jet engine turbine blades
+      // Rotate turbofan turbine blades
       rotatingFans.forEach((fan) => {
         fan.rotation.y += 0.25;
       });
@@ -307,8 +307,8 @@ export default function HeroAircraft() {
         <div
           style={{
             position: "absolute",
-            top: Math.min(Math.max(hudPos.y - 70, 16), 380),
-            left: Math.min(Math.max(hudPos.x + 24, 16), 760),
+            top: Math.min(Math.max(hudPos.y - 70, 20), 460),
+            left: Math.min(Math.max(hudPos.x + 24, 20), 800),
             background: "rgba(255, 255, 255, 0.95)",
             backdropFilter: "blur(24px)",
             border: "1px solid rgba(0, 113, 227, 0.35)",

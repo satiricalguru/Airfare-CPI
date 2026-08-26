@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -21,7 +21,7 @@ import {
 const HeroAircraft = dynamic(() => import("./components/HeroAircraft"), {
   ssr: false,
   loading: () => (
-    <div style={{ height: "100%", minHeight: 480, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ height: "100%", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="live-green-dot" style={{ width: 14, height: 14 }} />
     </div>
   ),
@@ -92,10 +92,16 @@ export default function AppleAirfareCPI() {
         </div>
       </header>
 
-      {/* ── 1. HERO SECTION (Apple Product Showcase) ── */}
+      {/* ── 1. HERO SECTION (3D Aircraft Flying Straight Behind Homepage Text) ── */}
       <section id="overview" className="apple-hero">
-        <div className="container" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div className="apple-eyebrow">
+        {/* 3D Straight-Flying Airplane Canvas in Background */}
+        <div className="aircraft-bg-stage">
+          <HeroAircraft />
+        </div>
+
+        {/* Foreground Content Layer */}
+        <div className="container hero-content-wrap">
+          <div className="apple-eyebrow hero-interactive">
             <span>🏛️</span>
             <span>MINISTRY OF STATISTICS & PROGRAMME IMPLEMENTATION</span>
           </div>
@@ -109,7 +115,7 @@ export default function AppleAirfareCPI() {
             AIRFARE CPI continuously transforms high-frequency domestic airfare observations into a statistically rigorous, ILO/IMF-compliant measure of aviation price movement for India.
           </p>
 
-          <div style={{ display: "flex", gap: 14, marginBottom: 20 }}>
+          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginBottom: 16 }}>
             <a href="#index" className="apple-btn-primary">
               <span>Explore Live Index</span>
               <span>➔</span>
@@ -120,7 +126,7 @@ export default function AppleAirfareCPI() {
           </div>
 
           {/* Apple Live Status Ribbon */}
-          <div className="apple-ribbon">
+          <div className="apple-ribbon hero-interactive">
             <div className="apple-ribbon-item">
               <span style={{ color: "#0071e3" }}>⚡</span>
               <span style={{ color: "#86868b" }}>BASKET:</span>
@@ -140,32 +146,6 @@ export default function AppleAirfareCPI() {
               <span style={{ color: "#0071e3" }}>📐</span>
               <span style={{ color: "#86868b" }}>ENGINE:</span>
               <strong style={{ color: "#0071e3" }}>ONLINE (Jevons)</strong>
-            </div>
-          </div>
-
-          {/* 3D Realistic Aircraft Stage */}
-          <div className="aircraft-stage">
-            <HeroAircraft />
-            <div
-              style={{
-                position: "absolute",
-                bottom: 12,
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: "rgba(255, 255, 255, 0.9)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(0, 0, 0, 0.08)",
-                borderRadius: 100,
-                padding: "6px 18px",
-                fontSize: 12,
-                color: "#86868b",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-              }}
-            >
-              <span style={{ color: "#0071e3", fontWeight: 700 }}>● Hover cursor over aircraft parts to inspect live telemetry</span>
             </div>
           </div>
         </div>
