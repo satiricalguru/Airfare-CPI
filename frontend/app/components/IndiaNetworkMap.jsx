@@ -1,20 +1,21 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ROUTE_NETWORK_HUBS, NETWORK_ROUTES } from "../data/mockData";
+import { NETWORK_ROUTES } from "../data/mockData";
 
-// Enhanced Geographically Balanced Coordinates (800x540 viewport)
-const HUBS_800 = [
-  { code: "DEL", city: "New Delhi", x: 370, y: 100, pax: 1200000, cpi: 106.0, labelPos: "top" },
-  { code: "AMD", city: "Ahmedabad", x: 220, y: 220, pax: 370000, cpi: 106.2, labelPos: "left" },
-  { code: "CCU", city: "Kolkata", x: 650, y: 225, pax: 740000, cpi: 108.2, labelPos: "right" },
-  { code: "BOM", city: "Mumbai", x: 235, y: 305, pax: 870000, cpi: 107.4, labelPos: "left" },
-  { code: "PNQ", city: "Pune", x: 290, y: 335, pax: 390000, cpi: 105.4, labelPos: "bottom" },
-  { code: "HYD", city: "Hyderabad", x: 420, y: 320, pax: 780000, cpi: 105.8, labelPos: "right" },
-  { code: "GOI", city: "Goa", x: 255, y: 405, pax: 450000, cpi: 109.1, labelPos: "left" },
-  { code: "BLR", city: "Bengaluru", x: 365, y: 430, pax: 950000, cpi: 107.5, labelPos: "bottom" },
-  { code: "MAA", city: "Chennai", x: 470, y: 435, pax: 600000, cpi: 106.8, labelPos: "right" },
-  { code: "COK", city: "Kochi", x: 330, y: 490, pax: 230000, cpi: 104.5, labelPos: "left" },
+// Geographically Proportional Coordinates scaled to leave bottom 140px clear for card
+// Map bounds: X: 160 -> 660 (Width 800), Y: 50 -> 380 (Height 560)
+const HUBS_CONFIG = [
+  { code: "DEL", city: "New Delhi", x: 380, y: 65, pax: 1200000, cpi: 106.0, labelPos: "top" },
+  { code: "AMD", city: "Ahmedabad", x: 230, y: 165, pax: 370000, cpi: 106.2, labelPos: "left" },
+  { code: "CCU", city: "Kolkata", x: 650, y: 175, pax: 740000, cpi: 108.2, labelPos: "right" },
+  { code: "BOM", city: "Mumbai", x: 245, y: 235, pax: 870000, cpi: 107.4, labelPos: "left" },
+  { code: "PNQ", city: "Pune", x: 300, y: 260, pax: 390000, cpi: 105.4, labelPos: "right" },
+  { code: "HYD", city: "Hyderabad", x: 425, y: 250, pax: 780000, cpi: 105.8, labelPos: "right" },
+  { code: "GOI", city: "Goa", x: 265, y: 315, pax: 450000, cpi: 109.1, labelPos: "left" },
+  { code: "BLR", city: "Bengaluru", x: 370, y: 335, pax: 950000, cpi: 107.5, labelPos: "bottom" },
+  { code: "MAA", city: "Chennai", x: 475, y: 340, pax: 600000, cpi: 106.8, labelPos: "right" },
+  { code: "COK", city: "Kochi", x: 340, y: 385, pax: 230000, cpi: 104.5, labelPos: "bottom" },
 ];
 
 export default function IndiaNetworkMap() {
@@ -24,7 +25,7 @@ export default function IndiaNetworkMap() {
   const canvasRef = useRef(null);
 
   const hubMap = {};
-  HUBS_800.forEach((h) => {
+  HUBS_CONFIG.forEach((h) => {
     hubMap[h.code] = h;
   });
 
@@ -35,25 +36,25 @@ export default function IndiaNetworkMap() {
     const ctx = canvas.getContext("2d");
 
     let animId;
-    let width = (canvas.width = canvas.offsetWidth * 2);
-    let height = (canvas.height = canvas.offsetHeight * 2);
-    ctx.scale(2, 2);
+    const VB_WIDTH = 800;
+    const VB_HEIGHT = 560;
 
-    const onResize = () => {
-      if (!canvas) return;
-      width = canvas.width = canvas.offsetWidth * 2;
-      height = canvas.height = canvas.offsetHeight * 2;
-      ctx.scale(2, 2);
+    const setupCanvas = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
     };
 
-    window.addEventListener("resize", onResize);
+    setupCanvas();
+    window.addEventListener("resize", setupCanvas);
 
-    // Flight particles for all routes
+    // Flight particles for each corridor
     const particles = NETWORK_ROUTES.map((route, i) => ({
       route,
-      progress: (i * 0.13) % 1,
-      speed: 0.0035 + (i % 3) * 0.0008,
-      size: 3.5,
+      progress: (i * 0.14) % 1,
+      speed: 0.003 + (i % 3) * 0.0006,
     }));
 
     // Quadratic Bezier interpolation helper
@@ -68,8 +69,7 @@ export default function IndiaNetworkMap() {
       const dx = h2.x - h1.x;
       const dy = h2.y - h1.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      // Curve outward based on corridor vector
-      const curvature = Math.min(dist * 0.22, 60);
+      const curvature = Math.min(dist * 0.2, 50);
       const nx = -dy / dist;
       const ny = dx / dist;
       return {
@@ -82,10 +82,11 @@ export default function IndiaNetworkMap() {
 
     const render = () => {
       time += 0.016;
-      ctx.clearRect(0, 0, width / 2, height / 2);
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width / VB_WIDTH;
+      const scaleY = rect.height / VB_HEIGHT;
 
-      const renderScaleX = (canvas.offsetWidth || 800) / 800;
-      const renderScaleY = (canvas.offsetHeight || 540) / 540;
+      ctx.clearRect(0, 0, rect.width, rect.height);
 
       // 1. Draw Flight Paths
       NETWORK_ROUTES.forEach((route) => {
@@ -98,40 +99,40 @@ export default function IndiaNetworkMap() {
           (selectedRoute?.from === route.to && selectedRoute?.to === route.from);
         const isHovered = hoveredRoute === route;
 
-        const h1 = { x: from.x * renderScaleX, y: from.y * renderScaleY };
-        const h2 = { x: to.x * renderScaleX, y: to.y * renderScaleY };
+        const h1 = { x: from.x * scaleX, y: from.y * scaleY };
+        const h2 = { x: to.x * scaleX, y: to.y * scaleY };
         const cp = getControlPoint(h1, h2);
 
-        // Draw Arc
+        // Draw Flight Path Arc
         ctx.beginPath();
         ctx.moveTo(h1.x, h1.y);
         ctx.quadraticCurveTo(cp.x, cp.y, h2.x, h2.y);
 
         if (isSelected) {
-          // Glow Outer Beam
-          ctx.strokeStyle = "rgba(0, 113, 227, 0.25)";
-          ctx.lineWidth = 6;
+          // Luminous Outer Beam Glow
+          ctx.strokeStyle = "rgba(0, 113, 227, 0.22)";
+          ctx.lineWidth = 8;
           ctx.setLineDash([]);
           ctx.stroke();
 
           // Solid Core Beam
           ctx.strokeStyle = "#0071e3";
-          ctx.lineWidth = 2.5;
+          ctx.lineWidth = 3;
           ctx.stroke();
         } else if (isHovered) {
           ctx.strokeStyle = "rgba(0, 113, 227, 0.6)";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2.2;
           ctx.setLineDash([]);
           ctx.stroke();
         } else {
-          ctx.strokeStyle = "rgba(142, 142, 147, 0.25)";
+          ctx.strokeStyle = "rgba(142, 142, 147, 0.22)";
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
           ctx.stroke();
         }
       });
 
-      // 2. Animate Cruising Particle Flights (Ultra-smooth 60fps)
+      // 2. Animate Cruising Aircraft Beacons & Vapor Trails (60 FPS Smooth)
       particles.forEach((p) => {
         p.progress += p.speed;
         if (p.progress > 1) p.progress -= 1;
@@ -144,46 +145,48 @@ export default function IndiaNetworkMap() {
           (selectedRoute?.from === p.route.from && selectedRoute?.to === p.route.to) ||
           (selectedRoute?.from === p.route.to && selectedRoute?.to === p.route.from);
 
-        const h1 = { x: from.x * renderScaleX, y: from.y * renderScaleY };
-        const h2 = { x: to.x * renderScaleX, y: to.y * renderScaleY };
+        const h1 = { x: from.x * scaleX, y: from.y * scaleY };
+        const h2 = { x: to.x * scaleX, y: to.y * scaleY };
         const cp = getControlPoint(h1, h2);
 
         const pt = getBezierPoint(h1, cp, h2, p.progress);
-        const trailPt = getBezierPoint(h1, cp, h2, Math.max(0, p.progress - 0.04));
+        const trailPt = getBezierPoint(h1, cp, h2, Math.max(0, p.progress - 0.05));
 
         // Vapor Trail
         ctx.beginPath();
         ctx.moveTo(trailPt.x, trailPt.y);
         ctx.lineTo(pt.x, pt.y);
-        ctx.strokeStyle = isSelected ? "rgba(0, 113, 227, 0.4)" : "rgba(0, 113, 227, 0.2)";
-        ctx.lineWidth = isSelected ? 3 : 1.5;
+        ctx.strokeStyle = isSelected ? "rgba(0, 113, 227, 0.45)" : "rgba(0, 113, 227, 0.25)";
+        ctx.lineWidth = isSelected ? 3.5 : 1.8;
+        ctx.setLineDash([]);
         ctx.stroke();
 
-        // Cruising Beacon / Plane Dot
+        // Cruising Aircraft Beacon Dot
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, isSelected ? 4.5 : 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? "#0071e3" : "#0071e3";
+        ctx.arc(pt.x, pt.y, isSelected ? 5 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = "#0071e3";
         ctx.shadowColor = "#0071e3";
-        ctx.shadowBlur = isSelected ? 12 : 4;
+        ctx.shadowBlur = isSelected ? 12 : 6;
         ctx.fill();
-        ctx.shadowBlur = 0; // Reset
+        ctx.shadowBlur = 0;
       });
 
       // 3. Draw Radar Pulses on Active Hubs
-      HUBS_800.forEach((hub) => {
+      HUBS_CONFIG.forEach((hub) => {
         const isFrom = selectedRoute?.from === hub.code;
         const isTo = selectedRoute?.to === hub.code;
         const isConnected = isFrom || isTo;
 
         if (isConnected) {
-          const hx = hub.x * renderScaleX;
-          const hy = hub.y * renderScaleY;
-          const pulseR = 6 + (Math.sin(time * 3) + 1) * 6;
+          const hx = hub.x * scaleX;
+          const hy = hub.y * scaleY;
+          const pulseR = 8 + (Math.sin(time * 3) + 1) * 7;
 
           ctx.beginPath();
           ctx.arc(hx, hy, pulseR, 0, Math.PI * 2);
           ctx.strokeStyle = "rgba(0, 113, 227, 0.35)";
           ctx.lineWidth = 1.5;
+          ctx.setLineDash([]);
           ctx.stroke();
         }
       });
@@ -195,7 +198,7 @@ export default function IndiaNetworkMap() {
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", setupCanvas);
     };
   }, [selectedRoute, hoveredRoute]);
 
@@ -204,7 +207,7 @@ export default function IndiaNetworkMap() {
       style={{
         position: "relative",
         width: "100%",
-        height: 540,
+        height: 560,
         backgroundColor: "#ffffff",
         borderRadius: 20,
         overflow: "hidden",
@@ -212,7 +215,7 @@ export default function IndiaNetworkMap() {
         boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
       }}
     >
-      {/* Background Decorative Spatial Grid */}
+      {/* Background Decorative Spatial Radar Grid */}
       <div
         style={{
           position: "absolute",
@@ -235,9 +238,9 @@ export default function IndiaNetworkMap() {
         }}
       />
 
-      {/* SVG Interactive Hub Overlay & Non-Overlapping Labels */}
+      {/* SVG Interactive Hub Overlay & Visible Labels */}
       <svg
-        viewBox="0 0 800 540"
+        viewBox="0 0 800 560"
         style={{
           position: "absolute",
           inset: 0,
@@ -245,7 +248,7 @@ export default function IndiaNetworkMap() {
           height: "100%",
         }}
       >
-        {/* Invisible Clickable Corridors */}
+        {/* Invisible Clickable Corridor Hitboxes */}
         {NETWORK_ROUTES.map((route, idx) => {
           const from = hubMap[route.from];
           const to = hubMap[route.to];
@@ -254,7 +257,7 @@ export default function IndiaNetworkMap() {
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const curvature = Math.min(dist * 0.22, 60);
+          const curvature = Math.min(dist * 0.2, 50);
           const nx = -dy / dist;
           const ny = dx / dist;
           const cpx = (from.x + to.x) / 2 + nx * curvature;
@@ -268,7 +271,7 @@ export default function IndiaNetworkMap() {
               d={pathD}
               fill="none"
               stroke="transparent"
-              strokeWidth={24}
+              strokeWidth={28}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => setHoveredRoute(route)}
               onMouseLeave={() => setHoveredRoute(null)}
@@ -277,8 +280,8 @@ export default function IndiaNetworkMap() {
           );
         })}
 
-        {/* Airport Hub Nodes with Clean Spacing */}
-        {HUBS_800.map((hub) => {
+        {/* Airport Hub Nodes & Labels - Fully Visible with Clear Spacing */}
+        {HUBS_CONFIG.map((hub) => {
           const isFrom = selectedRoute?.from === hub.code;
           const isTo = selectedRoute?.to === hub.code;
           const isConnected = isFrom || isTo;
@@ -292,7 +295,7 @@ export default function IndiaNetworkMap() {
           if (hub.labelPos === "top") {
             labelY -= 14;
           } else if (hub.labelPos === "bottom") {
-            labelY += 20;
+            labelY += 18;
           } else if (hub.labelPos === "left") {
             labelX -= 16;
             labelY += 4;
@@ -318,7 +321,7 @@ export default function IndiaNetworkMap() {
               <circle
                 cx={hub.x}
                 cy={hub.y}
-                r={isConnected || isHovered ? 11 : 6}
+                r={isConnected || isHovered ? 12 : 7}
                 fill={isConnected ? "rgba(0, 113, 227, 0.15)" : "#ffffff"}
                 stroke={isConnected ? "#0071e3" : "rgba(0, 0, 0, 0.18)"}
                 strokeWidth={isConnected ? 2 : 1}
@@ -329,7 +332,7 @@ export default function IndiaNetworkMap() {
               <circle
                 cx={hub.x}
                 cy={hub.y}
-                r={isConnected ? 4.5 : 2.8}
+                r={isConnected ? 5 : 3}
                 fill={isConnected ? "#0071e3" : "#1d1d1f"}
                 style={{ transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
               />
@@ -356,20 +359,20 @@ export default function IndiaNetworkMap() {
         })}
       </svg>
 
-      {/* Selected Corridor Apple Floating Glass Pill */}
+      {/* Selected Corridor Floating Glass Pill Card */}
       {selectedRoute && (
         <div
           style={{
             position: "absolute",
-            bottom: 20,
-            left: 20,
-            right: 20,
-            background: "rgba(255, 255, 255, 0.92)",
+            bottom: 16,
+            left: 16,
+            right: 16,
+            background: "rgba(255, 255, 255, 0.94)",
             backdropFilter: "blur(24px)",
             WebkitBackdropFilter: "blur(24px)",
             border: "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: 16,
-            padding: "16px 24px",
+            padding: "14px 22px",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
@@ -377,20 +380,21 @@ export default function IndiaNetworkMap() {
             gap: 16,
             boxShadow: "0 10px 32px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
             transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            zIndex: 10,
           }}
         >
           <div>
             <div style={{ fontSize: 10, color: "#86868b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Active Aviation Corridor
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+            <div style={{ fontSize: 19, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
               <span>{selectedRoute.from}</span>
               <span style={{ fontSize: 13, color: "#0071e3" }}>➔</span>
               <span>{selectedRoute.to}</span>
               <span
                 style={{
                   fontSize: 10,
-                  padding: "3px 8px",
+                  padding: "2px 7px",
                   borderRadius: 100,
                   backgroundColor: selectedRoute.status === "Surging" ? "rgba(255, 59, 48, 0.1)" : "rgba(52, 199, 89, 0.1)",
                   color: selectedRoute.status === "Surging" ? "#ff3b30" : "#34c759",
@@ -404,18 +408,18 @@ export default function IndiaNetworkMap() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 32 }}>
+          <div style={{ display: "flex", gap: 28 }}>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Jevons Index</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: "#0071e3", fontFamily: "var(--font-mono)" }}>{selectedRoute.cpi}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#0071e3", fontFamily: "var(--font-mono)" }}>{selectedRoute.cpi}</div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Average Fare</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: "#1d1d1f", fontFamily: "var(--font-mono)" }}>{selectedRoute.fare}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#1d1d1f", fontFamily: "var(--font-mono)" }}>{selectedRoute.fare}</div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>MoM Movement</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: "#34c759", fontFamily: "var(--font-mono)" }}>{selectedRoute.change}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#34c759", fontFamily: "var(--font-mono)" }}>{selectedRoute.change}</div>
             </div>
           </div>
         </div>
@@ -426,18 +430,18 @@ export default function IndiaNetworkMap() {
         <div
           style={{
             position: "absolute",
-            top: 20,
-            right: 20,
+            top: 16,
+            right: 16,
             background: "#ffffff",
             border: "1px solid rgba(0, 0, 0, 0.08)",
             borderRadius: 12,
-            padding: "10px 16px",
+            padding: "8px 14px",
             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
             zIndex: 30,
             pointerEvents: "none",
           }}
         >
-          <div style={{ color: "#0071e3", fontWeight: 800, fontSize: 13 }}>
+          <div style={{ color: "#0071e3", fontWeight: 800, fontSize: 12 }}>
             {hoveredHub.city} ({hoveredHub.code})
           </div>
           <div style={{ color: "#86868b", fontSize: 11, marginTop: 2, fontFamily: "var(--font-mono)" }}>
