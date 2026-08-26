@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export default function CustomCursor({ isAircraftHovered }) {
+export default function CustomCursor() {
   const [pos, setPos] = useState({ x: -100, y: -100 });
   const [trailingPos, setTrailingPos] = useState({ x: -100, y: -100 });
   const [isPointer, setIsPointer] = useState(false);
@@ -22,8 +22,8 @@ export default function CustomCursor({ isAircraftHovered }) {
       const clickable =
         target.closest("button") ||
         target.closest("a") ||
-        target.closest("[role='button']") ||
-        target.classList.contains("clickable");
+        target.closest("input") ||
+        target.closest("[role='button']");
       setIsPointer(!!clickable);
     };
 
@@ -32,15 +32,14 @@ export default function CustomCursor({ isAircraftHovered }) {
     window.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseleave", onMouseLeave);
 
-    // Smooth trailing physics
     let animId;
     let currX = -100;
     let currY = -100;
 
     const loop = () => {
       animId = requestAnimationFrame(loop);
-      currX += (mouseX - currX) * 0.15;
-      currY += (mouseY - currY) * 0.15;
+      currX += (mouseX - currX) * 0.2;
+      currY += (mouseY - currY) * 0.2;
       setTrailingPos({ x: currX, y: currY });
     };
 
@@ -57,72 +56,40 @@ export default function CustomCursor({ isAircraftHovered }) {
 
   return (
     <>
-      {/* Small Precision Dot */}
+      {/* Apple Precision Dot */}
       <div
         style={{
           position: "fixed",
           top: 0,
           left: 0,
-          width: 8,
-          height: 8,
-          backgroundColor: isAircraftHovered ? "#f9bd22" : "#00f0ff",
+          width: 7,
+          height: 7,
+          backgroundColor: "#0071e3",
           borderRadius: "50%",
           pointerEvents: "none",
           zIndex: 9999,
-          transform: `translate3d(${pos.x - 4}px, ${pos.y - 4}px, 0)`,
-          boxShadow: isAircraftHovered
-            ? "0 0 12px #f9bd22, 0 0 20px #f9bd22"
-            : "0 0 10px #00f0ff, 0 0 18px #00f0ff",
-          transition: "background-color 0.2s ease",
+          transform: `translate3d(${pos.x - 3.5}px, ${pos.y - 3.5}px, 0)`,
+          boxShadow: "0 0 10px rgba(0, 113, 227, 0.4)",
         }}
       />
 
-      {/* Trailing Aura Ring */}
+      {/* Trailing Translucent Ring */}
       <div
         style={{
           position: "fixed",
           top: 0,
           left: 0,
-          width: isAircraftHovered ? 84 : isPointer ? 44 : 32,
-          height: isAircraftHovered ? 84 : isPointer ? 44 : 32,
-          border: isAircraftHovered
-            ? "1.5px solid rgba(249, 189, 34, 0.85)"
-            : isPointer
-            ? "1.5px solid rgba(76, 215, 246, 0.8)"
-            : "1px solid rgba(76, 215, 246, 0.4)",
-          backgroundColor: isAircraftHovered
-            ? "rgba(249, 189, 34, 0.1)"
-            : isPointer
-            ? "rgba(6, 182, 212, 0.08)"
-            : "transparent",
+          width: isPointer ? 44 : 28,
+          height: isPointer ? 44 : 28,
+          border: isPointer ? "1.5px solid rgba(0, 113, 227, 0.6)" : "1px solid rgba(0, 0, 0, 0.15)",
+          backgroundColor: isPointer ? "rgba(0, 113, 227, 0.05)" : "transparent",
           borderRadius: "50%",
           pointerEvents: "none",
           zIndex: 9998,
-          transform: `translate3d(${trailingPos.x - (isAircraftHovered ? 42 : isPointer ? 22 : 16)}px, ${
-            trailingPos.y - (isAircraftHovered ? 42 : isPointer ? 22 : 16)
-          }px, 0)`,
-          transition: "width 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background-color 0.2s ease",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backdropFilter: isAircraftHovered ? "blur(4px)" : "none",
+          transform: `translate3d(${trailingPos.x - (isPointer ? 22 : 14)}px, ${trailingPos.y - (isPointer ? 22 : 14)}px, 0)`,
+          transition: "width 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease",
         }}
-      >
-        {isAircraftHovered && (
-          <span
-            style={{
-              fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "#f9bd22",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-            }}
-          >
-            EXPLORE
-          </span>
-        )}
-      </div>
+      />
     </>
   );
 }
