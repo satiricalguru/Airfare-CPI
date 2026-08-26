@@ -161,7 +161,6 @@ export default function AppleAirfareCPI() {
       <div style={{ display: "flex", justifyContent: "center", marginTop: -32, position: "relative", zIndex: 20 }}>
         <div className="apple-ribbon">
           <div className="apple-ribbon-item">
-            <span style={{ color: "#0071e3" }}>⚡</span>
             <span style={{ color: "#86868b" }}>BASKET:</span>
             <strong style={{ color: "#1d1d1f" }}>25 / 25 Routes</strong>
           </div>
@@ -171,12 +170,10 @@ export default function AppleAirfareCPI() {
             <strong style={{ color: "#34c759" }}>HEALTHY</strong>
           </div>
           <div className="apple-ribbon-item">
-            <span style={{ color: "#ff9500" }}>⏱</span>
             <span style={{ color: "#86868b" }}>UPDATED:</span>
             <strong style={{ color: "#1d1d1f" }}>{STATISTICAL_CONSTANTS.lastUpdate}</strong>
           </div>
           <div className="apple-ribbon-item">
-            <span style={{ color: "#0071e3" }}>📐</span>
             <span style={{ color: "#86868b" }}>ENGINE:</span>
             <strong style={{ color: "#0071e3" }}>ONLINE (Jevons)</strong>
           </div>
@@ -258,7 +255,7 @@ export default function AppleAirfareCPI() {
             </div>
 
             <div style={{ marginTop: 24, padding: "16px 20px", background: "#f5f5f7", borderRadius: 12, fontSize: 13, color: "#86868b" }}>
-              💡 <strong>Methodology Note:</strong> {currentHorizon.desc}
+              <strong>Methodology Note:</strong> {currentHorizon.desc}
             </div>
           </div>
         </div>
@@ -559,7 +556,7 @@ export default function AppleAirfareCPI() {
                   cursor: isScrapingRunning ? "wait" : "pointer",
                 }}
               >
-                {isScrapingRunning ? `🔄 INGESTING (STAGE ${scrapeStep}/4)...` : "⚡ TRIGGER SCRAPE CYCLE"}
+                {isScrapingRunning ? `Ingesting (Stage ${scrapeStep}/4)...` : "Trigger Scrape Cycle"}
               </button>
             </div>
 
@@ -756,7 +753,7 @@ export default function AppleAirfareCPI() {
                       gap: 6,
                     }}
                   >
-                    <span>{copiedCode ? "✓ Copied" : "📋 Copy"}</span>
+                    <span>{copiedCode ? "Copied" : "Copy"}</span>
                   </button>
 
                   <button
@@ -778,7 +775,7 @@ export default function AppleAirfareCPI() {
                       boxShadow: "0 2px 8px rgba(0, 113, 227, 0.4)",
                     }}
                   >
-                    <span>{isApiLoading ? "⏳ Running..." : "▶ Send Request"}</span>
+                    <span>{isApiLoading ? "Running..." : "Send Request"}</span>
                   </button>
                 </div>
               </div>
