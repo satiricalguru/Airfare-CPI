@@ -92,14 +92,14 @@ export default function AppleAirfareCPI() {
         </div>
       </header>
 
-      {/* ── 1. HERO SECTION (3D Aircraft Flying Straight Behind Homepage Text) ── */}
+      {/* ── 1. HERO SECTION (Clean, Minimalist Apple Stage with 3D Aircraft) ── */}
       <section id="overview" className="apple-hero">
         {/* 3D Straight-Flying Airplane Canvas in Background */}
         <div className="aircraft-bg-stage">
           <HeroAircraft />
         </div>
 
-        {/* Foreground Content Layer */}
+        {/* Minimalist Foreground Content Layer */}
         <div className="container hero-content-wrap">
           <div className="apple-eyebrow hero-interactive">
             <span>🏛️</span>
@@ -107,15 +107,10 @@ export default function AppleAirfareCPI() {
           </div>
 
           <h1 className="apple-heading">
-            The Price of Flight. <br />
-            <span className="apple-heading-gradient">Measured in Real Time.</span>
+            The Price of Flight.
           </h1>
 
-          <p className="apple-subheading">
-            AIRFARE CPI continuously transforms high-frequency domestic airfare observations into a statistically rigorous, ILO/IMF-compliant measure of aviation price movement for India.
-          </p>
-
-          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginBottom: 16 }}>
+          <div className="hero-interactive" style={{ display: "flex", gap: 14, marginTop: 12, marginBottom: 28 }}>
             <a href="#index" className="apple-btn-primary">
               <span>Explore Live Index</span>
               <span>➔</span>
