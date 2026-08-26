@@ -33,6 +33,9 @@ export default function AppleAirfareCPI() {
   const [isScrapingRunning, setIsScrapingRunning] = useState(false);
   const [scrapeStep, setScrapeStep] = useState(0);
   const [selectedApiIndex, setSelectedApiIndex] = useState(0);
+  const [apiActiveTab, setApiActiveTab] = useState("response"); // "response" | "curl" | "js" | "python"
+  const [isApiLoading, setIsApiLoading] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [showBulletinModal, setShowBulletinModal] = useState(false);
 
   // Scraper Simulation Run
@@ -50,7 +53,44 @@ export default function AppleAirfareCPI() {
     }, 3200);
   };
 
+  // API Playground Run Query Simulation
+  const handleRunApiQuery = () => {
+    if (isApiLoading) return;
+    setIsApiLoading(true);
+    setTimeout(() => {
+      setIsApiLoading(false);
+    }, 350);
+  };
+
+  const handleCopyCode = (text) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
   const currentHorizon = BOOKING_HORIZONS[volatilityIndex];
+  const activeEndpoint = API_ENDPOINTS_LIST[selectedApiIndex];
+
+  // Code snippets generator for active endpoint
+  const getCodeSnippet = (tab) => {
+    const baseUrl = `https://api.airfare-cpi.mospi.gov.in${activeEndpoint.path}`;
+    if (tab === "curl") {
+      return activeEndpoint.method === "GET"
+        ? `curl -X GET "${baseUrl}" \\\n  -H "Authorization: Bearer mospi_live_key_9f8a2" \\\n  -H "Accept: application/json"`
+        : `curl -X POST "${baseUrl}" \\\n  -H "Authorization: Bearer mospi_live_key_9f8a2" \\\n  -H "Content-Type: application/json" \\\n  -d '{"trigger_source": "manual_admin", "depth": "full"}'`;
+    }
+    if (tab === "js") {
+      return activeEndpoint.method === "GET"
+        ? `const res = await fetch("${baseUrl}", {\n  headers: {\n    "Authorization": "Bearer mospi_live_key_9f8a2",\n    "Accept": "application/json"\n  }\n});\nconst data = await res.json();\nconsole.log(data);`
+        : `const res = await fetch("${baseUrl}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer mospi_live_key_9f8a2",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ trigger_source: "manual_admin" })\n});\nconst data = await res.json();\nconsole.log(data);`;
+    }
+    if (tab === "python") {
+      return activeEndpoint.method === "GET"
+        ? `import requests\n\nurl = "${baseUrl}"\nheaders = {\n    "Authorization": "Bearer mospi_live_key_9f8a2",\n    "Accept": "application/json"\n}\n\nresponse = requests.get(url, headers=headers)\nprint(response.json())`
+        : `import requests\n\nurl = "${baseUrl}"\nheaders = {"Authorization": "Bearer mospi_live_key_9f8a2"}\npayload = {"trigger_source": "manual_admin"}\n\nresponse = requests.post(url, json=payload, headers=headers)\nprint(response.json())`;
+    }
+    return JSON.stringify(activeEndpoint.response, null, 2);
+  };
 
   return (
     <div style={{ position: "relative", minHeight: "100vh", backgroundColor: "#ffffff" }}>
@@ -543,78 +583,256 @@ export default function AppleAirfareCPI() {
         </div>
       </section>
 
-      {/* ── 9. API EXPLORER ── */}
+      {/* ── 9. DEVELOPER-GRADE API PLAYGROUND (Stripe/Apple Level Console) ── */}
       <section id="api" className="section-wrap">
         <div className="container">
           <div className="apple-section-header">
-            <div className="apple-section-eyebrow">Enterprise & Dissemination Architecture</div>
-            <h2 className="apple-section-title">One Index. Many Interfaces.</h2>
+            <div className="apple-section-eyebrow">Enterprise & Statistical Dissemination</div>
+            <h2 className="apple-section-title">One Index. Infinite Interfaces.</h2>
             <p className="apple-section-desc">
-              High-performance REST API endpoints providing statistical data feeds for MoSPI systems.
+              High-throughput REST API with microsecond responses, automated schema documentation, and multi-language SDK integrations.
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 24, alignItems: "start" }}>
+            {/* Left: Interactive Endpoint List */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {API_ENDPOINTS_LIST.map((ep, i) => (
-                <div
-                  key={ep.path}
-                  onClick={() => setSelectedApiIndex(i)}
-                  style={{
-                    background: selectedApiIndex === i ? "#ffffff" : "#f5f5f7",
-                    border: selectedApiIndex === i ? "1.5px solid #0071e3" : "1px solid rgba(0,0,0,0.06)",
-                    borderRadius: 12,
-                    padding: "16px 20px",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    boxShadow: selectedApiIndex === i ? "0 4px 16px rgba(0,113,227,0.12)" : "none",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: 6,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        fontFamily: "var(--font-mono)",
-                        backgroundColor: ep.method === "GET" ? "rgba(52, 199, 89, 0.15)" : "rgba(0, 113, 227, 0.15)",
-                        color: ep.method === "GET" ? "#15803d" : "#0071e3",
-                      }}
-                    >
-                      {ep.method}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "#1d1d1f", fontWeight: 700 }}>
-                      {ep.path}
-                    </span>
+              {API_ENDPOINTS_LIST.map((ep, i) => {
+                const isSelected = selectedApiIndex === i;
+                return (
+                  <div
+                    key={ep.path}
+                    onClick={() => setSelectedApiIndex(i)}
+                    style={{
+                      background: isSelected ? "#ffffff" : "#f5f5f7",
+                      border: isSelected ? "2px solid #0071e3" : "1px solid rgba(0, 0, 0, 0.05)",
+                      borderRadius: 14,
+                      padding: "16px 20px",
+                      cursor: "pointer",
+                      transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+                      boxShadow: isSelected ? "0 8px 24px rgba(0, 113, 227, 0.12)" : "none",
+                      transform: isSelected ? "translateX(4px)" : "none",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            fontFamily: "var(--font-mono)",
+                            backgroundColor: ep.method === "GET" ? "rgba(52, 199, 89, 0.15)" : "rgba(0, 113, 227, 0.15)",
+                            color: ep.method === "GET" ? "#15803d" : "#0071e3",
+                          }}
+                        >
+                          {ep.method}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: isSelected ? "#0071e3" : "#1d1d1f", fontWeight: 700 }}>
+                          {ep.path}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, color: "#34c759", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                        ● ~14ms
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "#86868b", marginTop: 8, lineHeight: 1.5 }}>
+                      {ep.description}
+                    </p>
                   </div>
-                  <p style={{ fontSize: 12, color: "#86868b", marginTop: 6 }}>
-                    {ep.description}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* JSON Response Terminal */}
+            {/* Right: Apple/macOS Interactive Terminal Playground */}
             <div
-              className="apple-card"
               style={{
-                background: "#1d1d1f",
-                padding: 24,
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                overflowY: "auto",
-                maxHeight: 460,
-                color: "#4cd7f6",
+                background: "#161618",
+                borderRadius: 18,
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                overflow: "hidden",
+                boxShadow: "0 20px 50px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.8)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 8, marginBottom: 12, color: "#86868b", fontSize: 11 }}>
-                <span>HTTP/1.1 200 OK</span>
-                <span>Content-Type: application/json</span>
+              {/* macOS Window Title Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 18px",
+                  backgroundColor: "#1f1f23",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                }}
+              >
+                {/* Traffic Light Dots */}
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#ff5f56" }} />
+                  <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#ffbd2e" }} />
+                  <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#27c93f" }} />
+                  <span style={{ fontSize: 11, color: "#86868b", marginLeft: 12, fontFamily: "var(--font-mono)" }}>
+                    MoSPI Live Dissemination Console
+                  </span>
+                </div>
+
+                {/* Live Latency & Status */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      padding: "2px 8px",
+                      borderRadius: 100,
+                      background: "rgba(52, 199, 89, 0.15)",
+                      color: "#34c759",
+                      fontFamily: "var(--font-mono)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    HTTP 200 OK
+                  </span>
+                  <span style={{ fontSize: 11, color: "#86868b", fontFamily: "var(--font-mono)" }}>14ms</span>
+                </div>
               </div>
-              <pre style={{ margin: 0 }}>
-                {JSON.stringify(API_ENDPOINTS_LIST[selectedApiIndex].response, null, 2)}
-              </pre>
+
+              {/* Playground Navigation Tabs & Actions */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 16px",
+                  backgroundColor: "#161618",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                }}
+              >
+                {/* Language / View Switcher */}
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[
+                    { id: "response", label: "Response (JSON)" },
+                    { id: "curl", label: "cURL" },
+                    { id: "js", label: "JavaScript" },
+                    { id: "python", label: "Python" },
+                  ].map((tab) => {
+                    const isActive = apiActiveTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setApiActiveTab(tab.id)}
+                        style={{
+                          background: isActive ? "rgba(255, 255, 255, 0.1)" : "transparent",
+                          color: isActive ? "#ffffff" : "#86868b",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fontFamily: "var(--font-mono)",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Playground Action Buttons */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => handleCopyCode(getCodeSnippet(apiActiveTab))}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      color: copiedCode ? "#34c759" : "#d1d5db",
+                      borderRadius: 8,
+                      padding: "5px 12px",
+                      fontSize: 11,
+                      fontFamily: "var(--font-mono)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span>{copiedCode ? "✓ Copied" : "📋 Copy"}</span>
+                  </button>
+
+                  <button
+                    onClick={handleRunApiQuery}
+                    disabled={isApiLoading}
+                    style={{
+                      background: "#0071e3",
+                      border: "none",
+                      color: "#ffffff",
+                      borderRadius: 8,
+                      padding: "5px 14px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fontFamily: "var(--font-mono)",
+                      cursor: isApiLoading ? "wait" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: "0 2px 8px rgba(0, 113, 227, 0.4)",
+                    }}
+                  >
+                    <span>{isApiLoading ? "⏳ Running..." : "▶ Send Request"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Terminal Output Window */}
+              <div
+                style={{
+                  padding: 20,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  lineHeight: 1.65,
+                  minHeight: 320,
+                  maxHeight: 460,
+                  overflowY: "auto",
+                  color: "#e2e8f0",
+                }}
+              >
+                {isApiLoading ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#0071e3", padding: "40px 0", justifyContent: "center" }}>
+                    <div className="live-green-dot" style={{ background: "#0071e3", width: 12, height: 12 }} />
+                    <span>Executing HTTP query to MoSPI Node...</span>
+                  </div>
+                ) : (
+                  <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {apiActiveTab === "response" ? (
+                      <code style={{ color: "#38bdf8" }}>
+                        {JSON.stringify(activeEndpoint.response, null, 2)}
+                      </code>
+                    ) : (
+                      <code style={{ color: "#a5b4fc" }}>
+                        {getCodeSnippet(apiActiveTab)}
+                      </code>
+                    )}
+                  </pre>
+                )}
+              </div>
+
+              {/* Terminal Bottom Security & Metadata Bar */}
+              <div
+                style={{
+                  padding: "10px 18px",
+                  backgroundColor: "#1a1a1e",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: 11,
+                  color: "#6b7280",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                <span>Auth: Bearer Token Verified</span>
+                <span>Payload: ~1.4 KB · Jevons Geometric Engine</span>
+              </div>
             </div>
           </div>
         </div>
