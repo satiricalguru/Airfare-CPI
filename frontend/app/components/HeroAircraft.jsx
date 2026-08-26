@@ -24,8 +24,8 @@ export default function HeroAircraft() {
       0.1,
       100
     );
-    // Camera positioned with optimal side-quarter beauty angle
-    camera.position.set(0, 0.3, 8.5);
+    // Camera positioned with optimal elevation to view plane behind headline
+    camera.position.set(0, 0.45, 8.4);
 
     // 2. High-Performance WebGL Renderer
     const renderer = new THREE.WebGLRenderer({
@@ -71,7 +71,7 @@ export default function HeroAircraft() {
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.06 });
     const groundShadow = new THREE.Mesh(shadowGeo, shadowMat);
     groundShadow.rotation.x = -Math.PI / 2;
-    groundShadow.position.y = -2.0;
+    groundShadow.position.y = -2.2;
     groundShadow.receiveShadow = true;
     scene.add(groundShadow);
 
@@ -98,7 +98,7 @@ export default function HeroAircraft() {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const targetScale = 7.4 / (maxDim || 1); // Large majestic presence
+        const targetScale = 7.4 / (maxDim || 1);
 
         planeModel.scale.set(targetScale, targetScale, targetScale);
         planeModel.position.set(
@@ -165,13 +165,13 @@ export default function HeroAircraft() {
       (err) => console.error("Error loading A320 model:", err)
     );
 
-    // Initial Left-to-Right Flight Attitude:
-    // With baseRotY = 0.05, the tail is on the left (-X) and the nose is on the right (+X), cruising left to right across the screen!
+    // Elevated Left-to-Right Flight Attitude (Shifted upwards to sit directly behind headline text)
     const baseRotY = 0.05; // Tail on left, nose on right
     const baseRotX = 0.04; // Level horizontal pitch
     const baseRotZ = 0.0; // Level horizontal wings
 
-    airplaneFlightGroup.position.set(0, -0.15, 0);
+    const basePosY = 0.42; // Elevated upwards
+    airplaneFlightGroup.position.set(0, basePosY, 0);
     airplaneFlightGroup.rotation.set(baseRotX, baseRotY, baseRotZ);
 
     // 7. Mouse & Raycasting Setup
@@ -182,7 +182,7 @@ export default function HeroAircraft() {
     let targetRotY = baseRotY;
     let targetRotZ = baseRotZ;
     let targetPosX = 0;
-    let targetPosY = -0.15;
+    let targetPosY = basePosY;
 
     let currentlyHovered = null;
 
@@ -196,11 +196,11 @@ export default function HeroAircraft() {
       setHudPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
 
       // Subtle, gentle cruising flight steering
-      targetRotY = baseRotY + x * 0.18; // Gentle yaw
-      targetRotX = baseRotX - y * 0.12; // Gentle pitch
-      targetRotZ = baseRotZ - x * 0.1; // Gentle aerodynamic roll
+      targetRotY = baseRotY + x * 0.18;
+      targetRotX = baseRotX - y * 0.12;
+      targetRotZ = baseRotZ - x * 0.1;
       targetPosX = x * 0.35;
-      targetPosY = -0.15 + y * 0.18;
+      targetPosY = basePosY + y * 0.18;
     };
 
     window.addEventListener("mousemove", onMouseMove);
