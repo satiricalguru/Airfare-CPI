@@ -153,7 +153,7 @@ export default function IndiaNetworkMap() {
           ctx.stroke();
         } else {
           // Subtle background route mesh
-          ctx.strokeStyle = isDarkMode ? "rgba(148, 163, 184, 0.18)" : "rgba(100, 116, 139, 0.22)";
+          ctx.strokeStyle = isDarkMode ? "rgba(148, 163, 184, 0.22)" : "rgba(100, 116, 139, 0.25)";
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
           ctx.shadowBlur = 0;
@@ -242,18 +242,27 @@ export default function IndiaNetworkMap() {
         }}
       />
 
-
-
-      {/* Main Map Container */}
-      <div style={{ position: "relative", width: "100%", height: 560, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {/* Real Geographic Vector Map of India (SVG Base) */}
+      {/* Main Centered Map Stage with Locked Aspect Ratio */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 520,
+          aspectRatio: "612 / 696",
+          margin: "16px auto 12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* Unified Single SVG Map (States + Nodes perfectly locked) */}
         <svg
           viewBox={INDIA_MAP_DATA.viewBox}
           style={{
+            position: "absolute",
+            inset: 0,
             width: "100%",
             height: "100%",
-            maxWidth: 580,
-            maxHeight: 560,
             filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(56, 189, 248, 0.12))" : "drop-shadow(0 4px 16px rgba(0, 101, 145, 0.08))",
           }}
         >
@@ -272,7 +281,7 @@ export default function IndiaNetworkMap() {
             </linearGradient>
           </defs>
 
-          {/* 36 Indian State Polygons */}
+          {/* Layer 1: 36 Indian State Polygons */}
           <g id="india-states">
             {INDIA_MAP_DATA.locations.map((loc) => {
               const isHovered = hoveredState === loc.id;
@@ -280,12 +289,12 @@ export default function IndiaNetworkMap() {
 
               let fillColor = isDarkMode ? "#0f172a" : "#f1f5f9";
               if (hasActiveHub) {
-                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.16)" : "rgba(0, 101, 145, 0.12)";
+                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.18)" : "rgba(0, 101, 145, 0.12)";
               } else if (isHovered) {
                 fillColor = isDarkMode ? "rgba(56, 189, 248, 0.1)" : "rgba(0, 101, 145, 0.08)";
               }
 
-              let strokeColor = isDarkMode ? "rgba(56, 189, 248, 0.25)" : "rgba(148, 163, 184, 0.6)";
+              let strokeColor = isDarkMode ? "rgba(56, 189, 248, 0.28)" : "rgba(148, 163, 184, 0.65)";
               if (hasActiveHub) {
                 strokeColor = isDarkMode ? "#38bdf8" : "#006591";
               }
@@ -297,7 +306,7 @@ export default function IndiaNetworkMap() {
                   d={loc.path}
                   fill={fillColor}
                   stroke={strokeColor}
-                  strokeWidth={hasActiveHub ? 1.5 : 0.75}
+                  strokeWidth={hasActiveHub ? 1.6 : 0.8}
                   strokeLinejoin="round"
                   style={{
                     transition: "fill 0.25s ease, stroke 0.25s ease",
@@ -311,9 +320,78 @@ export default function IndiaNetworkMap() {
               );
             })}
           </g>
+
+          {/* Layer 2: Airport Hub Interactive Nodes (inside same SVG!) */}
+          <g id="airport-hubs">
+            {HUBS_CONFIG.map((hub) => {
+              const isOrigin = hub.code === activeFrom;
+              const isDest = hub.code === activeTo;
+              const isSelected = isOrigin || isDest;
+              const isHovered = hoveredHub === hub.code;
+
+              return (
+                <g
+                  key={hub.code}
+                  transform={`translate(${hub.x}, ${hub.y})`}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => setHoveredHub(hub.code)}
+                  onMouseLeave={() => setHoveredHub(null)}
+                  onClick={() => {
+                    const matchingRoute = routesList.find((r) => r.from === hub.code || r.to === hub.code);
+                    if (matchingRoute) setSelectedRoute(matchingRoute);
+                  }}
+                >
+                  {/* Active Hub Radar Ring */}
+                  {isSelected && (
+                    <circle
+                      r={14}
+                      fill={isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.12)"}
+                      stroke={isDarkMode ? "#38bdf8" : "#006591"}
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
+                    />
+                  )}
+
+                  {/* Hub Beacon Pin */}
+                  <circle
+                    r={isSelected ? 6 : (isHovered ? 5 : 3.5)}
+                    fill={isSelected ? (isDarkMode ? "#ffffff" : "#006591") : (isDarkMode ? "#38bdf8" : "#0284c7")}
+                    stroke={isSelected ? (isDarkMode ? "#38bdf8" : "#ffffff") : (isDarkMode ? "#0f172a" : "#ffffff")}
+                    strokeWidth={2}
+                    filter={isSelected ? "url(#india-glow)" : undefined}
+                  />
+
+                  {/* Hub IATA Label Pill */}
+                  <g transform={`translate(${hub.labelPos === "left" ? -28 : (hub.labelPos === "right" ? 10 : -10)}, ${hub.labelPos === "top" ? -12 : 16})`}>
+                    <rect
+                      x={-2}
+                      y={-10}
+                      width={24}
+                      height={14}
+                      rx={3}
+                      fill={isSelected ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(15,23,42,0.88)" : "rgba(255,255,255,0.9)")}
+                      stroke={isSelected ? "#ffffff" : (isDarkMode ? "rgba(56, 189, 248, 0.4)" : "rgba(0, 101, 145, 0.25)")}
+                      strokeWidth={0.8}
+                    />
+                    <text
+                      x={10}
+                      y={0}
+                      textAnchor="middle"
+                      fill={isSelected ? "#ffffff" : (isDarkMode ? "#e2e8f0" : "#1e293b")}
+                      fontSize={8.5}
+                      fontWeight={900}
+                      fontFamily="var(--font-mono)"
+                    >
+                      {hub.code}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+          </g>
         </svg>
 
-        {/* 60FPS Flight Stream Animation Layer */}
+        {/* Layer 3: 60FPS Flight Stream Canvas (exact same frame) */}
         <canvas
           ref={canvasRef}
           style={{
@@ -325,94 +403,13 @@ export default function IndiaNetworkMap() {
           }}
         />
 
-        {/* Airport Hub Interactive Nodes (SVG Overlay) */}
-        <svg
-          viewBox={INDIA_MAP_DATA.viewBox}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            maxWidth: 580,
-            maxHeight: 560,
-            pointerEvents: "auto",
-          }}
-        >
-          {HUBS_CONFIG.map((hub) => {
-            const isOrigin = hub.code === activeFrom;
-            const isDest = hub.code === activeTo;
-            const isSelected = isOrigin || isDest;
-            const isHovered = hoveredHub === hub.code;
-
-            return (
-              <g
-                key={hub.code}
-                transform={`translate(${hub.x}, ${hub.y})`}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={() => setHoveredHub(hub.code)}
-                onMouseLeave={() => setHoveredHub(null)}
-                onClick={() => {
-                  // Switch corridor to or from this hub
-                  const matchingRoute = routesList.find((r) => r.from === hub.code || r.to === hub.code);
-                  if (matchingRoute) setSelectedRoute(matchingRoute);
-                }}
-              >
-                {/* Active Hub Radar Ring */}
-                {isSelected && (
-                  <circle
-                    r={14}
-                    fill={isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.12)"}
-                    stroke={isDarkMode ? "#38bdf8" : "#006591"}
-                    strokeWidth={1.5}
-                    strokeDasharray="3 3"
-                  />
-                )}
-
-                {/* Hub Beacon Pin */}
-                <circle
-                  r={isSelected ? 6 : (isHovered ? 5 : 3.5)}
-                  fill={isSelected ? (isDarkMode ? "#ffffff" : "#006591") : (isDarkMode ? "#38bdf8" : "#0284c7")}
-                  stroke={isSelected ? (isDarkMode ? "#38bdf8" : "#ffffff") : (isDarkMode ? "#0f172a" : "#ffffff")}
-                  strokeWidth={2}
-                  filter={isSelected ? "url(#india-glow)" : undefined}
-                />
-
-                {/* Hub IATA Label Pill */}
-                <g transform={`translate(${hub.labelPos === "left" ? -28 : (hub.labelPos === "right" ? 10 : -10)}, ${hub.labelPos === "top" ? -12 : 16})`}>
-                  <rect
-                    x={-2}
-                    y={-10}
-                    width={24}
-                    height={14}
-                    rx={3}
-                    fill={isSelected ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(15,23,42,0.85)" : "rgba(255,255,255,0.85)")}
-                    stroke={isSelected ? "#ffffff" : (isDarkMode ? "rgba(56, 189, 248, 0.4)" : "rgba(0, 101, 145, 0.25)")}
-                    strokeWidth={0.8}
-                  />
-                  <text
-                    x={10}
-                    y={0}
-                    textAnchor="middle"
-                    fill={isSelected ? "#ffffff" : (isDarkMode ? "#e2e8f0" : "#1e293b")}
-                    fontSize={8.5}
-                    fontWeight={900}
-                    fontFamily="var(--font-mono)"
-                  >
-                    {hub.code}
-                  </text>
-                </g>
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Hover Hub Telemetry Tooltip */}
+        {/* Layer 4: Hover Hub Telemetry Tooltip */}
         {hoveredHub && hubMap[hoveredHub] && (
           <div
             style={{
               position: "absolute",
-              top: 24,
-              right: 24,
+              top: 10,
+              right: 10,
               padding: "10px 14px",
               borderRadius: 12,
               backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
