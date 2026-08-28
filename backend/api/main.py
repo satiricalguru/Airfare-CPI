@@ -181,15 +181,15 @@ def compute_all_indices(start_date: date, end_date: date):
     ]
     aggregator = NationalAggregator(route_weights)
     
-    # Get base period prices (first day's geometric means per route)
+    # Get base period prices (first week's geometric means per route)
     base_prices_by_route = {}
     for route in routes:
         route_fares = [
             obs["fare_total"]
             for obs in store.fare_observations
             if obs.get("route_id") == route["route_id"]
-            and obs.get("departure_date", "")[:10] >= base_date.isoformat()
-            and obs.get("departure_date", "")[:10] <= (base_date + timedelta(days=6)).isoformat()
+            and obs.get("scrape_timestamp", "")[:10] >= base_date.isoformat()
+            and obs.get("scrape_timestamp", "")[:10] <= (base_date + timedelta(days=6)).isoformat()
             and obs.get("is_valid", True)
         ]
         if route_fares:
@@ -232,9 +232,9 @@ def compute_all_indices(start_date: date, end_date: date):
                     "route_id": result.route_id,
                     "index_date": result.index_date.isoformat(),
                     "booking_horizon": result.booking_horizon,
-                    "jevons_index": result.jevons_index,
+                    "jevons_index": round(result.jevons_index, 4),
                     "observation_count": result.observation_count,
-                    "geometric_mean_price": result.geometric_mean_price,
+                    "geometric_mean_price": round(result.geometric_mean_price, 2),
                     "base_period": f"{result.base_period_start} to {result.base_period_end}",
                 })
         
@@ -248,9 +248,9 @@ def compute_all_indices(start_date: date, end_date: date):
                 store.national_indices.append({
                     "index_date": national.index_date.isoformat(),
                     "booking_horizon": national.booking_horizon,
-                    "airfare_cpi": national.airfare_cpi,
-                    "mom_change_pct": national.mom_change_pct,
-                    "yoy_change_pct": national.yoy_change_pct,
+                    "airfare_cpi": round(national.airfare_cpi, 2),
+                    "mom_change_pct": round(national.mom_change_pct, 2) if national.mom_change_pct is not None else None,
+                    "yoy_change_pct": round(national.yoy_change_pct, 2) if national.yoy_change_pct is not None else None,
                     "routes_included": national.routes_included,
                     "total_observations": national.total_observations,
                     "base_period": national.base_period,
@@ -259,9 +259,9 @@ def compute_all_indices(start_date: date, end_date: date):
                             "route_id": rc.route_id,
                             "origin_code": rc.origin_code,
                             "destination_code": rc.destination_code,
-                            "weight": rc.weight,
-                            "jevons_index": rc.jevons_index,
-                            "contribution_pct": rc.contribution_pct,
+                            "weight": round(rc.weight, 4),
+                            "jevons_index": round(rc.jevons_index, 4),
+                            "contribution_pct": round(rc.contribution_pct, 2),
                         }
                         for rc in national.route_contributions
                     ],

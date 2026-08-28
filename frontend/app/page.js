@@ -102,10 +102,16 @@ export default function StitchAirfareCPIApp() {
             const cpiData = await cpiRes.json();
             setLiveStats((prev) => ({
               ...prev,
-              headlineCPI: cpiData.airfare_cpi || prev.headlineCPI,
-              momChange: cpiData.mom_change_pct ? `${cpiData.mom_change_pct > 0 ? "+" : ""}${cpiData.mom_change_pct.toFixed(2)}%` : prev.momChange,
-              yoyChange: cpiData.yoy_change_pct ? `${cpiData.yoy_change_pct > 0 ? "+" : ""}${cpiData.yoy_change_pct.toFixed(2)}%` : prev.yoyChange,
-              dailyQuotesSampled: healthData.total_observations ? healthData.total_observations.toLocaleString() : prev.dailyQuotesSampled,
+              headlineCPI: typeof cpiData.airfare_cpi === "number"
+                ? cpiData.airfare_cpi.toFixed(2)
+                : (parseFloat(cpiData.airfare_cpi) ? Number(cpiData.airfare_cpi).toFixed(2) : (cpiData.airfare_cpi || prev.headlineCPI)),
+              momChange: cpiData.mom_change_pct != null
+                ? `${Number(cpiData.mom_change_pct) > 0 ? "+" : ""}${Number(cpiData.mom_change_pct).toFixed(2)}%`
+                : prev.momChange,
+              yoyChange: cpiData.yoy_change_pct != null
+                ? `${Number(cpiData.yoy_change_pct) > 0 ? "+" : ""}${Number(cpiData.yoy_change_pct).toFixed(2)}%`
+                : prev.yoyChange,
+              dailyQuotesSampled: healthData.total_observations ? Number(healthData.total_observations).toLocaleString() : prev.dailyQuotesSampled,
               lastUpdate: "Just now",
             }));
           }
@@ -886,15 +892,15 @@ export default function StitchAirfareCPIApp() {
                       ? "0 14px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3)"
                       : "0 14px 40px rgba(0, 0, 0, 0.08), 0 2px 10px rgba(0, 0, 0, 0.03)",
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr)) 180px",
+                    gridTemplateColumns: "1.2fr 1fr 1fr 1fr 150px",
                     alignItems: "center",
-                    gap: 24,
+                    gap: 20,
                   }}
                 >
                   {/* Column 1: Live Index Overview */}
-                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e" }}>Live Index Overview</div>
-                    <div style={{ fontSize: 12, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2 }}>India Airfare Price Index (All Routes)</div>
+                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16, minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e", whiteSpace: "nowrap" }}>Live Index Overview</div>
+                    <div style={{ fontSize: 12, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>India Airfare Price Index</div>
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, fontWeight: 600, color: "#34c759" }}>
                       <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "#34c759", display: "inline-block" }} />
                       Live
@@ -902,40 +908,40 @@ export default function StitchAirfareCPIApp() {
                   </div>
 
                   {/* Column 2: Current Index */}
-                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16 }}>
+                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16, minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: isDarkMode ? "#8990a4" : "#76777d" }}>Current Index</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono)", color: "#34c759", marginTop: 2 }}>
-                      {liveStats.headlineCPI}
+                    <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "var(--font-mono)", color: "#34c759", marginTop: 2, whiteSpace: "nowrap" }}>
+                      {typeof liveStats.headlineCPI === "number" ? liveStats.headlineCPI.toFixed(2) : (parseFloat(liveStats.headlineCPI) ? Number(liveStats.headlineCPI).toFixed(2) : liveStats.headlineCPI)}
                     </div>
-                    <div style={{ fontSize: 11, color: isDarkMode ? "#39b8fd" : "#006591", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: isDarkMode ? "#39b8fd" : "#006591", marginTop: 2, whiteSpace: "nowrap" }}>
                       {liveStats.momChange} vs yesterday
                     </div>
                   </div>
 
                   {/* Column 3: Sampled Quotes */}
-                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16 }}>
+                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16, minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: isDarkMode ? "#8990a4" : "#76777d" }}>Sampled Quotes</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
+                    <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2, whiteSpace: "nowrap" }}>
                       {liveStats.dailyQuotesSampled}
                     </div>
-                    <div style={{ fontSize: 11, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2, whiteSpace: "nowrap" }}>
                       Across 25 DGCA Corridors
                     </div>
                   </div>
 
                   {/* Column 4: Top Corridor */}
-                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: isDarkMode ? "#8990a4" : "#76777d" }}>Top Corridor (DEL - BOM)</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
+                  <div style={{ borderRight: `1px solid ${isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingRight: 16, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: isDarkMode ? "#8990a4" : "#76777d", whiteSpace: "nowrap" }}>Top Corridor (DEL - BOM)</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2, whiteSpace: "nowrap" }}>
                       ₹6,240
                     </div>
-                    <div style={{ fontSize: 11, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2, whiteSpace: "nowrap" }}>
                       Average Fare
                     </div>
                   </div>
 
                   {/* Column 5: Sparkline & Link */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", minWidth: 140 }}>
                     <div style={{ width: 140, height: 42, marginBottom: 6 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
