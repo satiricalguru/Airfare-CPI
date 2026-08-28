@@ -387,14 +387,12 @@ export default function StitchAirfareCPIApp() {
           >
             <img
               src={isDarkMode ? "/logo_dark.png" : "/logo.png"}
-              alt="MoSPI Airfare Price Index"
+              alt="Airfare CPI Logo"
+              className="logo-animated-glow"
               style={{
                 width: 36,
                 height: 36,
                 objectFit: "contain",
-                filter: isDarkMode
-                  ? "drop-shadow(0 2px 8px rgba(57, 184, 253, 0.35))"
-                  : "drop-shadow(0 2px 4px rgba(0, 101, 145, 0.2))",
               }}
             />
             <div>
