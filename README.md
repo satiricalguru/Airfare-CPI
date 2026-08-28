@@ -5,12 +5,12 @@
   # ✈️ Real-Time Airfare Consumer Price Index (Airfare CPI)
   ### *Developed by Team Sprint Zero · Automated Price Intelligence & CPI Augmentation for MoSPI*
 
-  [![Smart India Hackathon](https://img.shields.io/badge/SIH-2026-orange.svg?style=for-the-badge&logo=target)](https://sih.gov.in)
+  [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-22c55e.svg?style=for-the-badge&logo=github&logoColor=white)](https://satiricalguru.github.io/Prototype-2/)
+  [![Deploy with Vercel](https://img.shields.io/badge/Vercel-Deploy%20Ready-black.svg?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsatiricalguru%2FPrototype-2)
   [![Team Sprint Zero](https://img.shields.io/badge/Team-Sprint%20Zero-blueviolet.svg?style=for-the-badge&logo=rocket)](https://github.com/satiricalguru/Prototype-2)
   [![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
   [![Tests](https://img.shields.io/badge/Tests-30%2F30%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](https://pytest.org)
   [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
