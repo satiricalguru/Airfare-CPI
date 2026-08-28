@@ -19,14 +19,16 @@ DATABASE_URL = os.getenv(
     "sqlite+aiosqlite:///./airfare_cpi.db"
 )
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-)
+# Create async engine with dialect-appropriate pooling
+engine_kwargs = {"echo": False}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "10"))
+    engine_kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+    engine_kwargs["pool_pre_ping"] = True
+
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 
 # Session factory
 AsyncSessionLocal = async_sessionmaker(

@@ -91,6 +91,9 @@ export const TIME_SERIES_DATA = {
   ],
 };
 
+// Aliases for backwards compatibility
+TIME_SERIES_DATA["30D"] = TIME_SERIES_DATA["1M"];
+
 export const SUB_INDICES = [
   { name: "Headline National CPI", code: "CPI_ALL", value: 107.55, change: "+2.84%", weight: "100.0%" },
   { name: "Domestic Non-Stop", code: "CPI_DIRECT", value: 107.20, change: "+2.60%", weight: "74.5%" },
@@ -225,3 +228,6 @@ export const API_ENDPOINTS_LIST = [
     },
   },
 ];
+
+// Explicit export alias for network graph visualization
+export const NETWORK_ROUTES = ROUTE_HEATMAP_DATA;

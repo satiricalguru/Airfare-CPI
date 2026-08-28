@@ -1,9 +1,8 @@
 /* ============================================================
    MoSPI Airfare CPI — Stitch Material Design System
    Pixel-perfect styling conforming to Google Stitch Specifications
+   Fonts are loaded via preconnected <link> in layout.js
    ============================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   /* Stitch Light Palette */

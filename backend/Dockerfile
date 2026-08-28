@@ -17,5 +17,5 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Run with uvicorn
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run with uvicorn for production
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

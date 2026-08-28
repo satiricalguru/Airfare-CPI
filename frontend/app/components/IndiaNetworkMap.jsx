@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { NETWORK_ROUTES } from "../data/mockData";
+import { ROUTE_HEATMAP_DATA, NETWORK_ROUTES } from "../data/mockData";
+
+const routesList = NETWORK_ROUTES || ROUTE_HEATMAP_DATA || [];
 
 // Geographically Proportional Coordinates scaled to leave bottom 140px clear for card
 // Map bounds: X: 160 -> 660 (Width 800), Y: 50 -> 380 (Height 560)
@@ -19,7 +21,7 @@ const HUBS_CONFIG = [
 ];
 
 export default function IndiaNetworkMap() {
-  const [selectedRoute, setSelectedRoute] = useState(NETWORK_ROUTES[0]);
+  const [selectedRoute, setSelectedRoute] = useState(routesList[0] || null);
   const [hoveredHub, setHoveredHub] = useState(null);
   const [hoveredRoute, setHoveredRoute] = useState(null);
   const canvasRef = useRef(null);

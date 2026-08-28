@@ -20,7 +20,8 @@ import {
   API_ENDPOINTS_LIST,
 } from "./data/mockData";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = RAW_API_BASE.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
 
 export default function StitchAirfareCPIApp() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -338,7 +339,7 @@ export default function StitchAirfareCPIApp() {
   );
 
   // Active time series dataset
-  const activeSeries = TIME_SERIES_DATA[chartRange] || TIME_SERIES_DATA["30D"];
+  const activeSeries = TIME_SERIES_DATA[chartRange] || TIME_SERIES_DATA["1Y"] || TIME_SERIES_DATA["1M"] || [];
 
   // Nav Items array matching Base44 Fare Pulse
   const NAV_TABS = [
