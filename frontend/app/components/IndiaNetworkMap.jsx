@@ -242,65 +242,7 @@ export default function IndiaNetworkMap() {
         }}
       />
 
-      {/* Top Header Badge */}
-      <div
-        style={{
-          position: "absolute",
-          top: 18,
-          left: 22,
-          zIndex: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "5px 12px",
-            borderRadius: 20,
-            backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(12px)",
-            border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.3)" : "rgba(0, 101, 145, 0.18)"}`,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: "#22c55e",
-              boxShadow: "0 0 8px #22c55e",
-              display: "inline-block",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: isDarkMode ? "#e2e8f0" : "#1e293b",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            Pan-India Airway Network (60 FPS)
-          </span>
-        </div>
 
-        <span
-          style={{
-            fontSize: 11,
-            color: isDarkMode ? "#94a3b8" : "#64748b",
-            fontWeight: 600,
-          }}
-        >
-          36 States &amp; UTs Integrated
-        </span>
-      </div>
 
       {/* Main Map Container */}
       <div style={{ position: "relative", width: "100%", height: 560, display: "flex", alignItems: "center", justifyContent: "center" }}>
