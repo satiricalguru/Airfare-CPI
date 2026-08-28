@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { getAssetPath } from "../utils/assetPath";
 
 export default function TermsOfServicePage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -41,7 +42,7 @@ export default function TermsOfServicePage() {
       >
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "inherit" }}>
           <img
-            src={isDarkMode ? "/logo_dark.png" : "/logo.png"}
+            src={getAssetPath(isDarkMode ? "/logo_dark.png" : "/logo.png")}
             alt="Airfare CPI Logo"
             className="logo-animated-glow"
             style={{

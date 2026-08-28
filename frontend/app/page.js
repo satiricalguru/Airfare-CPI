@@ -7,6 +7,7 @@ import {
 } from "recharts";
 
 import IndiaNetworkMap from "./components/IndiaNetworkMap";
+import { getAssetPath } from "./utils/assetPath";
 import {
   STATISTICAL_CONSTANTS,
   AIRPORTS_LIST,
@@ -400,7 +401,7 @@ export default function StitchAirfareCPIApp() {
             style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
           >
             <img
-              src={isDarkMode ? "/logo_dark.png" : "/logo.png"}
+              src={getAssetPath(isDarkMode ? "/logo_dark.png" : "/logo.png")}
               alt="Airfare CPI Logo"
               className="logo-animated-glow"
               style={{
@@ -1170,7 +1171,7 @@ export default function StitchAirfareCPIApp() {
                                 >
                                   {HOMEPAGE_AIRLINE_FLEET_DATA.find((a) => a.code === cb.code)?.logoUrl ? (
                                     <img
-                                      src={HOMEPAGE_AIRLINE_FLEET_DATA.find((a) => a.code === cb.code).logoUrl}
+                                      src={getAssetPath(HOMEPAGE_AIRLINE_FLEET_DATA.find((a) => a.code === cb.code).logoUrl)}
                                       alt={cb.name}
                                       style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                     />
@@ -1345,7 +1346,7 @@ export default function StitchAirfareCPIApp() {
                         >
                           {airline.logoUrl ? (
                             <img
-                              src={airline.logoUrl}
+                              src={getAssetPath(airline.logoUrl)}
                               alt={`${airline.name} Logo`}
                               style={{
                                 width: "100%",

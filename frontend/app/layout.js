@@ -5,6 +5,10 @@ export const metadata = {
   description:
     "Ministry of Statistics & Programme Implementation (MoSPI) Real-Time Airfare Price Index for India — Automated web scraping of airline and OTA portals for CPI augmentation.",
   keywords: "Airfare CPI, price index, MoSPI, India, aviation, inflation, statistics, SIH26056",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -19,7 +23,6 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
         />
-        <link rel="icon" href="/favicon.ico" />
       </head>
       <body className="antialiased" suppressHydrationWarning>{children}</body>
     </html>
