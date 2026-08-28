@@ -15,20 +15,20 @@ const routesList = rawRoutes.map((r) => ({
   cpi: r.cpi ? (typeof r.cpi === "number" ? r.cpi.toFixed(1) : r.cpi) : "106.0",
 }));
 
-// Geographically exact coordinates mapped inside viewBox="0 0 612 696" of India SVG
+// Geographically exact coordinates mapped inside viewBox="0 0 612 696" strictly on Indian land
 const HUBS_CONFIG = [
-  { code: "DEL", city: "New Delhi", state: "Delhi", x: 188.4, y: 206.5, pax: "1.2M", cpi: 106.0, labelPos: "top" },
-  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 122.5, y: 406.0, pax: "870K", cpi: 107.4, labelPos: "left" },
-  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 202.0, y: 554.0, pax: "950K", cpi: 107.5, labelPos: "bottom" },
-  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 252.0, y: 546.0, pax: "600K", cpi: 106.8, labelPos: "right" },
-  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 408.0, y: 348.0, pax: "740K", cpi: 108.2, labelPos: "right" },
-  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 232.0, y: 442.0, pax: "780K", cpi: 105.8, labelPos: "right" },
-  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 104.0, y: 326.0, pax: "370K", cpi: 106.2, labelPos: "left" },
-  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 148.0, y: 422.0, pax: "390K", cpi: 105.4, labelPos: "bottom" },
-  { code: "GOI", city: "Goa", state: "Goa", x: 118.0, y: 508.0, pax: "450K", cpi: 109.1, labelPos: "left" },
-  { code: "COK", city: "Kochi", state: "Kerala", x: 172.0, y: 624.0, pax: "230K", cpi: 104.5, labelPos: "bottom" },
-  { code: "GAU", city: "Guwahati", state: "Assam", x: 488.0, y: 272.0, pax: "310K", cpi: 107.8, labelPos: "top" },
-  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 154.0, y: 86.0, pax: "190K", cpi: 105.1, labelPos: "top" },
+  { code: "DEL", city: "New Delhi", state: "Delhi", x: 186.5, y: 210.0, pax: "1.2M", cpi: 106.0, labelPos: "top" },
+  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 140.0, y: 434.0, pax: "870K", cpi: 107.4, labelPos: "left" },
+  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 156.0, y: 448.0, pax: "390K", cpi: 105.4, labelPos: "right" },
+  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 82.0, y: 342.0, pax: "370K", cpi: 106.2, labelPos: "left" },
+  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 198.0, y: 562.0, pax: "950K", cpi: 107.5, labelPos: "bottom" },
+  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 246.0, y: 560.0, pax: "600K", cpi: 106.8, labelPos: "right" },
+  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 416.0, y: 348.0, pax: "740K", cpi: 108.2, labelPos: "right" },
+  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 236.0, y: 456.0, pax: "780K", cpi: 105.8, labelPos: "right" },
+  { code: "GOI", city: "Goa", state: "Goa", x: 122.0, y: 512.0, pax: "450K", cpi: 109.1, labelPos: "left" },
+  { code: "COK", city: "Kochi", state: "Kerala", x: 175.0, y: 615.0, pax: "230K", cpi: 104.5, labelPos: "bottom" },
+  { code: "GAU", city: "Guwahati", state: "Assam", x: 486.0, y: 268.0, pax: "310K", cpi: 107.8, labelPos: "top" },
+  { code: "SXR", city: "Srinagar", state: "Jammu and Kashmir", x: 168.0, y: 65.0, pax: "190K", cpi: 105.1, labelPos: "top" },
 ];
 
 export default function IndiaNetworkMap() {
