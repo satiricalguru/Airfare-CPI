@@ -3,7 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import { ROUTE_HEATMAP_DATA, NETWORK_ROUTES } from "../data/mockData";
 
-const routesList = NETWORK_ROUTES || ROUTE_HEATMAP_DATA || [];
+const rawRoutes = NETWORK_ROUTES || ROUTE_HEATMAP_DATA || [];
+const routesList = rawRoutes.map((r) => ({
+  ...r,
+  from: r.from || r.origin || "DEL",
+  to: r.to || r.destination || "BOM",
+  status: r.status || (r.cpi > 107 ? "Surging" : "Stable"),
+  fare: r.fare || (r.avgFare ? `₹${r.avgFare.toLocaleString()}` : "₹6,240"),
+  change: r.change || "+2.5%",
+  cpi: r.cpi ? (typeof r.cpi === "number" ? r.cpi.toFixed(1) : r.cpi) : "106.0",
+}));
 
 // Geographically Proportional Coordinates scaled to leave bottom 140px clear for card
 // Map bounds: X: 160 -> 660 (Width 800), Y: 50 -> 380 (Height 560)
@@ -53,7 +62,7 @@ export default function IndiaNetworkMap() {
     window.addEventListener("resize", setupCanvas);
 
     // Flight particles for each corridor
-    const particles = NETWORK_ROUTES.map((route, i) => ({
+    const particles = routesList.map((route, i) => ({
       route,
       progress: (i * 0.14) % 1,
       speed: 0.003 + (i % 3) * 0.0006,
@@ -91,7 +100,7 @@ export default function IndiaNetworkMap() {
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       // 1. Draw Flight Paths
-      NETWORK_ROUTES.forEach((route) => {
+      routesList.forEach((route) => {
         const from = hubMap[route.from];
         const to = hubMap[route.to];
         if (!from || !to) return;
@@ -251,7 +260,7 @@ export default function IndiaNetworkMap() {
         }}
       >
         {/* Invisible Clickable Corridor Hitboxes */}
-        {NETWORK_ROUTES.map((route, idx) => {
+        {routesList.map((route, idx) => {
           const from = hubMap[route.from];
           const to = hubMap[route.to];
           if (!from || !to) return null;
@@ -315,53 +324,55 @@ export default function IndiaNetworkMap() {
               onMouseEnter={() => setHoveredHub(hub)}
               onMouseLeave={() => setHoveredHub(null)}
               onClick={() => {
-                const connectedRoute = NETWORK_ROUTES.find((r) => r.from === hub.code || r.to === hub.code);
+                const connectedRoute = routesList.find((r) => r.from === hub.code || r.to === hub.code);
                 if (connectedRoute) setSelectedRoute(connectedRoute);
               }}
             >
-              {/* Outer Glow Ring */}
+              {/* Outer Luminous Pulse */}
               <circle
                 cx={hub.x}
                 cy={hub.y}
-                r={isConnected || isHovered ? 12 : 7}
-                fill={isConnected ? "rgba(0, 113, 227, 0.15)" : "#ffffff"}
-                stroke={isConnected ? "#0071e3" : "rgba(0, 0, 0, 0.18)"}
-                strokeWidth={isConnected ? 2 : 1}
-                style={{ transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
+                r={isConnected || isHovered ? 14 : 7}
+                fill={isConnected ? "rgba(0, 113, 227, 0.2)" : isHovered ? "rgba(52, 199, 89, 0.2)" : "rgba(0, 113, 227, 0.08)"}
+                style={{ transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}
               />
 
-              {/* Center Core Dot */}
+              {/* Core Node Dot */}
               <circle
                 cx={hub.x}
                 cy={hub.y}
-                r={isConnected ? 5 : 3}
-                fill={isConnected ? "#0071e3" : "#1d1d1f"}
-                style={{ transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
+                r={isConnected || isHovered ? 5.5 : 4}
+                fill={isConnected ? "#0071e3" : isHovered ? "#34c759" : "#1d1d1f"}
+                stroke="#ffffff"
+                strokeWidth={2}
+                style={{ transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}
               />
 
-              {/* Hub Code Label */}
-              <text
-                x={labelX}
-                y={labelY}
-                textAnchor={textAnchor}
-                fill={isConnected ? "#0071e3" : "#1d1d1f"}
-                fontSize={isConnected ? "13" : "11"}
-                fontFamily="var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif)"
-                fontWeight={isConnected ? "800" : "600"}
-                letterSpacing="0.04em"
-                style={{
-                  transition: "all 0.25s ease",
-                  userSelect: "none",
-                }}
-              >
-                {hub.code}
-              </text>
+              {/* Crisp Airport Code Pill Label */}
+              <g transform={`translate(${labelX}, ${labelY})`}>
+                <text
+                  x={0}
+                  y={0}
+                  textAnchor={textAnchor}
+                  dominantBaseline="central"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    fontWeight: isConnected || isHovered ? 800 : 700,
+                    fill: isConnected ? "#0071e3" : isHovered ? "#34c759" : "#1d1d1f",
+                    letterSpacing: "0.04em",
+                    filter: "drop-shadow(0px 1px 3px rgba(255,255,255,0.95)) drop-shadow(0px 0px 2px rgba(255,255,255,1))",
+                  }}
+                >
+                  {hub.code}
+                </text>
+              </g>
             </g>
           );
         })}
       </svg>
 
-      {/* Selected Corridor Floating Glass Pill Card */}
+      {/* Corridor HUD Card on Bottom */}
       {selectedRoute && (
         <div
           style={{
@@ -370,13 +381,12 @@ export default function IndiaNetworkMap() {
             left: 16,
             right: 16,
             background: "rgba(255, 255, 255, 0.94)",
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
             border: "1px solid rgba(0, 0, 0, 0.08)",
-            borderRadius: 16,
-            padding: "14px 22px",
+            borderRadius: 14,
+            padding: "14px 20px",
             display: "flex",
-            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 16,
@@ -390,9 +400,9 @@ export default function IndiaNetworkMap() {
               Active Aviation Corridor
             </div>
             <div style={{ fontSize: 19, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-              <span>{selectedRoute.from}</span>
+              <span>{selectedRoute.from || selectedRoute.origin || "DEL"}</span>
               <span style={{ fontSize: 13, color: "#0071e3" }}>➔</span>
-              <span>{selectedRoute.to}</span>
+              <span>{selectedRoute.to || selectedRoute.destination || "BOM"}</span>
               <span
                 style={{
                   fontSize: 10,
@@ -405,7 +415,7 @@ export default function IndiaNetworkMap() {
                   fontFamily: "var(--font-mono)",
                 }}
               >
-                {selectedRoute.status.toUpperCase()}
+                {(selectedRoute.status || "Stable").toUpperCase()}
               </span>
             </div>
           </div>
