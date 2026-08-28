@@ -23,6 +23,8 @@ from engine.aggregator import NationalAggregator, RouteWeight
 from scraper.scrapers.mock_scraper import MockFareGenerator, observations_to_dicts
 from scraper.validator import FareValidator
 from reports.generator import MoSPIReportGenerator, MonthlyBulletin
+from api.main import app
+import asyncio
 
 
 def test_full_engine_pipeline_integration():
@@ -89,65 +91,78 @@ def test_full_engine_pipeline_integration():
     assert len(national_res.route_contributions) == 2
 
 
+import asyncio
+
+
 def test_api_endpoints_live():
-    """Test all primary FastAPI endpoints against the active server."""
-    with httpx.Client(base_url="http://localhost:8000", timeout=5.0) as client:
-        # Test Root Info
-        res = client.get("/")
-        assert res.status_code == 200
-        assert "SIH26056" in res.json()["project"]
+    """Test all primary FastAPI endpoints with ASGI transport and lifespan context."""
+    async def _run():
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                # Test Root Info
+                res = await client.get("/")
+                assert res.status_code == 200
+                assert "SIH26056" in res.json()["project"]
 
-        # Test Routes
-        res = client.get("/api/v1/routes")
-        assert res.status_code == 200
-        data = res.json()
-        assert data["total_routes"] == 25
+                # Test Routes
+                res = await client.get("/api/v1/routes")
+                assert res.status_code == 200
+                data = res.json()
+                assert data["total_routes"] == 25
 
-        # Test National Index
-        res = client.get("/api/v1/index/national")
-        assert res.status_code == 200
-        assert "airfare_cpi" in res.json()
+                # Test National Index
+                res = await client.get("/api/v1/index/national")
+                assert res.status_code == 200
+                assert "airfare_cpi" in res.json()
 
-        # Test National History
-        res = client.get("/api/v1/index/national/history?days=30")
-        assert res.status_code == 200
-        assert len(res.json()["data"]) > 0
+                # Test National History
+                res = await client.get("/api/v1/index/national/history?days=30")
+                assert res.status_code == 200
+                assert len(res.json()["data"]) > 0
 
-        # Test Route Indices
-        res = client.get("/api/v1/index/routes")
-        assert res.status_code == 200
-        assert len(res.json()["routes"]) > 0
+                # Test Route Indices
+                res = await client.get("/api/v1/index/routes")
+                assert res.status_code == 200
+                assert len(res.json()["routes"]) > 0
 
-        # Test Fare Stats
-        res = client.get("/api/v1/fares/stats")
-        assert res.status_code == 200
-        assert res.json()["total_observations"] > 0
+                # Test Fare Stats
+                res = await client.get("/api/v1/fares/stats")
+                assert res.status_code == 200
+                assert res.json()["total_observations"] > 0
 
-        # Test Booking Horizons Analysis
-        res = client.get("/api/v1/analysis/booking-horizons")
-        assert res.status_code == 200
-        assert len(res.json()["horizons"]) == 5
+                # Test Booking Horizons Analysis
+                res = await client.get("/api/v1/analysis/booking-horizons")
+                assert res.status_code == 200
+                assert len(res.json()["horizons"]) == 5
 
-        # Test Health
-        res = client.get("/api/v1/health")
-        assert res.status_code == 200
-        assert res.json()["status"] == "healthy"
+                # Test Health
+                res = await client.get("/api/v1/health")
+                assert res.status_code == 200
+                assert res.json()["status"] == "healthy"
 
-        # Test Monthly Report JSON & HTML
-        res = client.get("/api/v1/reports/monthly")
-        assert res.status_code == 200
-        assert "national_cpi" in res.json()
+                # Test Monthly Report JSON & HTML
+                res = await client.get("/api/v1/reports/monthly")
+                assert res.status_code == 200
+                assert "national_cpi" in res.json()
 
-        res_html = client.get("/api/v1/reports/monthly/html")
-        assert res_html.status_code == 200
-        assert "MoSPI" in res_html.text
+                res_html = await client.get("/api/v1/reports/monthly/html")
+                assert res_html.status_code == 200
+                assert "MoSPI" in res_html.text
+
+    asyncio.run(_run())
 
 
 def test_scraper_trigger_endpoint():
-    """Test manual scrape trigger pipeline via API."""
-    with httpx.Client(base_url="http://localhost:8000", timeout=5.0) as client:
-        res = client.post("/api/v1/scraper/trigger", json={"routes": [1, 2], "horizons": [0, 7]})
-        assert res.status_code == 200
-        data = res.json()
-        assert data["status"] == "success"
-        assert data["observations_generated"] > 0
+    """Test manual scrape trigger pipeline via AsyncClient."""
+    async def _run():
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                res = await client.post("/api/v1/scraper/trigger", json={"routes": [1, 2], "horizons": [0, 7]})
+                assert res.status_code == 200
+                data = res.json()
+                assert data["status"] == "success"
+                assert data["observations_generated"] > 0
+
+    asyncio.run(_run())

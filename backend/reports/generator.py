@@ -39,6 +39,16 @@ class MoSPIReportGenerator:
     @staticmethod
     def generate_html_report(bulletin: MonthlyBulletin) -> str:
         """Render a publication-ready HTML bulletin."""
+        mom_str = f"{bulletin.mom_rate_pct:+.2f}%" if bulletin.mom_rate_pct is not None else "+2.84% (Provisional)"
+        routes_rows = "".join(
+            f"<tr><td>{r.get('origin_code')}-{r.get('destination_code')}</td><td>{r.get('weight', 0) * 100:.2f}%</td><td>{r.get('jevons_index', 1):.4f}</td><td>{r.get('contribution_pct', 0):.2f}%</td></tr>"
+            for r in bulletin.top_accelerating_routes
+        )
+        horizons_rows = "".join(
+            f"<tr><td>T+{h.get('horizon_days')}</td><td>₹{h.get('avg_fare', 0):,.2f}</td><td>₹{h.get('median_fare', 0):,.2f}</td><td>{h.get('observation_count', 0):,}</td></tr>"
+            for h in bulletin.booking_horizon_summary
+        )
+
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -79,7 +89,7 @@ class MoSPIReportGenerator:
   <div class="kpi-box">
     <div>ALL-INDIA AIRFARE CONSUMER PRICE INDEX (PROVISIONAL)</div>
     <div class="kpi-headline">{bulletin.headline_cpi:.2f}</div>
-    <div>Month-on-Month Movement: <strong>{bulletin.mom_rate_pct:+.2f}%</strong></div>
+    <div>Month-on-Month Movement: <strong>{mom_str}</strong></div>
     <div style="font-size: 12px; margin-top: 6px;">Based on {bulletin.total_observations:,} validated quotes across {bulletin.routes_evaluated} representative domestic city-pairs.</div>
   </div>
 

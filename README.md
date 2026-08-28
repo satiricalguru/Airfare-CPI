@@ -1,11 +1,12 @@
 <div align="center">
 
-  <img src="docs/assets/logo.png" alt="Airfare CPI - Real-Time Indian Aviation Price Index Logo" width="180" />
+  <img src="docs/assets/logo.png" alt="Airfare CPI - Team Sprint Zero" width="160" />
 
   # ✈️ Real-Time Airfare Consumer Price Index (Airfare CPI)
-  ### *Automated Price Collection, Econometric Modeling & CPI Augmentation for MoSPI*
+  ### *Developed by Team Sprint Zero · Automated Price Intelligence & CPI Augmentation for MoSPI*
 
   [![Smart India Hackathon](https://img.shields.io/badge/SIH-2026-orange.svg?style=for-the-badge&logo=target)](https://sih.gov.in)
+  [![Team Sprint Zero](https://img.shields.io/badge/Team-Sprint%20Zero-blueviolet.svg?style=for-the-badge&logo=rocket)](https://github.com/satiricalguru/Prototype-2)
   [![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
@@ -160,8 +161,8 @@ This script starts both the FastAPI backend and Next.js frontend, performs autom
 
 ```bash
 # Clone the repository
-git clone https://github.com/satiricalguru/Prototype-1.git
-cd Prototype-1
+git clone https://github.com/satiricalguru/Prototype-2.git
+cd Prototype-2
 
 # Launch full system
 ./start.sh
@@ -257,23 +258,42 @@ FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/d
 
 ---
 
-## 🎨 Interactive Dashboard Preview
+## 🎨 Interactive Dashboard & Tab Breakdown
 
-The frontend is built with **Next.js 16 App Router**, **Vanilla CSS Design System**, and **Recharts**:
+The frontend is built with **Next.js 16 App Router (Turbopack)**, modern **Vanilla CSS Design System**, **Google Fonts (`Outfit` & `Plus Jakarta Sans`)**, and **Recharts**:
 
-1. **📊 National Overview:**
-   - Animated KPI counters for Headline CPI, MoM rate, Validated Quotes, and Median Airfare.
-   - Zoomable SVG time-series area charts.
-   - Advance-purchase booking horizon bar comparison ($T+0$ to $T+30$).
-   - Route inflation contribution bar chart.
-2. **✈️ Route Explorer:**
-   - Full 25-route matrix with DGCA monthly passengers, weights, and live Jevons indices.
-3. **💚 Pipeline Health:**
-   - Scraper diagnostic monitors, latency indicators, and live IQR anomaly feed.
-4. **📐 Methodology:**
-   - Mathematical formula breakdowns, time-reversal proofs, and COICOP alignment references.
-5. **🔄 1-Click Scrape Trigger:**
-   - Interactive button on the dashboard that ingests new observations, validates them, updates route indices, and updates the headline CPI in real time!
+1. **🏠 Home (Aviation Intelligence Hub):**
+   - **Left-Aligned Intelligence:** Dynamic headline, real-time live pulse badge, and dual primary CTAs (`Explore Price Index` and `View CPI Bulletin`).
+   - **3 Single-Row Glass Cards:** `Real-Time Updates`, `Comprehensive Coverage` (25 DGCA corridors across 85+ domestic airports), and `Data You Can Trust` (automated scraping with DGCA passenger weights).
+   - **Floating 5-Column Live Index Bar:** Real-time headline CPI (`109.40` / `107.55`), 24h delta, sampled quote count (`48,200`), top corridor median fare (`₹6,240`), and animated green sparkline trend.
+   - **Cruising Aircraft Backdrop:** Pixel-crisp, realistic flight cruise animation with seamless day/night theme support.
+
+2. **📈 Price Index (National Macro & Sub-indices):**
+   - Headline composite CPI and 4 sub-indices (Non-Stop, Connecting, Advance Bookings, Last-Minute).
+   - Interactive zoomable AreaChart with default **1-Year (`1Y`)** time-horizon selector (`7D`, `1M`, `3M`, `6M`, `1Y`), fully formatted Y-axis padding, and tooltip inspect.
+   - Advance-purchase strata step-chart ($T+0$, $T+3$, $T+7$, $T+15$, $T+30$).
+
+3. **🗺️ Routes Matrix & Corridor Deep-Dive Modal:**
+   - Complete 25-route matrix with DGCA passenger traffic volume, normalized weights ($w_r$), and live Jevons micro-indices.
+   - **Interactive Route Details Modal:** Click any route or `"View Details →"` to view airport IATA metadata, advance-purchase stratification curves, operating airline market shares (IndiGo, Air India, Vistara, Akasa), and a direct 1-click filter into Flight Data.
+
+4. **✈️ Flight Data Explorer:**
+   - Real-time stream of validated domestic fare observations across all 25 city pairs.
+   - Multi-parameter filtering by Origin, Destination, Airline carrier, and Booking Horizon.
+
+5. **📐 Methodology & Mathematical Proofs:**
+   - Step-by-step mathematical breakdown of the Jevons elementary formula vs. Carli upward bias demonstrations.
+   - Axiomatic time-reversal test proofs ($I_{0\to t} \times I_{t\to 0} = 1.0$) and DGCA Laspeyres aggregation equations.
+
+6. **💚 Monitoring & Data Quality Engine:**
+   - Scraper throughput diagnostic gauges, request latency indicators, and automated Interquartile Range (IQR) outlier fences.
+   - **Live Scraper Trigger:** 1-click interactive button to execute or simulate a live ingestion and index recalculation cycle.
+
+7. **🏛️ Official MoSPI Bulletin:**
+   - Publication-ready HTML/JSON monthly statistical press release for official CPI augmentation.
+
+8. **📜 Legal & Compliance Pages:**
+   - Standalone `/privacy` (Privacy Policy) and `/terms` (Terms of Service) pages with full dark/light theme persistence.
 
 ---
 
@@ -313,11 +333,12 @@ The frontend is built with **Next.js 16 App Router**, **Vanilla CSS Design Syste
 
 ---
 
-## 👥 Authors & Acknowledgments
+## 👥 Authors & Team Credits
 
+* **Team:** **Sprint Zero**
 * Developed for **Smart India Hackathon 2026** (Problem Statement: **SIH26056**).
 * Sponsored by: **Ministry of Statistics and Programme Implementation (MoSPI)**.
 * Methodological References: **ILO/IMF Consumer Price Index Manual (2020)** & **DGCA India Traffic Reports**.
 
 ---
-*Built with statistical rigor and modern engineering.*
+*Built with statistical rigor, high-performance architecture, and modern engineering by Team Sprint Zero.*
