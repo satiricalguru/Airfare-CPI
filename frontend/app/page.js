@@ -1152,8 +1152,32 @@ export default function StitchAirfareCPIApp() {
                             }}
                           >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: cb.color }} />
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div
+                                  style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 6,
+                                    backgroundColor: "#ffffff",
+                                    padding: 2,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                                    overflow: "hidden",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {HOMEPAGE_AIRLINE_FLEET_DATA.find((a) => a.code === cb.code)?.logoUrl ? (
+                                    <img
+                                      src={HOMEPAGE_AIRLINE_FLEET_DATA.find((a) => a.code === cb.code).logoUrl}
+                                      alt={cb.name}
+                                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                                    />
+                                  ) : (
+                                    <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: cb.color }} />
+                                  )}
+                                </div>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e" }}>
                                   {cb.name}
                                 </span>
@@ -1302,23 +1326,52 @@ export default function StitchAirfareCPIApp() {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div
                           style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 8,
-                            backgroundColor: airline.logoColor,
-                            color: "#ffffff",
+                            width: 48,
+                            height: 48,
+                            borderRadius: 10,
+                            backgroundColor: "#ffffff",
+                            padding: "6px 8px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontSize: 14,
-                            fontWeight: 900,
-                            fontFamily: "var(--font-mono)",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                            border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
+                            overflow: "hidden",
+                            flexShrink: 0,
                           }}
                         >
-                          {airline.code}
+                          {airline.logoUrl ? (
+                            <img
+                              src={airline.logoUrl}
+                              alt={`${airline.name} Logo`}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: 6,
+                                backgroundColor: airline.logoColor,
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 13,
+                                fontWeight: 900,
+                                fontFamily: "var(--font-mono)",
+                              }}
+                            >
+                              {airline.code}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div style={{ fontSize: 16, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e" }}>

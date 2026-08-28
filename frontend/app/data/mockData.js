@@ -34,12 +34,12 @@ export const AIRPORTS_LIST = [
 ];
 
 export const AIRLINES_LIST = [
-  { code: "6E", name: "IndiGo", marketShare: "62.8%" },
-  { code: "AI", name: "Air India", marketShare: "14.2%" },
-  { code: "UK", name: "Vistara", marketShare: "9.6%" },
-  { code: "SG", name: "SpiceJet", marketShare: "5.4%" },
-  { code: "QP", name: "Akasa Air", marketShare: "4.8%" },
-  { code: "IX", name: "Air India Express", marketShare: "3.2%" },
+  { code: "6E", name: "IndiGo", marketShare: "62.8%", logoUrl: "/airlines/indigo.svg" },
+  { code: "AI", name: "Air India", marketShare: "14.2%", logoUrl: "/airlines/airindia.svg" },
+  { code: "UK", name: "Vistara", marketShare: "9.6%", logoUrl: "/airlines/vistara.svg" },
+  { code: "SG", name: "SpiceJet", marketShare: "5.4%", logoUrl: "/airlines/spicejet.svg" },
+  { code: "QP", name: "Akasa Air", marketShare: "4.8%", logoUrl: "/airlines/akasa.svg" },
+  { code: "IX", name: "Air India Express", marketShare: "3.2%", logoUrl: "/airlines/airindiaexpress.svg" },
 ];
 
 export const BOOKING_HORIZONS = [
@@ -380,6 +380,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "6E",
     name: "IndiGo",
+    logoUrl: "/airlines/indigo.svg",
     logoColor: "#006591",
     tag: "Market Leader",
     marketShare: "62.8%",
@@ -394,6 +395,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "AI",
     name: "Air India",
+    logoUrl: "/airlines/airindia.svg",
     logoColor: "#e11d48",
     tag: "National Full-Service",
     marketShare: "14.2%",
@@ -408,6 +410,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "UK",
     name: "Vistara",
+    logoUrl: "/airlines/vistara.svg",
     logoColor: "#7c3aed",
     tag: "Premium Full-Service",
     marketShare: "9.6%",
@@ -422,6 +425,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "QP",
     name: "Akasa Air",
+    logoUrl: "/airlines/akasa.svg",
     logoColor: "#f97316",
     tag: "Fast-Growing Ultra-LCC",
     marketShare: "4.8%",
@@ -436,6 +440,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "SG",
     name: "SpiceJet",
+    logoUrl: "/airlines/spicejet.svg",
     logoColor: "#ef4444",
     tag: "Value Carrier",
     marketShare: "5.4%",
@@ -450,6 +455,7 @@ export const HOMEPAGE_AIRLINE_FLEET_DATA = [
   {
     code: "IX",
     name: "Air India Express",
+    logoUrl: "/airlines/airindiaexpress.svg",
     logoColor: "#dc2626",
     tag: "Low-Cost Wing",
     marketShare: "3.2%",
