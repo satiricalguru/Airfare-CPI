@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { INDIA_MAP_DATA } from "../data/indiaMapData";
 import { ROUTE_HEATMAP_DATA, NETWORK_ROUTES } from "../data/mockData";
 
 const rawRoutes = NETWORK_ROUTES || ROUTE_HEATMAP_DATA || [];
@@ -14,41 +15,59 @@ const routesList = rawRoutes.map((r) => ({
   cpi: r.cpi ? (typeof r.cpi === "number" ? r.cpi.toFixed(1) : r.cpi) : "106.0",
 }));
 
-// Geographically Proportional Coordinates scaled to leave bottom 140px clear for card
-// Map bounds: X: 160 -> 660 (Width 800), Y: 50 -> 380 (Height 560)
+// Geographically exact coordinates mapped inside viewBox="0 0 612 696" of India SVG
 const HUBS_CONFIG = [
-  { code: "DEL", city: "New Delhi", x: 380, y: 65, pax: 1200000, cpi: 106.0, labelPos: "top" },
-  { code: "AMD", city: "Ahmedabad", x: 230, y: 165, pax: 370000, cpi: 106.2, labelPos: "left" },
-  { code: "CCU", city: "Kolkata", x: 650, y: 175, pax: 740000, cpi: 108.2, labelPos: "right" },
-  { code: "BOM", city: "Mumbai", x: 245, y: 235, pax: 870000, cpi: 107.4, labelPos: "left" },
-  { code: "PNQ", city: "Pune", x: 300, y: 260, pax: 390000, cpi: 105.4, labelPos: "right" },
-  { code: "HYD", city: "Hyderabad", x: 425, y: 250, pax: 780000, cpi: 105.8, labelPos: "right" },
-  { code: "GOI", city: "Goa", x: 265, y: 315, pax: 450000, cpi: 109.1, labelPos: "left" },
-  { code: "BLR", city: "Bengaluru", x: 370, y: 335, pax: 950000, cpi: 107.5, labelPos: "bottom" },
-  { code: "MAA", city: "Chennai", x: 475, y: 340, pax: 600000, cpi: 106.8, labelPos: "right" },
-  { code: "COK", city: "Kochi", x: 340, y: 385, pax: 230000, cpi: 104.5, labelPos: "bottom" },
+  { code: "DEL", city: "New Delhi", state: "Delhi", x: 188.4, y: 206.5, pax: "1.2M", cpi: 106.0, labelPos: "top" },
+  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 122.5, y: 406.0, pax: "870K", cpi: 107.4, labelPos: "left" },
+  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 202.0, y: 554.0, pax: "950K", cpi: 107.5, labelPos: "bottom" },
+  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 252.0, y: 546.0, pax: "600K", cpi: 106.8, labelPos: "right" },
+  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 408.0, y: 348.0, pax: "740K", cpi: 108.2, labelPos: "right" },
+  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 232.0, y: 442.0, pax: "780K", cpi: 105.8, labelPos: "right" },
+  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 104.0, y: 326.0, pax: "370K", cpi: 106.2, labelPos: "left" },
+  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 148.0, y: 422.0, pax: "390K", cpi: 105.4, labelPos: "bottom" },
+  { code: "GOI", city: "Goa", state: "Goa", x: 118.0, y: 508.0, pax: "450K", cpi: 109.1, labelPos: "left" },
+  { code: "COK", city: "Kochi", state: "Kerala", x: 172.0, y: 624.0, pax: "230K", cpi: 104.5, labelPos: "bottom" },
+  { code: "GAU", city: "Guwahati", state: "Assam", x: 488.0, y: 272.0, pax: "310K", cpi: 107.8, labelPos: "top" },
+  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 154.0, y: 86.0, pax: "190K", cpi: 105.1, labelPos: "top" },
 ];
 
 export default function IndiaNetworkMap() {
   const [selectedRoute, setSelectedRoute] = useState(routesList[0] || null);
   const [hoveredHub, setHoveredHub] = useState(null);
-  const [hoveredRoute, setHoveredRoute] = useState(null);
+  const [hoveredState, setHoveredState] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const canvasRef = useRef(null);
+
+  // Sync dark mode
+  useEffect(() => {
+    const checkDark = () => {
+      setIsDarkMode(document.documentElement.classList.contains("dark"));
+    };
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   const hubMap = {};
   HUBS_CONFIG.forEach((h) => {
     hubMap[h.code] = h;
   });
 
-  // 60FPS High-Performance Canvas Particle & Flight Stream Animation
+  const activeFrom = selectedRoute?.from || "DEL";
+  const activeTo = selectedRoute?.to || "BOM";
+  const fromHub = hubMap[activeFrom] || HUBS_CONFIG[0];
+  const toHub = hubMap[activeTo] || HUBS_CONFIG[1];
+
+  // 60FPS Particle Stream Animation on Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
     let animId;
-    const VB_WIDTH = 800;
-    const VB_HEIGHT = 560;
+    const VB_WIDTH = 612;
+    const VB_HEIGHT = 696;
 
     const setupCanvas = () => {
       const rect = canvas.getBoundingClientRect();
@@ -61,14 +80,15 @@ export default function IndiaNetworkMap() {
     setupCanvas();
     window.addEventListener("resize", setupCanvas);
 
-    // Flight particles for each corridor
+    // Dynamic flight particles across all interconnected corridors
     const particles = routesList.map((route, i) => ({
       route,
-      progress: (i * 0.14) % 1,
-      speed: 0.003 + (i % 3) * 0.0006,
+      progress: (i * 0.12) % 1,
+      speed: 0.0035 + (i % 4) * 0.0008,
+      size: (i % 3 === 0 ? 3.5 : 2.5),
     }));
 
-    // Quadratic Bezier interpolation helper
+    // Quadratic Bezier Helper
     const getBezierPoint = (p0, p1, p2, t) => {
       const invT = 1 - t;
       const x = invT * invT * p0.x + 2 * invT * t * p1.x + t * t * p2.x;
@@ -80,7 +100,7 @@ export default function IndiaNetworkMap() {
       const dx = h2.x - h1.x;
       const dy = h2.y - h1.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const curvature = Math.min(dist * 0.2, 50);
+      const curvature = Math.min(dist * 0.22, 45);
       const nx = -dy / dist;
       const ny = dx / dist;
       return {
@@ -99,368 +119,477 @@ export default function IndiaNetworkMap() {
 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
-      // 1. Draw Flight Paths
-      routesList.forEach((route) => {
-        const from = hubMap[route.from];
-        const to = hubMap[route.to];
-        if (!from || !to) return;
+      // 1. Draw Flight Stream Arcs
+      routesList.forEach((r) => {
+        const h1 = hubMap[r.from];
+        const h2 = hubMap[r.to];
+        if (!h1 || !h2) return;
 
         const isSelected =
-          (selectedRoute?.from === route.from && selectedRoute?.to === route.to) ||
-          (selectedRoute?.from === route.to && selectedRoute?.to === route.from);
-        const isHovered = hoveredRoute === route;
+          (r.from === activeFrom && r.to === activeTo) ||
+          (r.from === activeTo && r.to === activeFrom);
 
-        const h1 = { x: from.x * scaleX, y: from.y * scaleY };
-        const h2 = { x: to.x * scaleX, y: to.y * scaleY };
         const cp = getControlPoint(h1, h2);
 
-        // Draw Flight Path Arc
         ctx.beginPath();
-        ctx.moveTo(h1.x, h1.y);
-        ctx.quadraticCurveTo(cp.x, cp.y, h2.x, h2.y);
+        ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
+        ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
 
         if (isSelected) {
-          // Luminous Outer Beam Glow
-          ctx.strokeStyle = "rgba(0, 113, 227, 0.22)";
-          ctx.lineWidth = 8;
-          ctx.setLineDash([]);
+          // Luminous glowing active corridor
+          ctx.strokeStyle = isDarkMode ? "#38bdf8" : "#006591";
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = isDarkMode ? "rgba(56, 189, 248, 0.9)" : "rgba(0, 101, 145, 0.6)";
+          ctx.shadowBlur = 12;
           ctx.stroke();
 
-          // Solid Core Beam
-          ctx.strokeStyle = "#0071e3";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        } else if (isHovered) {
-          ctx.strokeStyle = "rgba(0, 113, 227, 0.6)";
-          ctx.lineWidth = 2.2;
-          ctx.setLineDash([]);
+          // Outer secondary glow
+          ctx.beginPath();
+          ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
+          ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
+          ctx.strokeStyle = isDarkMode ? "rgba(56, 189, 248, 0.3)" : "rgba(0, 101, 145, 0.2)";
+          ctx.lineWidth = 8;
+          ctx.shadowBlur = 0;
           ctx.stroke();
         } else {
-          ctx.strokeStyle = "rgba(142, 142, 147, 0.22)";
+          // Subtle background route mesh
+          ctx.strokeStyle = isDarkMode ? "rgba(148, 163, 184, 0.18)" : "rgba(100, 116, 139, 0.22)";
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
+          ctx.shadowBlur = 0;
           ctx.stroke();
+          ctx.setLineDash([]);
         }
       });
 
-      // 2. Animate Cruising Aircraft Beacons & Vapor Trails (60 FPS Smooth)
+      // 2. Animate Photon Flight Particles along Arcs
       particles.forEach((p) => {
-        p.progress += p.speed;
-        if (p.progress > 1) p.progress -= 1;
-
-        const from = hubMap[p.route.from];
-        const to = hubMap[p.route.to];
-        if (!from || !to) return;
+        const h1 = hubMap[p.route.from];
+        const h2 = hubMap[p.route.to];
+        if (!h1 || !h2) return;
 
         const isSelected =
-          (selectedRoute?.from === p.route.from && selectedRoute?.to === p.route.to) ||
-          (selectedRoute?.from === p.route.to && selectedRoute?.to === p.route.from);
+          (p.route.from === activeFrom && p.route.to === activeTo) ||
+          (p.route.from === activeTo && p.route.to === activeFrom);
 
-        const h1 = { x: from.x * scaleX, y: from.y * scaleY };
-        const h2 = { x: to.x * scaleX, y: to.y * scaleY };
+        p.progress += p.speed * (isSelected ? 1.5 : 1.0);
+        if (p.progress > 1) p.progress = 0;
+
         const cp = getControlPoint(h1, h2);
-
         const pt = getBezierPoint(h1, cp, h2, p.progress);
-        const trailPt = getBezierPoint(h1, cp, h2, Math.max(0, p.progress - 0.05));
 
-        // Vapor Trail
-        ctx.beginPath();
-        ctx.moveTo(trailPt.x, trailPt.y);
-        ctx.lineTo(pt.x, pt.y);
-        ctx.strokeStyle = isSelected ? "rgba(0, 113, 227, 0.45)" : "rgba(0, 113, 227, 0.25)";
-        ctx.lineWidth = isSelected ? 3.5 : 1.8;
-        ctx.setLineDash([]);
-        ctx.stroke();
+        const screenX = pt.x * scaleX;
+        const screenY = pt.y * scaleY;
 
-        // Cruising Aircraft Beacon Dot
+        // Draw particle trail
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, isSelected ? 5 : 3, 0, Math.PI * 2);
-        ctx.fillStyle = "#0071e3";
-        ctx.shadowColor = "#0071e3";
-        ctx.shadowBlur = isSelected ? 12 : 6;
+        ctx.arc(screenX, screenY, isSelected ? 4.5 : p.size, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? (isDarkMode ? "#ffffff" : "#0284c7") : (isDarkMode ? "#38bdf8" : "#0ea5e9");
+        ctx.shadowColor = isDarkMode ? "#38bdf8" : "#0284c7";
+        ctx.shadowBlur = isSelected ? 16 : 8;
         ctx.fill();
         ctx.shadowBlur = 0;
       });
 
-      // 3. Draw Radar Pulses on Active Hubs
-      HUBS_CONFIG.forEach((hub) => {
-        const isFrom = selectedRoute?.from === hub.code;
-        const isTo = selectedRoute?.to === hub.code;
-        const isConnected = isFrom || isTo;
+      // 3. Expanding Radar Pulse on Selected Hubs
+      [fromHub, toHub].forEach((hub, idx) => {
+        if (!hub) return;
+        const phase = (time * 1.8 + idx * 0.8) % 1;
+        const radius = (10 + phase * 32) * ((scaleX + scaleY) / 2);
+        const opacity = (1 - phase) * 0.7;
 
-        if (isConnected) {
-          const hx = hub.x * scaleX;
-          const hy = hub.y * scaleY;
-          const pulseR = 8 + (Math.sin(time * 3) + 1) * 7;
-
-          ctx.beginPath();
-          ctx.arc(hx, hy, pulseR, 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(0, 113, 227, 0.35)";
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([]);
-          ctx.stroke();
-        }
+        ctx.beginPath();
+        ctx.arc(hub.x * scaleX, hub.y * scaleY, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = isDarkMode ? `rgba(56, 189, 248, ${opacity})` : `rgba(0, 101, 145, ${opacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       });
 
       animId = requestAnimationFrame(render);
     };
 
-    render();
+    animId = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", setupCanvas);
     };
-  }, [selectedRoute, hoveredRoute]);
+  }, [selectedRoute, activeFrom, activeTo, isDarkMode, fromHub, toHub]);
 
   return (
     <div
+      className="stitch-card"
       style={{
         position: "relative",
         width: "100%",
-        height: 560,
-        backgroundColor: "#ffffff",
         borderRadius: 20,
         overflow: "hidden",
-        border: "1px solid rgba(0, 0, 0, 0.06)",
-        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
+        backgroundColor: isDarkMode ? "#080d1a" : "#f8fafc",
+        border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.2)" : "rgba(0, 101, 145, 0.12)"}`,
+        boxShadow: isDarkMode ? "0 20px 50px rgba(0,0,0,0.5)" : "0 12px 36px rgba(0, 101, 145, 0.08)",
       }}
     >
-      {/* Background Decorative Spatial Radar Grid */}
+      {/* Background Radar Grid Pattern */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: "radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px)",
+          backgroundImage: isDarkMode
+            ? "radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08) 1px, transparent 1px)"
+            : "radial-gradient(circle at 50% 50%, rgba(0, 101, 145, 0.06) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
           pointerEvents: "none",
         }}
       />
 
-      {/* 60FPS Ultra-Smooth Canvas Animation Layer */}
-      <canvas
-        ref={canvasRef}
+      {/* Top Header Badge */}
+      <div
         style={{
           position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* SVG Interactive Hub Overlay & Visible Labels */}
-      <svg
-        viewBox="0 0 800 560"
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
+          top: 18,
+          left: 22,
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
         }}
       >
-        {/* Invisible Clickable Corridor Hitboxes */}
-        {routesList.map((route, idx) => {
-          const from = hubMap[route.from];
-          const to = hubMap[route.to];
-          if (!from || !to) return null;
-
-          const dx = to.x - from.x;
-          const dy = to.y - from.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const curvature = Math.min(dist * 0.2, 50);
-          const nx = -dy / dist;
-          const ny = dx / dist;
-          const cpx = (from.x + to.x) / 2 + nx * curvature;
-          const cpy = (from.y + to.y) / 2 + ny * curvature;
-
-          const pathD = `M ${from.x} ${from.y} Q ${cpx} ${cpy} ${to.x} ${to.y}`;
-
-          return (
-            <path
-              key={idx}
-              d={pathD}
-              fill="none"
-              stroke="transparent"
-              strokeWidth={28}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHoveredRoute(route)}
-              onMouseLeave={() => setHoveredRoute(null)}
-              onClick={() => setSelectedRoute(route)}
-            />
-          );
-        })}
-
-        {/* Airport Hub Nodes & Labels - Fully Visible with Clear Spacing */}
-        {HUBS_CONFIG.map((hub) => {
-          const isFrom = selectedRoute?.from === hub.code;
-          const isTo = selectedRoute?.to === hub.code;
-          const isConnected = isFrom || isTo;
-          const isHovered = hoveredHub?.code === hub.code;
-
-          // Label offsets
-          let labelX = hub.x;
-          let labelY = hub.y;
-          let textAnchor = "middle";
-
-          if (hub.labelPos === "top") {
-            labelY -= 14;
-          } else if (hub.labelPos === "bottom") {
-            labelY += 18;
-          } else if (hub.labelPos === "left") {
-            labelX -= 16;
-            labelY += 4;
-            textAnchor = "end";
-          } else if (hub.labelPos === "right") {
-            labelX += 16;
-            labelY += 4;
-            textAnchor = "start";
-          }
-
-          return (
-            <g
-              key={hub.code}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHoveredHub(hub)}
-              onMouseLeave={() => setHoveredHub(null)}
-              onClick={() => {
-                const connectedRoute = routesList.find((r) => r.from === hub.code || r.to === hub.code);
-                if (connectedRoute) setSelectedRoute(connectedRoute);
-              }}
-            >
-              {/* Outer Luminous Pulse */}
-              <circle
-                cx={hub.x}
-                cy={hub.y}
-                r={isConnected || isHovered ? 14 : 7}
-                fill={isConnected ? "rgba(0, 113, 227, 0.2)" : isHovered ? "rgba(52, 199, 89, 0.2)" : "rgba(0, 113, 227, 0.08)"}
-                style={{ transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}
-              />
-
-              {/* Core Node Dot */}
-              <circle
-                cx={hub.x}
-                cy={hub.y}
-                r={isConnected || isHovered ? 5.5 : 4}
-                fill={isConnected ? "#0071e3" : isHovered ? "#34c759" : "#1d1d1f"}
-                stroke="#ffffff"
-                strokeWidth={2}
-                style={{ transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}
-              />
-
-              {/* Crisp Airport Code Pill Label */}
-              <g transform={`translate(${labelX}, ${labelY})`}>
-                <text
-                  x={0}
-                  y={0}
-                  textAnchor={textAnchor}
-                  dominantBaseline="central"
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    fontWeight: isConnected || isHovered ? 800 : 700,
-                    fill: isConnected ? "#0071e3" : isHovered ? "#34c759" : "#1d1d1f",
-                    letterSpacing: "0.04em",
-                    filter: "drop-shadow(0px 1px 3px rgba(255,255,255,0.95)) drop-shadow(0px 0px 2px rgba(255,255,255,1))",
-                  }}
-                >
-                  {hub.code}
-                </text>
-              </g>
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Corridor HUD Card on Bottom */}
-      {selectedRoute && (
         <div
           style={{
-            position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            background: "rgba(255, 255, 255, 0.94)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
-            borderRadius: 14,
-            padding: "14px 20px",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            boxShadow: "0 10px 32px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
-            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-            zIndex: 10,
+            gap: 6,
+            padding: "5px 12px",
+            borderRadius: 20,
+            backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.9)",
+            backdropFilter: "blur(12px)",
+            border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.3)" : "rgba(0, 101, 145, 0.18)"}`,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
           }}
         >
-          <div>
-            <div style={{ fontSize: 10, color: "#86868b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Active Aviation Corridor
-            </div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: "#1d1d1f", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-              <span>{selectedRoute.from || selectedRoute.origin || "DEL"}</span>
-              <span style={{ fontSize: 13, color: "#0071e3" }}>➔</span>
-              <span>{selectedRoute.to || selectedRoute.destination || "BOM"}</span>
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "2px 7px",
-                  borderRadius: 100,
-                  backgroundColor: selectedRoute.status === "Surging" ? "rgba(255, 59, 48, 0.1)" : "rgba(52, 199, 89, 0.1)",
-                  color: selectedRoute.status === "Surging" ? "#ff3b30" : "#34c759",
-                  fontWeight: 700,
-                  marginLeft: 6,
-                  fontFamily: "var(--font-mono)",
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              backgroundColor: "#22c55e",
+              boxShadow: "0 0 8px #22c55e",
+              display: "inline-block",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: isDarkMode ? "#e2e8f0" : "#1e293b",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            Pan-India Airway Network (60 FPS)
+          </span>
+        </div>
+
+        <span
+          style={{
+            fontSize: 11,
+            color: isDarkMode ? "#94a3b8" : "#64748b",
+            fontWeight: 600,
+          }}
+        >
+          36 States &amp; UTs Integrated
+        </span>
+      </div>
+
+      {/* Main Map Container */}
+      <div style={{ position: "relative", width: "100%", height: 560, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {/* Real Geographic Vector Map of India (SVG Base) */}
+        <svg
+          viewBox={INDIA_MAP_DATA.viewBox}
+          style={{
+            width: "100%",
+            height: "100%",
+            maxWidth: 580,
+            maxHeight: 560,
+            filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(56, 189, 248, 0.12))" : "drop-shadow(0 4px 16px rgba(0, 101, 145, 0.08))",
+          }}
+        >
+          <defs>
+            <filter id="india-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <linearGradient id="state-gradient-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#0f172a" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+            <linearGradient id="state-gradient-light" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#f1f5f9" />
+              <stop offset="100%" stopColor="#e2e8f0" />
+            </linearGradient>
+          </defs>
+
+          {/* 36 Indian State Polygons */}
+          <g id="india-states">
+            {INDIA_MAP_DATA.locations.map((loc) => {
+              const isHovered = hoveredState === loc.id;
+              const hasActiveHub = (fromHub?.state === loc.name) || (toHub?.state === loc.name);
+
+              let fillColor = isDarkMode ? "#0f172a" : "#f1f5f9";
+              if (hasActiveHub) {
+                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.16)" : "rgba(0, 101, 145, 0.12)";
+              } else if (isHovered) {
+                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.1)" : "rgba(0, 101, 145, 0.08)";
+              }
+
+              let strokeColor = isDarkMode ? "rgba(56, 189, 248, 0.25)" : "rgba(148, 163, 184, 0.6)";
+              if (hasActiveHub) {
+                strokeColor = isDarkMode ? "#38bdf8" : "#006591";
+              }
+
+              return (
+                <path
+                  key={loc.id}
+                  id={`state-${loc.id}`}
+                  d={loc.path}
+                  fill={fillColor}
+                  stroke={strokeColor}
+                  strokeWidth={hasActiveHub ? 1.5 : 0.75}
+                  strokeLinejoin="round"
+                  style={{
+                    transition: "fill 0.25s ease, stroke 0.25s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={() => setHoveredState(loc.id)}
+                  onMouseLeave={() => setHoveredState(null)}
+                >
+                  <title>{loc.name}</title>
+                </path>
+              );
+            })}
+          </g>
+        </svg>
+
+        {/* 60FPS Flight Stream Animation Layer */}
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Airport Hub Interactive Nodes (SVG Overlay) */}
+        <svg
+          viewBox={INDIA_MAP_DATA.viewBox}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            maxWidth: 580,
+            maxHeight: 560,
+            pointerEvents: "auto",
+          }}
+        >
+          {HUBS_CONFIG.map((hub) => {
+            const isOrigin = hub.code === activeFrom;
+            const isDest = hub.code === activeTo;
+            const isSelected = isOrigin || isDest;
+            const isHovered = hoveredHub === hub.code;
+
+            return (
+              <g
+                key={hub.code}
+                transform={`translate(${hub.x}, ${hub.y})`}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setHoveredHub(hub.code)}
+                onMouseLeave={() => setHoveredHub(null)}
+                onClick={() => {
+                  // Switch corridor to or from this hub
+                  const matchingRoute = routesList.find((r) => r.from === hub.code || r.to === hub.code);
+                  if (matchingRoute) setSelectedRoute(matchingRoute);
                 }}
               >
-                {(selectedRoute.status || "Stable").toUpperCase()}
+                {/* Active Hub Radar Ring */}
+                {isSelected && (
+                  <circle
+                    r={14}
+                    fill={isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.12)"}
+                    stroke={isDarkMode ? "#38bdf8" : "#006591"}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                  />
+                )}
+
+                {/* Hub Beacon Pin */}
+                <circle
+                  r={isSelected ? 6 : (isHovered ? 5 : 3.5)}
+                  fill={isSelected ? (isDarkMode ? "#ffffff" : "#006591") : (isDarkMode ? "#38bdf8" : "#0284c7")}
+                  stroke={isSelected ? (isDarkMode ? "#38bdf8" : "#ffffff") : (isDarkMode ? "#0f172a" : "#ffffff")}
+                  strokeWidth={2}
+                  filter={isSelected ? "url(#india-glow)" : undefined}
+                />
+
+                {/* Hub IATA Label Pill */}
+                <g transform={`translate(${hub.labelPos === "left" ? -28 : (hub.labelPos === "right" ? 10 : -10)}, ${hub.labelPos === "top" ? -12 : 16})`}>
+                  <rect
+                    x={-2}
+                    y={-10}
+                    width={24}
+                    height={14}
+                    rx={3}
+                    fill={isSelected ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(15,23,42,0.85)" : "rgba(255,255,255,0.85)")}
+                    stroke={isSelected ? "#ffffff" : (isDarkMode ? "rgba(56, 189, 248, 0.4)" : "rgba(0, 101, 145, 0.25)")}
+                    strokeWidth={0.8}
+                  />
+                  <text
+                    x={10}
+                    y={0}
+                    textAnchor="middle"
+                    fill={isSelected ? "#ffffff" : (isDarkMode ? "#e2e8f0" : "#1e293b")}
+                    fontSize={8.5}
+                    fontWeight={900}
+                    fontFamily="var(--font-mono)"
+                  >
+                    {hub.code}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Hover Hub Telemetry Tooltip */}
+        {hoveredHub && hubMap[hoveredHub] && (
+          <div
+            style={{
+              position: "absolute",
+              top: 24,
+              right: 24,
+              padding: "10px 14px",
+              borderRadius: 12,
+              backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(16px)",
+              border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.35)" : "rgba(0, 101, 145, 0.2)"}`,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+              zIndex: 20,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+              {hubMap[hoveredHub].city} ({hubMap[hoveredHub].code})
+            </div>
+            <div style={{ fontSize: 11, color: isDarkMode ? "#94a3b8" : "#64748b", marginTop: 2 }}>
+              State: {hubMap[hoveredHub].state}
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 11 }}>
+              <div>
+                <span style={{ color: isDarkMode ? "#64748b" : "#94a3b8" }}>Monthly Pax: </span>
+                <strong style={{ color: isDarkMode ? "#38bdf8" : "#006591" }}>{hubMap[hoveredHub].pax}</strong>
+              </div>
+              <div>
+                <span style={{ color: isDarkMode ? "#64748b" : "#94a3b8" }}>Hub CPI: </span>
+                <strong style={{ color: "#22c55e" }}>{hubMap[hoveredHub].cpi}</strong>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Interactive Bottom HUD Control Card */}
+      <div
+        style={{
+          margin: "0 16px 16px",
+          padding: "16px 20px",
+          borderRadius: 16,
+          backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.9)" : "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(16px)",
+          border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.25)" : "rgba(0, 101, 145, 0.15)"}`,
+          boxShadow: isDarkMode ? "0 8px 30px rgba(0,0,0,0.4)" : "0 4px 16px rgba(0,0,0,0.04)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          {/* Active Corridor Details */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#38bdf8" : "#006591", marginBottom: 2 }}>
+              Active Aviation Corridor
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20, fontWeight: 900, color: isDarkMode ? "#ffffff" : "#0f172a", fontFamily: "var(--font-mono)" }}>
+                {activeFrom} → {activeTo}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  backgroundColor: selectedRoute?.status === "Surging" ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                  color: selectedRoute?.status === "Surging" ? "#ef4444" : "#22c55e",
+                  border: `1px solid ${selectedRoute?.status === "Surging" ? "rgba(239, 68, 68, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                }}
+              >
+                {(selectedRoute?.status || "Stable").toUpperCase()}
               </span>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 28 }}>
+          {/* Metric Stats */}
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <div>
-              <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Jevons Index</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#0071e3", fontFamily: "var(--font-mono)" }}>{selectedRoute.cpi}</div>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>Jevons Index</div>
+              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#38bdf8" : "#006591" }}>
+                {selectedRoute?.cpi || "106.0"}
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>Average Fare</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#1d1d1f", fontFamily: "var(--font-mono)" }}>{selectedRoute.fare}</div>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>Average Fare</div>
+              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+                {selectedRoute?.fare || "₹6,240"}
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: "#86868b", textTransform: "uppercase", fontWeight: 600 }}>MoM Movement</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#34c759", fontFamily: "var(--font-mono)" }}>{selectedRoute.change}</div>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>MoM Movement</div>
+              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: "#22c55e" }}>
+                {selectedRoute?.change || "+3.2%"}
+              </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Hub Hover Popover Tooltip */}
-      {hoveredHub && (
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            background: "#ffffff",
-            border: "1px solid rgba(0, 0, 0, 0.08)",
-            borderRadius: 12,
-            padding: "8px 14px",
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
-            zIndex: 30,
-            pointerEvents: "none",
-          }}
-        >
-          <div style={{ color: "#0071e3", fontWeight: 800, fontSize: 12 }}>
-            {hoveredHub.city} ({hoveredHub.code})
-          </div>
-          <div style={{ color: "#86868b", fontSize: 11, marginTop: 2, fontFamily: "var(--font-mono)" }}>
-            Monthly Traffic: <strong>{(hoveredHub.pax / 1000000).toFixed(2)}M Pax</strong> · CPI: <strong style={{ color: "#0071e3" }}>{hoveredHub.cpi}</strong>
-          </div>
+        {/* Quick Corridor Selector Pills */}
+        <div style={{ display: "flex", gap: 8, marginTop: 14, overflowX: "auto", paddingBottom: 2 }}>
+          {routesList.slice(0, 6).map((r) => {
+            const isCurrent = r.from === activeFrom && r.to === activeTo;
+            return (
+              <button
+                key={`${r.from}-${r.to}`}
+                onClick={() => setSelectedRoute(r)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: "var(--font-mono)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  backgroundColor: isCurrent ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"),
+                  color: isCurrent ? "#ffffff" : (isDarkMode ? "#cbd5e1" : "#475569"),
+                  border: isCurrent ? `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}` : `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {r.from} ⇄ {r.to}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
