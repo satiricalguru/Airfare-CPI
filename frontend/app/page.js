@@ -604,7 +604,7 @@ export default function StitchAirfareCPIApp() {
               <div
                 className="hero-bg"
                 style={{
-                  backgroundImage: "url('/hero_day.jpg')",
+                  backgroundImage: `url('${getAssetPath("/hero_day.jpg")}')`,
                   opacity: isDarkMode ? 0 : 1,
                   zIndex: 0,
                 }}
@@ -614,7 +614,7 @@ export default function StitchAirfareCPIApp() {
               <div
                 className="hero-bg"
                 style={{
-                  backgroundImage: "url('/hero_night.jpg')",
+                  backgroundImage: `url('${getAssetPath("/hero_night.jpg")}')`,
                   opacity: isDarkMode ? 1 : 0,
                   zIndex: 0,
                 }}

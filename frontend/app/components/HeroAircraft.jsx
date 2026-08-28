@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { getAssetPath } from "../utils/assetPath";
 
 export default function HeroAircraft() {
   const mountRef = useRef(null);
@@ -92,7 +93,7 @@ export default function HeroAircraft() {
 
     // 6. Load Airbus A320 Commercial Jet Airliner via GLTFLoader
     const loader = new GLTFLoader();
-    const modelUrl = "/models/airplane.glb";
+    const modelUrl = getAssetPath("/models/airplane.glb");
 
     loader.load(
       modelUrl,
