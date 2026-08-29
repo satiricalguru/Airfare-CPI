@@ -388,8 +388,8 @@ export default function StitchAirfareCPIApp() {
   const NAV_TABS = [
     { id: "home", label: "Home", icon: "home" },
     { id: "price-index", label: "Price Index", icon: "trending_up" },
-    { id: "routes", label: "Route Analysis", icon: "alt_route" },
-    { id: "alerts", label: "Price Alerts", icon: "notifications_active" },
+    { id: "routes", label: "Routes", icon: "alt_route" },
+    { id: "alerts", label: "Alerts", icon: "notifications_active" },
     { id: "flight-data", label: "Flight Data", icon: "flight" },
     { id: "methodology", label: "Methodology", icon: "calculate" },
     { id: "about", label: "About", icon: "info" },
@@ -419,31 +419,32 @@ export default function StitchAirfareCPIApp() {
             maxWidth: 1440,
             height: "100%",
             margin: "0 auto",
-            padding: "0 24px",
+            padding: "0 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
           }}
         >
           {/* Logo & Brand */}
           <div
             onClick={() => setActiveTab("home")}
-            style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+            style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flexShrink: 0 }}
           >
             <img
               src={getAssetPath(isDarkMode ? "/logo_dark.png" : "/logo.png")}
               alt="Airfare CPI Logo"
               className="logo-animated-glow"
               style={{
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 objectFit: "contain",
               }}
             />
             <div>
               <div
                 style={{
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: 800,
                   fontFamily: "var(--font-heading)",
                   color: isDarkMode ? "#ffffff" : "#131b2e",
@@ -455,17 +456,17 @@ export default function StitchAirfareCPIApp() {
               </div>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 9.5,
                   fontWeight: 600,
-                  letterSpacing: "0.08em",
+                  letterSpacing: "0.06em",
                   textTransform: "uppercase",
                   color: isDarkMode ? "#bec6e0" : "#76777d",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 5,
                 }}
               >
-                <span>India · MoSPI Prototype</span>
+                <span>India · MoSPI</span>
                 <span
                   style={{
                     display: "inline-block",
@@ -480,14 +481,18 @@ export default function StitchAirfareCPIApp() {
             </div>
           </div>
 
-          {/* Navigation Tabs (Home, Price Index, Route Analysis, Flight Data, Methodology, About, Monitoring) */}
+          {/* Navigation Tabs */}
           <div
+            className="nav-tabs-container no-scrollbar"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 4,
+              gap: 2,
               overflowX: "auto",
-              padding: "4px 0",
+              padding: "2px 0",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              flexShrink: 1,
             }}
           >
             {NAV_TABS.map((tab) => {
@@ -499,9 +504,9 @@ export default function StitchAirfareCPIApp() {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    fontWeight: isActive ? 600 : 500,
+                    gap: 5,
+                    fontSize: 12.5,
+                    fontWeight: isActive ? 700 : 500,
                     color: isActive
                       ? isDarkMode ? "#39b8fd" : "#131b2e"
                       : isDarkMode ? "#bec6e0" : "#45464d",
@@ -510,13 +515,14 @@ export default function StitchAirfareCPIApp() {
                       : "transparent",
                     border: "none",
                     borderRadius: 6,
-                    padding: "7px 12px",
+                    padding: "6px 9px",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                     whiteSpace: "nowrap",
+                    flexShrink: 0,
                   }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
                     {tab.icon}
                   </span>
                   {tab.label}
@@ -526,28 +532,29 @@ export default function StitchAirfareCPIApp() {
           </div>
 
           {/* Actions: AI Copilot, Theme Toggle, Notifications, Settings, Sign In */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {/* AI Copilot Button */}
             <button
               onClick={() => setIsCopilotOpen(true)}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
-                padding: "6px 14px",
-                borderRadius: 20,
+                gap: 5,
+                padding: "5px 11px",
+                borderRadius: 16,
                 background: isDarkMode ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(2, 132, 199, 0.35))" : "linear-gradient(135deg, rgba(0, 101, 145, 0.1), rgba(56, 189, 248, 0.2))",
                 border: `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}`,
                 color: isDarkMode ? "#38bdf8" : "#006591",
-                fontSize: 12.5,
+                fontSize: 12,
                 fontWeight: 800,
                 cursor: "pointer",
-                boxShadow: isDarkMode ? "0 0 16px rgba(56, 189, 248, 0.25)" : "0 2px 8px rgba(0, 101, 145, 0.15)",
+                boxShadow: isDarkMode ? "0 0 14px rgba(56, 189, 248, 0.2)" : "0 2px 6px rgba(0, 101, 145, 0.12)",
                 transition: "all 0.2s ease",
+                whiteSpace: "nowrap",
               }}
               title="Ask Airfare CPI AI Copilot"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 17, color: isDarkMode ? "#38bdf8" : "#006591" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 15, color: isDarkMode ? "#38bdf8" : "#006591" }}>
                 smart_toy
               </span>
               <span>AI Copilot</span>
@@ -560,17 +567,18 @@ export default function StitchAirfareCPIApp() {
                 background: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)",
                 border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}`,
                 borderRadius: "50%",
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
                 color: isDarkMode ? "#ffddb8" : "#131b2e",
+                flexShrink: 0,
               }}
               title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                 {isDarkMode ? "light_mode" : "dark_mode"}
               </span>
             </button>
