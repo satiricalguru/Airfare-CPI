@@ -664,21 +664,21 @@ export default function StitchAirfareCPIApp() {
                 overflow: "hidden",
               }}
             >
-              {/* Day Image */}
+              {/* Day Image (Sprint Zero Daylight Flight) */}
               <div
                 className="hero-bg"
                 style={{
-                  backgroundImage: `url('${getAssetPath("/hero_day.jpg")}')`,
+                  backgroundImage: `url('${getAssetPath("/hero_day.jpg")}?v=3')`,
                   opacity: isDarkMode ? 0 : 1,
                   zIndex: 0,
                 }}
               />
 
-              {/* Night Image */}
+              {/* Night Image (Sprint Zero Night Flight) */}
               <div
                 className="hero-bg"
                 style={{
-                  backgroundImage: `url('${getAssetPath("/hero_night.jpg")}')`,
+                  backgroundImage: `url('${getAssetPath("/hero_night.jpg")}?v=3')`,
                   opacity: isDarkMode ? 1 : 0,
                   zIndex: 0,
                 }}
