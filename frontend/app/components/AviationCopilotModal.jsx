@@ -245,6 +245,42 @@ function parseBoldText(text) {
   });
 }
 
+// Elegant Vector AI Copilot Symbol
+export function CopilotSymbol({ size = 16, className = "" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    >
+      <defs>
+        <linearGradient id="aiCopilotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="50%" stopColor="#0ea5e9" />
+          <stop offset="100%" stopColor="#34d399" />
+        </linearGradient>
+      </defs>
+      {/* Primary Radiant Intelligence Star */}
+      <path
+        d="M12 2C12.45 7.15 16.85 11.55 22 12C16.85 12.45 12.45 16.85 12 22C11.55 16.85 7.15 12.45 2 12C7.15 11.55 11.55 7.15 12 2Z"
+        fill="url(#aiCopilotGradient)"
+      />
+      {/* Precision Micro Sparkle */}
+      <path
+        d="M19.5 3.5C19.75 5 21 6.25 22.5 6.5C21 6.75 19.75 8 19.5 9.5C19.25 8 18 6.75 16.5 6.5C18 6.25 19.25 5 19.5 3.5Z"
+        fill="#38bdf8"
+        opacity="0.9"
+      />
+      {/* Luminous Core Light */}
+      <circle cx="12" cy="12" r="2.2" fill="#ffffff" />
+    </svg>
+  );
+}
+
 export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "" }) {
   const [messages, setMessages] = useState([
     {
@@ -355,12 +391,10 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#38bdf8",
+                boxShadow: "0 0 14px rgba(56, 189, 248, 0.25)",
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                smart_toy
-              </span>
+              <CopilotSymbol size={18} />
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -449,14 +483,11 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: "#38bdf8",
                       flexShrink: 0,
                       marginTop: 2,
                     }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                      auto_awesome
-                    </span>
+                    <CopilotSymbol size={15} />
                   </div>
                 )}
 
@@ -500,12 +531,9 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#38bdf8",
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                  auto_awesome
-                </span>
+                <CopilotSymbol size={15} />
               </div>
               <div
                 style={{

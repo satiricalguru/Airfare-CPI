@@ -7,7 +7,7 @@ import {
 } from "recharts";
 
 import IndiaNetworkMap from "./components/IndiaNetworkMap";
-import AviationCopilotModal from "./components/AviationCopilotModal";
+import AviationCopilotModal, { CopilotSymbol } from "./components/AviationCopilotModal";
 import PriceAlertEngine from "./components/PriceAlertEngine";
 import RouteDetailModal from "./components/RouteDetailModal";
 import { getAssetPath } from "./utils/assetPath";
@@ -539,7 +539,7 @@ export default function StitchAirfareCPIApp() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 5,
+                gap: 6,
                 padding: "5px 11px",
                 borderRadius: 16,
                 background: isDarkMode ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(2, 132, 199, 0.35))" : "linear-gradient(135deg, rgba(0, 101, 145, 0.1), rgba(56, 189, 248, 0.2))",
@@ -554,9 +554,7 @@ export default function StitchAirfareCPIApp() {
               }}
               title="Ask Airfare CPI AI Copilot"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 15, color: isDarkMode ? "#38bdf8" : "#006591" }}>
-                smart_toy
-              </span>
+              <CopilotSymbol size={15} />
               <span>AI Copilot</span>
             </button>
 
