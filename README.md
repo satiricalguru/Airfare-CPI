@@ -7,10 +7,10 @@
 
   [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-22c55e.svg?style=for-the-badge&logo=github&logoColor=white)](https://satiricalguru.github.io/Prototype-2/)
   [![Deploy with Vercel](https://img.shields.io/badge/Vercel-Deploy%20Ready-black.svg?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsatiricalguru%2FPrototype-2)
-  [![Team Sprint Zero](https://img.shields.io/badge/Team-Sprint%20Zero-blueviolet.svg?style=for-the-badge&logo=rocket)](https://github.com/satiricalguru/Prototype-2)
+  [![Gemini 3.5 Flash Lite](https://img.shields.io/badge/Google%20AI-Gemini%203.5%20Flash%20Lite-4285F4.svg?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
   [![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
+  [![Next.js 16](https://img.shields.io/badge/Next.js-16.3%20(Turbopack)-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-  [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
   [![Tests](https://img.shields.io/badge/Tests-30%2F30%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](https://pytest.org)
   [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
@@ -20,7 +20,7 @@
 
 ## 📌 Executive Summary & Problem Context
 
-In February 2026, the **Ministry of Statistics and Programme Implementation (MoSPI)** officially released India's modernized **Consumer Price Index (CPI) with Base Year 2024 = 100**. This landmark transition expands the national basket to 358 items and establishes the integration of alternative and administrative data sources (e.g., IRCTC rail ticketing feeds, PPAC petroleum prices, and online market price scraping).
+In February 2026, the **Ministry of Statistics and Programme Implementation (MoSPI)** officially transitioned to India's modernized **Consumer Price Index (CPI) with Base Year 2024 = 100**. This landmark transition expands the national basket to 358 items and establishes the integration of alternative and administrative data sources (e.g., IRCTC rail ticketing feeds, PPAC petroleum prices, and online market price scraping).
 
 ### 🎯 Problem Statement (SIH26056)
 > **"Development of a Real-time Airfare Price Index for India through Automated Web Scraping of Airline and Online Travel Aggregator Portals for Augmentation of the Consumer Price Index (CPI)."**
@@ -31,6 +31,36 @@ Air transport is one of the most volatile and complex consumer service categorie
 3. **Manual Collection Failure:** Traditional physical CPI field investigators visiting airport booking counters once a month capture arbitrary snapshot noise, failing to reflect true economic inflation.
 
 **Our Solution:** An end-to-end, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 high-density city-pairs**, stratifies observations across **5 advance-purchase booking horizons**, computes elementary price relatives using the **Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
+
+---
+
+## 🚀 Key Innovations & Platform Capabilities
+
+### 1. 🧠 AI Copilot (Powered by Google Gemini 3.5 Flash Lite + Live RAG)
+- **Live Generative Intelligence**: Powered by Google AI Studio's **`models/gemini-3.5-flash-lite`** for low-latency conversational reasoning.
+- **Domain RAG Grounding**: System prompts grounded with MoSPI 2024=100 base indices (`107.42`), DGCA passenger weights, 30-day route medians, and $T+0 \to T+30$ horizon multiplier matrices.
+- **Minimalist Luxury UI**: Frosted glassmorphic modal with rich markdown rendering (headers, bold weights, bullet markers), zero scrollbars, and integrated omni-input capsule.
+
+### 2. 🔥 Aviation Velocity Radar
+- **Surveillance of Market Momentum**: Real-time identification of top 5 surging corridors (*Corridors Heating Up*) vs top 5 price-dropping corridors (*Corridors Cooling Down*).
+- **Quantified 7-Day Velocity ($\Delta\%$)**: Clear breakdown of demand drivers (e.g., slot scarcity, holiday compression, capacity additions) and 1-click price alert creation.
+
+### 3. 🔔 Smart Price Alerts Engine
+- **Automated Threshold & Price Dip Watcher**: Set customized price watch alerts on any of the 25 domestic corridors with dual trigger modes:
+  - *Price Drops Below ₹X* (Leisure/Budget trigger).
+  - *Price Surges Above Y%* (Volatility/Surge alert).
+- **Dedicated Alerts Management**: View active and triggered watches with real-time status indicators.
+
+### 4. 📊 Route Intelligence Deep-Dive Modal
+- **Comprehensive 4-Tab Analytical Suite**:
+  1. **30-Day Historical Trend**: Interactive line chart with moving median and peak bounds.
+  2. **Advance Booking Horizon Curve ($T+0 \to T+30$)**: Price decay curve highlighting the optimal advance booking window.
+  3. **Carrier Pricing Spread**: Visual pricing distribution across IndiGo, Air India, Vistara, Akasa, and SpiceJet with official logos.
+  4. **IQR Anomaly Fencing**: Statistical boxplot and outlier detection gate.
+
+### 5. ✈️ Cinematic Aerodynamic Flight Hero
+- **High-Definition Sprint Zero Aircraft**: Smooth day/night flight imagery with seamless theme persistence.
+- **Realistic Flight Cruise Physics**: 20-second alternating multi-phase aerodynamic banking, gentle pitch/roll shifts, and altitude drift simulating cruise flight.
 
 ---
 
@@ -53,10 +83,11 @@ flowchart TD
         C2["🇮🇳 National Upper-Level Aggregator (Laspeyres / Young)<br/><b>CPI(t) = ∑ [ w_r × I(r, t) ] × 100</b><br/><i>Weighted by DGCA City-Pair Monthly Passenger Traffic Volume</i>"]
     end
 
-    subgraph S4["4. API & OUTPUT DISTRIBUTION"]
-        D1["⚡ FastAPI High-Performance Backend<br/><i>13 Async REST Endpoints · In-Memory & PostgreSQL 16 Store</i>"]
-        D2["📊 Next.js 16 Glassmorphism Dashboard<br/><i>Real-time CPI Trendlines, Route Heatmaps & Interactive Trigger</i>"]
-        D3["🏛️ Official MoSPI Statistical Bulletin<br/><i>Publication-ready Monthly Press Release</i>"]
+    subgraph S4["4. AI & OUTPUT DISTRIBUTION"]
+        D1["⚡ FastAPI High-Performance Backend<br/><i>13 Async REST Endpoints · SQLite & PostgreSQL 16 Store</i>"]
+        D2["🧠 Gemini 3.5 Flash Lite AI Copilot<br/><i>Real-time RAG grounding with MoSPI telemetry</i>"]
+        D3["📊 Next.js 16 Dashboard (Turbopack)<br/><i>Velocity Radar, Route Deep-Dives & Price Alerts</i>"]
+        D4["🏛️ Official MoSPI Statistical Bulletin<br/><i>Publication-ready Monthly Press Release</i>"]
     end
 
     A --> B1
@@ -67,6 +98,7 @@ flowchart TD
     C2 --> D1
     D1 --> D2
     D1 --> D3
+    D1 --> D4
 
     style S1 fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
     style S2 fill:#0f172a,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc
@@ -170,26 +202,29 @@ cd Prototype-2
 
 ---
 
-### 🐳 Option 2: Docker Compose
-Run the containerized PostgreSQL database and backend service:
-
-```bash
-cp .env.example .env
-docker compose up -d
-```
+### 🌐 Option 2: Live Cloud Deployments
+- **GitHub Pages (Static Export)**: [https://satiricalguru.github.io/Prototype-2/](https://satiricalguru.github.io/Prototype-2/)
+- **Vercel Deploy**: Connect the repository to Vercel with Root Directory set to `frontend/`.
 
 ---
 
 ### 🛠️ Option 3: Manual Step-by-Step Setup
 
-#### 1. Backend Service
+#### 1. Configure Gemini AI Studio Key
+Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
+NEXT_PUBLIC_GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+#### 2. Start Backend Service
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
 python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Frontend Dashboard
+#### 3. Start Frontend Dashboard
 ```bash
 cd frontend
 npm install
@@ -263,10 +298,9 @@ FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/d
 The frontend is built with **Next.js 16 App Router (Turbopack)**, modern **Vanilla CSS Design System**, **Google Fonts (`Outfit` & `Plus Jakarta Sans`)**, and **Recharts**:
 
 1. **🏠 Home (Aviation Intelligence Hub):**
-   - **Left-Aligned Intelligence:** Dynamic headline, real-time live pulse badge, and dual primary CTAs (`Explore Price Index` and `View CPI Bulletin`).
-   - **3 Single-Row Glass Cards:** `Real-Time Updates`, `Comprehensive Coverage` (25 DGCA corridors across 85+ domestic airports), and `Data You Can Trust` (automated scraping with DGCA passenger weights).
-   - **Floating 5-Column Live Index Bar:** Real-time headline CPI (`109.40` / `107.55`), 24h delta, sampled quote count (`48,200`), top corridor median fare (`₹6,240`), and animated green sparkline trend.
    - **Cruising Aircraft Backdrop:** Pixel-crisp, realistic flight cruise animation with seamless day/night theme support.
+   - **Floating 5-Column Live Index Bar:** Real-time headline CPI (`109.40` / `107.55`), 24h delta, sampled quote count (`48,200`), top corridor median fare (`₹6,240`), and animated green sparkline trend.
+   - **Market Velocity Radar:** Instant breakdown of top 5 surging and cooling corridors with 7-day velocity metrics.
 
 2. **📈 Price Index (National Macro & Sub-indices):**
    - Headline composite CPI and 4 sub-indices (Non-Stop, Connecting, Advance Bookings, Last-Minute).
@@ -275,61 +309,26 @@ The frontend is built with **Next.js 16 App Router (Turbopack)**, modern **Vanil
 
 3. **🗺️ Routes Matrix & Corridor Deep-Dive Modal:**
    - Complete 25-route matrix with DGCA passenger traffic volume, normalized weights ($w_r$), and live Jevons micro-indices.
-   - **Interactive Route Details Modal:** Click any route or `"View Details →"` to view airport IATA metadata, advance-purchase stratification curves, operating airline market shares (IndiGo, Air India, Vistara, Akasa), and a direct 1-click filter into Flight Data.
+   - **Interactive Route Details Modal:** 4-tab analytical suite (30-day historical trend, $T+0 \to T+30$ horizon decay, carrier price spread with logos, and IQR outlier boundaries).
 
-4. **✈️ Flight Data Explorer:**
+4. **🔔 Price Alerts Center:**
+   - Interactive threshold and price dip alert builder.
+   - Real-time active alerts monitoring table with live status badges.
+
+5. **✈️ Flight Data Explorer:**
    - Real-time stream of validated domestic fare observations across all 25 city pairs.
    - Multi-parameter filtering by Origin, Destination, Airline carrier, and Booking Horizon.
 
-5. **📐 Methodology & Mathematical Proofs:**
+6. **📐 Methodology & Mathematical Proofs:**
    - Step-by-step mathematical breakdown of the Jevons elementary formula vs. Carli upward bias demonstrations.
    - Axiomatic time-reversal test proofs ($I_{0\to t} \times I_{t\to 0} = 1.0$) and DGCA Laspeyres aggregation equations.
 
-6. **💚 Monitoring & Data Quality Engine:**
+7. **💚 Monitoring & Data Quality Engine:**
    - Scraper throughput diagnostic gauges, request latency indicators, and automated Interquartile Range (IQR) outlier fences.
    - **Live Scraper Trigger:** 1-click interactive button to execute or simulate a live ingestion and index recalculation cycle.
 
-7. **🏛️ Official MoSPI Bulletin:**
+8. **🏛️ Official MoSPI Bulletin:**
    - Publication-ready HTML/JSON monthly statistical press release for official CPI augmentation.
-
-8. **📜 Legal & Compliance Pages:**
-   - Standalone `/privacy` (Privacy Policy) and `/terms` (Terms of Service) pages with full dark/light theme persistence.
-
----
-
-## 🛡️ Legal, Ethical & Production Architecture
-
-### Prototype Compliance
-* Strictly adheres to `robots.txt` rate-limiting (randomized delays between 0.5s and 2.0s).
-* Zero storage of Personally Identifiable Information (PII) — strictly public airfare metadata.
-* Resilient dual-mode architecture: live web queries with calibrated econometric fallback to guarantee $100\%$ uptime during hackathon jury evaluation.
-
-### MoSPI Production Roadmap
-* **NDC & GDS Integration:** Direct partnership feeds from airline New Distribution Capability (NDC) APIs and Global Distribution Systems (Amadeus, Sabre).
-* **Automated DGCA Ingestion:** Direct database synchronization with DGCA monthly traffic tables for continuous automatic weight recalibration.
-* **COICOP 2018 Sub-Index Ingestion:** Automated export into MoSPI's central e-Sankhyiki retail inflation database.
-
----
-
-## 🏛️ Smart India Hackathon Jury Defense (FAQ)
-
-<details>
-<summary><strong>Q1: Why use Jevons instead of Laspeyres at the route level?</strong></summary>
-
-> *At the elementary route level, individual flight-by-flight quantity weights do not exist. Using an arithmetic mean like Carli introduces an upward substitution bias. Jevons (geometric mean of price relatives) assumes an elasticity of substitution equal to 1, accurately modeling consumers switching between flight times or carriers when relative prices shift. It also satisfies the axiomatic Time-Reversal Test.*
-</details>
-
-<details>
-<summary><strong>Q2: Why use DGCA passenger traffic as weights instead of revenue?</strong></summary>
-
-> *DGCA publishes scheduled monthly city-pair passenger numbers, providing the most accurate volume proxy for consumer air transport expenditure in India. For production rollout, passenger volumes multiplied by observed geometric mean fares ($Pax_r \times \bar{P}_r$) yield exact expenditure shares.*
-</details>
-
-<details>
-<summary><strong>Q3: How do you prevent dynamic pricing and festival spikes from distorting CPI?</strong></summary>
-
-> *By stratifying data into 5 advance-purchase booking horizons ($T+0, T+3, T+7, T+15, T+30$), we compare apples-to-apples (e.g., $T+7$ Diwali fares against $T+7$ baseline fares). Our `FareValidator` uses rolling Interquartile Range (IQR) fences: genuine market surges are preserved with flags, while scraper corruption errors are cleanly excluded.*
-</details>
 
 ---
 
