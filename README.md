@@ -108,6 +108,61 @@ flowchart TD
 
 ---
 
+## 🧠 The Aviation & MoSPI CPI RAG Architecture
+
+Our platform implements a specialized **Retrieval-Augmented Generation (RAG)** pipeline designed to eliminate LLM hallucinations and anchor every answer in empirical aviation telemetry and official MoSPI index standards:
+
+```mermaid
+flowchart TD
+    UserQuery["💬 User Query<br/><i>'Is ₹4,850 a good fare from Delhi to Mumbai right now?'</i>"]
+    
+    subgraph RAG_Engine["🔍 1. REAL-TIME DOMAIN CONTEXT RETRIEVAL (4 STORES)"]
+        Store1["📊 <b>Live Corridor Telemetry Matrix</b><br/>• Trailing 30-day median fare (₹5,320)<br/>• Price delta: -8.8% below median<br/>• 7-day velocity momentum & corridor Jevons index (105.8)"]
+        Store2["⏱️ <b>Yield Surface & Advance Curves</b><br/>• Stratified pricing: T+0, T+3, T+7, T+15, T+30<br/>• Lowest 20th percentile validation at ₹4,850"]
+        Store3["🛫 <b>Carrier Distribution & HHI Score</b><br/>• IndiGo 62.8% (₹4,850 baseline) vs Air India 14.2% (₹5,240)<br/>• Market concentration HHI index: 4,280"]
+        Store4["🏛️ <b>MoSPI & ILO Methodology Standards</b><br/>• Jevons Geometric Mean formula axioms<br/>• Time-reversal invariance & IQR anomaly fences"]
+    end
+    
+    subgraph LLM_Tier["🧠 2. COGNITIVE REASONING & INFERENCE"]
+        Augment["📝 <b>Context Augmentation</b><br/><i>Inject domain knowledge + prompt into system instructions</i>"]
+        Gemini["⚡ <b>Google Gemini 3.5 Flash Lite</b><br/><i>Sub-second low-latency generative reasoning engine</i>"]
+        Fallback["🛡️ <b>Edge Deterministic RAG Fallback</b><br/><i>In-browser statistical evaluator (offline / static mode)</i>"]
+    end
+    
+    subgraph Output_Tier["📊 3. STRUCTURED EXECUTIVE INTELLIGENCE"]
+        Verdict["🎯 <b>Actionable Verdict: Strong Buy</b><br/>• Quantitative savings: ₹470 below trailing median<br/>• Carrier spread breakdown (IndiGo vs Air India)<br/>• Advance purchase recommendation: Lock within 24h before T+7 surge (+35%)"]
+    end
+
+    UserQuery --> Store1 & Store2 & Store3 & Store4
+    Store1 & Store2 & Store3 & Store4 --> Augment
+    Augment --> Gemini
+    Gemini -.->|Network Error / Offline Fallback| Fallback
+    Gemini --> Verdict
+    Fallback --> Verdict
+
+    style UserQuery fill:#0b1329,stroke:#38bdf8,stroke-width:2px,color:#ffffff
+    style RAG_Engine fill:#020617,stroke:#6366f1,stroke-width:2px,color:#ffffff
+    style LLM_Tier fill:#020617,stroke:#10b981,stroke-width:2px,color:#ffffff
+    style Output_Tier fill:#0b1329,stroke:#f59e0b,stroke-width:2px,color:#ffffff
+```
+
+### 📚 The 4 Grounding Knowledge Stores:
+1. **Live Corridor Telemetry Matrix**:
+   - Ingests **48,200+ daily observations** across 25 high-density DGCA city pairs.
+   - Supplies real-time moving medians, standard deviations, and 7-day velocity acceleration ($\Delta\%$).
+2. **Advance Booking Yield Surface ($T+0 \to T+30$)**:
+   - Grounded on the 5 calibrated booking horizons ($T+0$ emergency walkup $\to$ $T+30$ advance leisure anchor), enabling the AI to evaluate true price percentiles rather than snapshot bias.
+3. **Carrier Pricing Spread & Market Structure**:
+   - Quantifies pricing variance and market share across IndiGo (62.8%), Air India (14.2%), Vistara (9.6%), Akasa (4.8%), and SpiceJet (5.4%).
+4. **MoSPI & ILO Axiomatic Econometric Standards**:
+   - Mathematical definitions for the Jevons Elementary Geometric Mean ($\mathcal{I}_{\text{Jevons}} = \prod (p_{i,t}/p_{i,0})^{1/n}$), time-reversal invariance, and Interquartile Range (IQR) outlier bounds.
+
+### ⚡ Resilient Dual-Tier Execution:
+- **Tier 1 (Live Cloud Inference)**: Connects directly to Google AI Studio via `models/gemini-3.5-flash-lite`, using context-augmented prompts for natural language conversational reasoning.
+- **Tier 2 (Edge Deterministic Fallback)**: If offline, experiencing rate-limiting, or hosted on static CDNs (like GitHub Pages), the Copilot falls back seamlessly to the client-side semantic telemetry retriever, guaranteeing **100% uninterrupted uptime**.
+
+---
+
 ## 📐 Statistical & Econometric Methodology
 
 ### 1. Route-Level Micro Index: The Jevons Formula
