@@ -7,6 +7,9 @@ import {
 } from "recharts";
 
 import IndiaNetworkMap from "./components/IndiaNetworkMap";
+import AviationCopilotModal from "./components/AviationCopilotModal";
+import PriceAlertEngine from "./components/PriceAlertEngine";
+import RouteDetailModal from "./components/RouteDetailModal";
 import { getAssetPath } from "./utils/assetPath";
 import {
   STATISTICAL_CONSTANTS,
@@ -23,6 +26,7 @@ import {
   HOMEPAGE_FEATURED_CORRIDORS,
   HOMEPAGE_AIRLINE_FLEET_DATA,
   HOMEPAGE_METHODOLOGY_HIGHLIGHTS,
+  VELOCITY_RADAR_DATA,
 } from "./data/mockData";
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -71,12 +75,37 @@ export default function StitchAirfareCPIApp() {
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [apiTestResponse, setApiTestResponse] = useState(null);
 
-  // Modals
+  // Modals & Dynamic Features
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showBulletinModal, setShowBulletinModal] = useState(false);
-  const [routeDetailsModal, setRouteDetailsModal] = useState(null);
+  
+  // AI Copilot, Deep Dive Modal, and Price Watch States
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [copilotInitialQuery, setCopilotInitialQuery] = useState("");
+  const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [selectedRouteForModal, setSelectedRouteForModal] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [toastType, setToastType] = useState("info");
+
+  const showToast = (msg, type = "info") => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
+  const handleOpenRouteDetail = (r) => {
+    setSelectedRouteForModal(r);
+    setIsRouteModalOpen(true);
+  };
+
+  const handleSetWatchFromRoute = (from, to, target) => {
+    setActiveTab("alerts");
+    showToast(`Navigated to Price Alerts for ${from} → ${to} (Suggested Target: ₹${Math.round(target * 0.9).toLocaleString()})`, "success");
+  };
 
   // Sync theme state with documentElement class
   useEffect(() => {
@@ -360,6 +389,7 @@ export default function StitchAirfareCPIApp() {
     { id: "home", label: "Home", icon: "home" },
     { id: "price-index", label: "Price Index", icon: "trending_up" },
     { id: "routes", label: "Route Analysis", icon: "alt_route" },
+    { id: "alerts", label: "Price Alerts", icon: "notifications_active" },
     { id: "flight-data", label: "Flight Data", icon: "flight" },
     { id: "methodology", label: "Methodology", icon: "calculate" },
     { id: "about", label: "About", icon: "info" },
@@ -495,8 +525,34 @@ export default function StitchAirfareCPIApp() {
             })}
           </div>
 
-          {/* Actions: Theme Toggle, Notifications, Settings, Sign In */}
+          {/* Actions: AI Copilot, Theme Toggle, Notifications, Settings, Sign In */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* AI Copilot Button */}
+            <button
+              onClick={() => setIsCopilotOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                borderRadius: 20,
+                background: isDarkMode ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(2, 132, 199, 0.35))" : "linear-gradient(135deg, rgba(0, 101, 145, 0.1), rgba(56, 189, 248, 0.2))",
+                border: `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}`,
+                color: isDarkMode ? "#38bdf8" : "#006591",
+                fontSize: 12.5,
+                fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: isDarkMode ? "0 0 16px rgba(56, 189, 248, 0.25)" : "0 2px 8px rgba(0, 101, 145, 0.15)",
+                transition: "all 0.2s ease",
+              }}
+              title="Ask Airfare CPI AI Copilot"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 17, color: isDarkMode ? "#38bdf8" : "#006591" }}>
+                smart_toy
+              </span>
+              <span>AI Copilot</span>
+            </button>
+
             <button
               onClick={toggleTheme}
               aria-label="Toggle Theme"
@@ -1300,6 +1356,263 @@ export default function StitchAirfareCPIApp() {
             </section>
 
             {/* ========================================================
+                HOMEPAGE SECTION: AVIATION VELOCITY RADAR (SURGING & COOLING ROUTES)
+                ======================================================== */}
+            <section style={{ maxWidth: 1440, margin: "0 auto", padding: "12px 24px 48px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#38bdf8" : "#006591", marginBottom: 4 }}>
+                    Live Market Momentum Engine
+                  </div>
+                  <h2 style={{ fontSize: 26, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e", letterSpacing: "-0.02em" }}>
+                    Aviation Velocity Radar — Routes Heating Up &amp; Cooling Down
+                  </h2>
+                  <p style={{ fontSize: 14, color: isDarkMode ? "#bec6e0" : "#45464d", marginTop: 4 }}>
+                    Continuous tracking of price acceleration: corridors facing intense surge pressure vs sectors seeing carrier discounting.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setCopilotInitialQuery("Which domestic routes are heating up fastest this week and why?");
+                    setIsCopilotOpen(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 18px",
+                    borderRadius: 12,
+                    backgroundColor: isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.1)",
+                    border: `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}`,
+                    color: isDarkMode ? "#38bdf8" : "#006591",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                    psychology
+                  </span>
+                  <span>Ask AI Velocity Explainer</span>
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 24 }}>
+                {/* Column 1: Routes Heating Up */}
+                <div
+                  className="stitch-card"
+                  style={{
+                    padding: "24px 26px",
+                    borderRadius: 20,
+                    borderTop: "4px solid #ef4444",
+                    backgroundColor: isDarkMode ? "#080d1a" : "#ffffff",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(239, 68, 68, 0.15)", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                          local_fire_department
+                        </span>
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 17, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#0f172a", margin: 0 }}>
+                          Corridors Heating Up (Surging Fares)
+                        </h3>
+                        <p style={{ fontSize: 12, color: "#ef4444", fontWeight: 700, margin: 0 }}>
+                          Accelerated Demand &amp; Capacity Tightening
+                        </p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 6, backgroundColor: "rgba(239, 68, 68, 0.12)", color: "#ef4444" }}>
+                      TOP 5 SURGES
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {VELOCITY_RADAR_DATA.heatingUp.map((r) => (
+                      <div
+                        key={`${r.from}-${r.to}`}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 12,
+                          backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.7)" : "#f8fafc",
+                          border: `1px solid ${isDarkMode ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.12)"}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 900, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+                              {r.from} → {r.to}
+                            </span>
+                            <span style={{ fontSize: 11, color: isDarkMode ? "#94a3b8" : "#64748b" }}>
+                              {r.fromCity} to {r.toCity}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, color: isDarkMode ? "#cbd5e1" : "#475569", marginTop: 3 }}>
+                            {r.reason}
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: "var(--font-mono)", color: "#ef4444" }}>
+                            {r.change7d}
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#0f172a", fontFamily: "var(--font-mono)" }}>
+                            ₹{r.currentFare.toLocaleString()}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 4, justifyContent: "flex-end" }}>
+                            <button
+                              onClick={() => handleOpenRouteDetail({ from: r.from, to: r.to, avgFare: r.currentFare, cpi: r.cpi, change: r.change7d })}
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                backgroundColor: isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.1)",
+                                color: isDarkMode ? "#38bdf8" : "#006591",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Analyze
+                            </button>
+                            <button
+                              onClick={() => handleSetWatchFromRoute(r.from, r.to, r.currentFare)}
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                color: "#ef4444",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Watch
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Column 2: Routes Cooling Down */}
+                <div
+                  className="stitch-card"
+                  style={{
+                    padding: "24px 26px",
+                    borderRadius: 20,
+                    borderTop: "4px solid #22c55e",
+                    backgroundColor: isDarkMode ? "#080d1a" : "#ffffff",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(34, 197, 94, 0.15)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                          ac_unit
+                        </span>
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 17, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#0f172a", margin: 0 }}>
+                          Corridors Cooling Down (Price Cuts)
+                        </h3>
+                        <p style={{ fontSize: 12, color: "#22c55e", fontWeight: 700, margin: 0 }}>
+                          Discount Seats &amp; Additional Capacity
+                        </p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 6, backgroundColor: "rgba(34, 197, 94, 0.12)", color: "#22c55e" }}>
+                      TOP 5 DEALS
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {VELOCITY_RADAR_DATA.coolingDown.map((r) => (
+                      <div
+                        key={`${r.from}-${r.to}`}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 12,
+                          backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.7)" : "#f8fafc",
+                          border: `1px solid ${isDarkMode ? "rgba(34, 197, 94, 0.2)" : "rgba(34, 197, 94, 0.12)"}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 900, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+                              {r.from} → {r.to}
+                            </span>
+                            <span style={{ fontSize: 11, color: isDarkMode ? "#94a3b8" : "#64748b" }}>
+                              {r.fromCity} to {r.toCity}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, color: isDarkMode ? "#cbd5e1" : "#475569", marginTop: 3 }}>
+                            {r.reason}
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 16, fontWeight: 900, fontFamily: "var(--font-mono)", color: "#22c55e" }}>
+                            {r.change7d}
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#0f172a", fontFamily: "var(--font-mono)" }}>
+                            ₹{r.currentFare.toLocaleString()}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 4, justifyContent: "flex-end" }}>
+                            <button
+                              onClick={() => handleOpenRouteDetail({ from: r.from, to: r.to, avgFare: r.currentFare, cpi: r.cpi, change: r.change7d })}
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                backgroundColor: isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.1)",
+                                color: isDarkMode ? "#38bdf8" : "#006591",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Analyze
+                            </button>
+                            <button
+                              onClick={() => handleSetWatchFromRoute(r.from, r.to, r.currentFare)}
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                backgroundColor: "rgba(34, 197, 94, 0.1)",
+                                color: "#22c55e",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Watch
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ========================================================
                 HOMEPAGE SECTION 3: AIRLINE MARKET INTELLIGENCE POSTERS
                 ======================================================== */}
             <section style={{ maxWidth: 1440, margin: "0 auto", padding: "12px 24px 48px" }}>
@@ -2067,7 +2380,13 @@ export default function StitchAirfareCPIApp() {
                       key={r.route}
                       onClick={() => {
                         setSelectedRoute(r);
-                        setRouteDetailsModal(r);
+                        handleOpenRouteDetail({
+                          from: r.origin,
+                          to: r.destination,
+                          avgFare: r.avgFare,
+                          cpi: r.cpi,
+                          change: "+2.8%",
+                        });
                       }}
                       style={{
                         borderBottom: i < filteredRoutes.length - 1 ? `1px solid ${isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}` : "none",
@@ -2093,7 +2412,13 @@ export default function StitchAirfareCPIApp() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedRoute(r);
-                            setRouteDetailsModal(r);
+                            handleOpenRouteDetail({
+                              from: r.origin,
+                              to: r.destination,
+                              avgFare: r.avgFare,
+                              cpi: r.cpi,
+                              change: "+2.8%",
+                            });
                           }}
                           style={{
                             border: `1px solid ${isDarkMode ? "rgba(57, 184, 253, 0.3)" : "rgba(0, 101, 145, 0.2)"}`,
@@ -2117,6 +2442,56 @@ export default function StitchAirfareCPIApp() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB: PRICE ALERTS & WATCH ENGINE
+            ======================================================== */}
+        {activeTab === "alerts" && (
+          <div style={{ maxWidth: 1440, margin: "0 auto", padding: "36px 24px 64px" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#38bdf8" : "#006591", marginBottom: 6 }}>
+                  Automated Aviation Surveillance
+                </div>
+                <h2 style={{ fontSize: 28, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e", letterSpacing: "-0.02em" }}>
+                  Price Alerts &amp; Threshold Watch Engine
+                </h2>
+                <p style={{ fontSize: 14, color: isDarkMode ? "#bec6e0" : "#45464d", marginTop: 4 }}>
+                  Configure continuous monitoring triggers on any DGCA corridor to receive instantaneous alerts on price drops or extreme surge anomalies.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setCopilotInitialQuery("How do automated price alerts work with Jevons index and MoSPI anomaly filters?");
+                  setIsCopilotOpen(true);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 18px",
+                  borderRadius: 12,
+                  backgroundColor: isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.1)",
+                  border: `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}`,
+                  color: isDarkMode ? "#38bdf8" : "#006591",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  smart_toy
+                </span>
+                <span>Ask AI About Alerts</span>
+              </button>
+            </div>
+
+            {/* Price Alert Engine Component */}
+            <PriceAlertEngine isDarkMode={isDarkMode} onTriggerToast={showToast} />
           </div>
         )}
 
@@ -3061,197 +3436,99 @@ export default function StitchAirfareCPIApp() {
         </div>
       )}
 
-      {/* ── Route Details Deep-Dive Modal ── */}
-      {routeDetailsModal && (
+      {/* ── AI Aviation Copilot Modal ── */}
+      <AviationCopilotModal
+        isOpen={isCopilotOpen}
+        onClose={() => {
+          setIsCopilotOpen(false);
+          setCopilotInitialQuery("");
+        }}
+        initialQuery={copilotInitialQuery}
+      />
+
+      {/* ── Route Deep-Dive Intelligence Modal ── */}
+      <RouteDetailModal
+        route={selectedRouteForModal}
+        isOpen={isRouteModalOpen}
+        onClose={() => setIsRouteModalOpen(false)}
+        isDarkMode={isDarkMode}
+        onSetWatch={handleSetWatchFromRoute}
+      />
+
+      {/* ── Floating AI Copilot Quick Launcher (Bottom Right) ── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 90,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <button
+          onClick={() => setIsCopilotOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "12px 20px",
+            borderRadius: 30,
+            background: "linear-gradient(135deg, #006591, #0284c7)",
+            color: "#ffffff",
+            fontSize: 14,
+            fontWeight: 800,
+            border: "1px solid rgba(56, 189, 248, 0.4)",
+            boxShadow: "0 8px 30px rgba(2, 132, 199, 0.5), 0 0 20px rgba(56, 189, 248, 0.3)",
+            cursor: "pointer",
+            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+          title="Open AI Copilot"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+            smart_toy
+          </span>
+          <span>Ask AI Copilot</span>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              backgroundColor: "#22c55e",
+              boxShadow: "0 0 8px #22c55e",
+            }}
+          />
+        </button>
+      </div>
+
+      {/* ── Dynamic In-App Toast Notification ── */}
+      {toastMessage && (
         <div
           style={{
             position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
-            backdropFilter: "blur(8px)",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 99999,
+            padding: "12px 24px",
+            borderRadius: 14,
+            backgroundColor: toastType === "success" ? "#065f46" : toastType === "warning" ? "#92400e" : "#0f172a",
+            color: "#ffffff",
+            border: `1px solid ${toastType === "success" ? "rgba(34, 197, 94, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            zIndex: 110,
-            padding: 20,
+            gap: 10,
+            fontSize: 13.5,
+            fontWeight: 600,
+            animation: "fadeInUp 0.2s ease-out",
           }}
-          onClick={() => setRouteDetailsModal(null)}
         >
-          <div
-            className="stitch-card"
-            style={{
-              maxWidth: 680,
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              backgroundColor: isDarkMode ? "#162036" : "#ffffff",
-              padding: 28,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#39b8fd" : "#006591" }}>
-                  Corridor Deep-Dive Intelligence
-                </div>
-                <h3 style={{ fontSize: 24, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 4 }}>
-                  {routeDetailsModal.route} Corridor
-                </h3>
-                <div style={{ fontSize: 12, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 2 }}>
-                  {AIRPORTS_LIST.find((a) => a.code === routeDetailsModal.origin)?.name || routeDetailsModal.origin} ({routeDetailsModal.origin}) ➔{" "}
-                  {AIRPORTS_LIST.find((a) => a.code === routeDetailsModal.destination)?.name || routeDetailsModal.destination} ({routeDetailsModal.destination})
-                </div>
-              </div>
-              <button
-                onClick={() => setRouteDetailsModal(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: isDarkMode ? "#bec6e0" : "#76777d" }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            {/* Quick Badges Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 20 }}>
-              <div style={{ padding: 12, borderRadius: 8, backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: isDarkMode ? "#8990a4" : "#76777d" }}>DGCA Weight</div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#39b8fd" : "#006591" }}>
-                  {routeDetailsModal.weight}%
-                </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 8, backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: isDarkMode ? "#8990a4" : "#76777d" }}>Monthly Traffic</div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e" }}>
-                  {routeDetailsModal.pax}
-                </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 8, backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: isDarkMode ? "#8990a4" : "#76777d" }}>Distance</div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e" }}>
-                  {routeDetailsModal.distance} km
-                </div>
-              </div>
-              <div style={{ padding: 12, borderRadius: 8, backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: isDarkMode ? "#8990a4" : "#76777d" }}>Jevons Index</div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-mono)", color: "#34c759" }}>
-                  {routeDetailsModal.cpi.toFixed(1)}
-                </div>
-              </div>
-            </div>
-
-            {/* Advance Booking Curve for this Route */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginBottom: 8 }}>
-                Advance Purchase Pricing Multipliers ({routeDetailsModal.route})
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, textAlign: "center" }}>
-                <div style={{ padding: 10, borderRadius: 6, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#8990a4" : "#76777d" }}>T+30 Anchor</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
-                    ₹{routeDetailsModal.t30.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#34c759", fontWeight: 700 }}>1.0×</div>
-                </div>
-
-                <div style={{ padding: 10, borderRadius: 6, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#8990a4" : "#76777d" }}>T+15 Advance</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
-                    ₹{routeDetailsModal.t15.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#39b8fd" : "#006591", fontWeight: 700 }}>1.16×</div>
-                </div>
-
-                <div style={{ padding: 10, borderRadius: 6, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#8990a4" : "#76777d" }}>T+7 1-Week</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
-                    ₹{routeDetailsModal.t7.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#ff9500", fontWeight: 700 }}>1.65×</div>
-                </div>
-
-                <div style={{ padding: 10, borderRadius: 6, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#8990a4" : "#76777d" }}>T+3 Urgent</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 2 }}>
-                    ₹{routeDetailsModal.t3.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#ff9500", fontWeight: 700 }}>2.35×</div>
-                </div>
-
-                <div style={{ padding: 10, borderRadius: 6, border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#8990a4" : "#76777d" }}>T+0 Walkup</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffb4ab" : "#ba1a1a", marginTop: 2 }}>
-                    ₹{routeDetailsModal.t0.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 10, color: isDarkMode ? "#ffb4ab" : "#ba1a1a", fontWeight: 700 }}>3.56×</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Carrier Breakdown on this route */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginBottom: 8 }}>
-                Operating Carriers on this Corridor
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <span>IndiGo (6E) · 62% Frequency</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700 }}>Avg ₹{Math.round(routeDetailsModal.avgFare * 0.96).toLocaleString()}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <span>Air India (AI) · 20% Frequency</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700 }}>Avg ₹{Math.round(routeDetailsModal.avgFare * 1.05).toLocaleString()}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <span>Vistara (UK) · 14% Frequency</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700 }}>Avg ₹{Math.round(routeDetailsModal.avgFare * 1.12).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-              <button
-                onClick={() => {
-                  setFlightOriginFilter(routeDetailsModal.origin);
-                  setFlightDestFilter(routeDetailsModal.destination);
-                  setFlightPage(1);
-                  setActiveTab("flight-data");
-                  setRouteDetailsModal(null);
-                }}
-                style={{
-                  backgroundColor: isDarkMode ? "#39b8fd" : "#131b2e",
-                  color: isDarkMode ? "#001e2f" : "#ffffff",
-                  border: "none",
-                  padding: "9px 18px",
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>flight</span>
-                View Live Flights in Flight Data Tab →
-              </button>
-              <button
-                onClick={() => setRouteDetailsModal(null)}
-                style={{
-                  backgroundColor: "transparent",
-                  border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}`,
-                  color: isDarkMode ? "#ffffff" : "#131b2e",
-                  padding: "9px 16px",
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          <span className="material-symbols-outlined" style={{ fontSize: 20, color: toastType === "success" ? "#34d399" : "#38bdf8" }}>
+            {toastType === "success" ? "check_circle" : "info"}
+          </span>
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>
