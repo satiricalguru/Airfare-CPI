@@ -10,23 +10,28 @@ import {
 
 const PRESET_PROMPTS = [
   {
-    label: "Delhi → Mumbai Fare Analysis",
+    label: "Delhi → Mumbai Fare",
+    icon: "flight_takeoff",
     query: "Is ₹4,850 a good fare from Delhi to Mumbai right now?",
   },
   {
     label: "Fastest Surging Corridors",
+    icon: "trending_up",
     query: "Which domestic routes are heating up fastest this week?",
   },
   {
     label: "Optimal Advance Window",
+    icon: "schedule",
     query: "When is the optimal advance-purchase booking window for Bengaluru flights?",
   },
   {
-    label: "Jevons Formula Explained",
+    label: "Jevons Index Formula",
+    icon: "calculate",
     query: "How does the Jevons Geometric Mean formula prevent surge pricing distortion in CPI?",
   },
   {
-    label: "IndiGo vs Air India Spread",
+    label: "Carrier Pricing Spread",
+    icon: "airlines",
     query: "Compare IndiGo and Air India pricing spread across high-density metro corridors.",
   },
 ];
@@ -34,81 +39,77 @@ const PRESET_PROMPTS = [
 function generateAviationResponse(query) {
   const q = query.toLowerCase();
 
-  if (q.includes("delhi") && q.includes("mumbai") || q.includes("del-bom") || q.includes("4,850") || q.includes("4850")) {
-    return `### ✈️ Route Analysis: Delhi (DEL) → Mumbai (BOM)
+  if ((q.includes("delhi") && q.includes("mumbai")) || q.includes("del-bom") || q.includes("4,850") || q.includes("4850")) {
+    return `### ✈️ Route Intelligence: Delhi (DEL) ➔ Mumbai (BOM)
 
-**Verdict: Excellent Value (Buy Recommendation)**
+**Verdict: Strong Buy (Lowest 20th Percentile)**
 
-- **Current Quote**: ₹4,850
+- **Current Live Quote**: ₹4,850
 - **30-Day Route Median**: ₹5,320
 - **Price Delta**: **-8.8% below trailing median** (₹470 savings)
 - **Current Jevons Corridor Index**: **105.8** (Base 2024 = 100)
 
-**Aviation Intelligence Summary:**
-1. **Advance Window Benefit**: Fares on this route typically decay between $T+15$ and $T+30$ down to ₹4,600–₹4,900. At ₹4,850, you are capturing pricing in the lowest 20th percentile.
-2. **Carrier Spread**: IndiGo currently operates 24 daily frequencies with baseline fares at ₹4,850, while Air India is quoting ₹5,240 (with complimentary baggage and meal inclusion).
-3. **Recommendation**: Lock in this fare within 24 hours. Fares typically spike by +35% once the booking horizon crosses within $T+7$.`;
+**Aviation Analysis:**
+1. **Advance Curve Advantage**: Fares on this route typically decay between $T+15$ and $T+30$ down to ₹4,600–₹4,900. At ₹4,850, you are capturing pricing in the lowest 20th percentile.
+2. **Carrier Distribution**: IndiGo operates 24 daily nonstop frequencies with baseline fares at ₹4,850, while Air India is quoting ₹5,240 (bundled with complimentary check-in baggage and meal).
+3. **Action Recommendation**: Lock in this fare within 24 hours. Fares historically surge by +35% once within the $T+7$ booking window.`;
   }
 
   if (q.includes("heating") || q.includes("surging") || q.includes("expensive") || q.includes("fastest")) {
     return `### 🔥 Market Velocity Radar: Surging Domestic Corridors
 
-Based on real-time crawling across 25 DGCA monitored city-pairs, here are the top 3 routes heating up:
+Real-time surveillance across 25 DGCA monitored city-pairs highlights the top 3 corridors heating up:
 
-1. **Delhi (DEL) → Goa (GOI)**
+1. **Delhi (DEL) ➔ Goa (GOI)**
    - **Current Index**: **109.1** (+4.8% 7-Day Surge)
    - **Avg Fare**: ₹7,450 (up from ₹6,200 last week)
-   - **Driver**: High seasonal leisure demand + compressed weekend inventory.
+   - **Driver**: Leisure seasonal compression & weekend slot scarcity.
 
-2. **Mumbai (BOM) → Kolkata (CCU)**
+2. **Mumbai (BOM) ➔ Kolkata (CCU)**
    - **Current Index**: **108.2** (+3.6% 7-Day Surge)
    - **Avg Fare**: ₹6,890
-   - **Driver**: Load factors exceeding 88% across morning departure banks.
+   - **Driver**: Morning departure bank load factors exceeding 88%.
 
-3. **Bengaluru (BLR) → Delhi (DEL)**
+3. **Bengaluru (BLR) ➔ Delhi (DEL)**
    - **Current Index**: **107.5** (+3.1% 7-Day Surge)
    - **Avg Fare**: ₹6,420
-   - **Driver**: Business travel volume rebound and evening slot congestion.
-
-💡 *Tip: You can set an automated Price Watch on any of these corridors to receive instant alerts when fare drops occur.*`;
+   - **Driver**: Business travel volume rebound & evening slot congestion.`;
   }
 
   if (q.includes("advance") || q.includes("booking window") || q.includes("bengaluru") || q.includes("when to book")) {
-    return `### ⏱️ Booking Horizon Curve: Bengaluru (BLR) Sectors
+    return `### ⏱️ Booking Horizon Decay: Bengaluru (BLR) Sectors
 
-Statistical decay analysis across 8,400+ sampled observations reveals the following advance purchase profile:
+Statistical analysis across 8,400+ sampled observations reveals the following advance purchase profile:
 
-| Booking Horizon | Relative Price Index | Avg Fare Spread | Recommended Action |
-| :--- | :---: | :---: | :--- |
-| **$T+30$ Days** | **94.2** | ₹4,200 – ₹4,600 | 🟢 **Optimal Booking Window** |
-| **$T+15$ Days** | **99.5** | ₹4,800 – ₹5,200 | 🟡 Fair Rate (Standard) |
-| **$T+7$ Days** | **112.4** | ₹6,100 – ₹6,800 | 🟠 Urgency Surcharge (+22%) |
-| **$T+3$ Days** | **138.6** | ₹7,900 – ₹9,200 | 🔴 Dynamic Yield Premium (+48%) |
-| **$T+0$ (Same Day)** | **184.0** | ₹11,500 – ₹14,200 | ⚠️ Peak Scarcity (+95%) |
+- **$T+30$ Days Anchor**: **₹4,200 – ₹4,600** (Index: 94.2) ➔ **Optimal Booking Window**
+- **$T+15$ Days Standard**: **₹4,800 – ₹5,200** (Index: 99.5) ➔ Standard Fair Rate
+- **$T+7$ Days Cutoff**: **₹6,100 – ₹6,800** (Index: 112.4) ➔ Urgency Surcharge (+22%)
+- **$T+3$ Days Peak**: **₹7,900 – ₹9,200** (Index: 138.6) ➔ Dynamic Yield Surcharge (+48%)
+- **$T+0$ Same-Day Walkup**: **₹11,500 – ₹14,200** (Index: 184.0) ➔ Peak Scarcity (+95%)
 
-**Core Takeaway:** To avoid inflation-distorted yield management pricing, book Bengaluru flights at least **18 to 24 days prior to departure**.`;
+**Strategic Recommendation:** Book flights at least **18 to 24 days prior to departure** to avoid algorithmic dynamic yield surcharges.`;
   }
 
   if (q.includes("jevons") || q.includes("formula") || q.includes("cpi") || q.includes("geometric") || q.includes("mospi")) {
     return `### 🏛️ MoSPI CPI Methodology: Jevons Geometric Mean
 
-**Why MoSPI uses the Jevons Index for Airfare CPI:**
+**Why MoSPI mandates the Jevons Formula:**
 
 $$\\mathcal{I}_{\\text{Jevons}} = \\prod_{i=1}^{n} \\left( \\frac{p_{i,t}}{p_{i,0}} \\right)^{\\frac{1}{n}} = \\frac{\\left( \\prod p_{i,t} \\right)^{1/n}}{\\left( \\prod p_{i,0} \\right)^{1/n}}$$
 
-1. **Elimination of Extreme Surge Bias**: Traditional arithmetic means (Carli Index) suffer from upward bias when airlines apply 300% last-minute surge pricing. The Geometric Mean is scale-invariant and satisfies the **Time Reversal Test**.
-2. **Axiomatic Defensibility**: As established by ILO and MoSPI's 2024 Base Year guidelines, the Jevons formula accurately measures underlying pure price change rather than consumer panic or extreme scarcity premiums.
-3. **DGCA Passenger Weighting**: Elementary Jevons relatives are subsequently aggregated across corridors using Directorate General of Civil Aviation passenger traffic weights ($w_i = \\text{Pax}_i / \\sum \\text{Pax}$).`;
+1. **Eliminates Surge Pricing Distortion**: Traditional arithmetic averages (Carli Index) suffer severe upward bias when airlines apply 300% same-day walkup surge pricing. The Geometric Mean is scale-invariant and satisfies the axiomatic **Time Reversal Test**.
+2. **Economic Defensibility**: As established by ILO guidelines, Jevons reflects underlying core price movement rather than unconstrained emergency panic fares.
+3. **DGCA Passenger Rescaling**: Elementary corridor relatives are aggregated using Directorate General of Civil Aviation passenger traffic weights ($w_i = \\text{Pax}_i / \\sum \\text{Pax}$).`;
   }
 
   if (q.includes("indigo") || q.includes("air india") || q.includes("spread") || q.includes("airline") || q.includes("market share")) {
-    return `### 🛫 Carrier Spread & Market Intelligence
+    return `### 🛫 Carrier Spread & Market Concentration
 
-**Domestic Carrier Pricing Overview (Metro Trunk Corridors):**
+**Domestic Metro Trunk Corridor Overview:**
 
-- **IndiGo (6E)**: 
+- **IndiGo (6E)**:
   - *Market Share*: **62.8%**
-  - *Price Positioning*: Lowest median base fare (₹4,950 average across 25 corridors). Highest operational punctuality and density.
+  - *Price Positioning*: Lowest median base fare (₹4,950 average across 25 corridors). Highest operational density.
 - **Air India (AI)**:
   - *Market Share*: **14.2%**
   - *Price Positioning*: +6% to +12% above LCC baseline, bundled with 25kg standard check-in luggage and hot meals.
@@ -119,10 +120,10 @@ $$\\mathcal{I}_{\\text{Jevons}} = \\prod_{i=1}^{n} \\left( \\frac{p_{i,t}}{p_{i,
   - *Market Share*: **4.8%**
   - *Price Positioning*: Highly aggressive promotional pricing on tier-1 to tier-2 routes (-5% below IndiGo).
 
-**Herfindahl-Hirschman Index (HHI)**: **4,280** *(Indicates high market concentration with IndiGo as the dominant price-setter).*`;
+**Herfindahl-Hirschman Index (HHI)**: **4,280** *(Indicates high market concentration with IndiGo as dominant price-setter).*`;
   }
 
-  return `### ✈️ Airfare CPI Intelligence Response
+  return `### ✈️ Airfare CPI Intelligence
 
 **Query**: *"${query}"*
 
@@ -131,9 +132,117 @@ $$\\mathcal{I}_{\\text{Jevons}} = \\prod_{i=1}^{n} \\left( \\frac{p_{i,t}}{p_{i,
 - **Advance Horizons Sampled**: $T+0, T+3, T+7, T+15, T+30$
 - **Daily Ingested Quotes**: **48,200+ observations**
 
-**Key Insight:** Domestic airfare inflation in India has stabilized at **+2.84% MoM**, largely driven by moderate jet fuel (ATF) adjustments and robust post-monsoon capacity additions. 
+**Key Insight:** Domestic airfare inflation in India has stabilized at **+2.84% MoM**, largely driven by moderate jet fuel (ATF) adjustments and robust post-monsoon capacity additions.`;
+}
 
-*Try asking about specific routes (e.g. "Delhi to Mumbai"), booking horizons ("when should I book?"), or statistical formulas ("how does Jevons work?").*`;
+// Minimalist Markdown Renderer
+function renderFormattedContent(rawText) {
+  const lines = rawText.split("\n");
+
+  return lines.map((line, idx) => {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      return <div key={idx} style={{ height: 8 }} />;
+    }
+
+    // Heading 3
+    if (trimmed.startsWith("### ")) {
+      return (
+        <div
+          key={idx}
+          style={{
+            fontSize: 14.5,
+            fontWeight: 800,
+            color: "#38bdf8",
+            marginTop: idx === 0 ? 0 : 12,
+            marginBottom: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {trimmed.replace("### ", "")}
+        </div>
+      );
+    }
+
+    // Bullet points
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      const content = trimmed.substring(2);
+      return (
+        <div
+          key={idx}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            fontSize: 13,
+            lineHeight: 1.6,
+            color: "#e2e8f0",
+            marginBottom: 4,
+          }}
+        >
+          <span style={{ color: "#38bdf8", fontSize: 10, marginTop: 4 }}>◆</span>
+          <div>{parseBoldText(content)}</div>
+        </div>
+      );
+    }
+
+    // Numbered lists
+    if (/^\d+\.\s/.test(trimmed)) {
+      const match = trimmed.match(/^(\d+\.)\s(.*)/);
+      return (
+        <div
+          key={idx}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            fontSize: 13,
+            lineHeight: 1.6,
+            color: "#e2e8f0",
+            marginBottom: 6,
+          }}
+        >
+          <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 12, minWidth: 18 }}>
+            {match ? match[1] : "•"}
+          </span>
+          <div>{parseBoldText(match ? match[2] : trimmed)}</div>
+        </div>
+      );
+    }
+
+    // Standard paragraph
+    return (
+      <p
+        key={idx}
+        style={{
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: "#e2e8f0",
+          margin: "0 0 6px 0",
+        }}
+      >
+        {parseBoldText(trimmed)}
+      </p>
+    );
+  });
+}
+
+function parseBoldText(text) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} style={{ color: "#ffffff", fontWeight: 700 }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
 }
 
 export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "" }) {
@@ -148,6 +257,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
   const [inputQuery, setInputQuery] = useState(initialQuery);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (initialQuery) {
@@ -158,6 +268,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [messages, isOpen]);
 
@@ -188,7 +299,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         },
       ]);
       setIsTyping(false);
-    }, 600);
+    }, 550);
   };
 
   return (
@@ -197,92 +308,95 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        backdropFilter: "blur(8px)",
+        backgroundColor: "rgba(3, 7, 18, 0.72)",
+        backdropFilter: "blur(16px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
+        animation: "fadeIn 0.15s ease-out",
       }}
       onClick={onClose}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 780,
-          maxHeight: "90vh",
+          maxWidth: 720,
+          maxHeight: "88vh",
           display: "flex",
           flexDirection: "column",
-          borderRadius: 24,
+          borderRadius: 20,
           overflow: "hidden",
-          backgroundColor: "#0d121f",
-          border: "1px solid rgba(56, 189, 248, 0.3)",
-          boxShadow: "0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.15)",
+          backgroundColor: "#0b101b",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.9), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
+        {/* Minimalist Modal Header */}
         <div
           style={{
-            padding: "18px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "16px 20px",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(13, 18, 31, 0.95))",
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 12,
-                background: "linear-gradient(135deg, #006591, #38bdf8)",
+                width: 32,
+                height: 32,
+                borderRadius: 9,
+                background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(2, 132, 199, 0.35))",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#ffffff",
-                boxShadow: "0 0 16px rgba(56, 189, 248, 0.5)",
+                color: "#38bdf8",
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
                 smart_toy
               </span>
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.01em" }}>
-                  Airfare CPI AI Copilot
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.01em" }}>
+                  Airfare CPI Copilot
                 </span>
                 <span
                   style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    padding: "2px 7px",
-                    borderRadius: 6,
-                    backgroundColor: "rgba(34, 197, 94, 0.18)",
-                    color: "#22c55e",
-                    border: "1px solid rgba(34, 197, 94, 0.3)",
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                    backgroundColor: "rgba(34, 197, 94, 0.12)",
+                    color: "#34d399",
+                    border: "1px solid rgba(34, 197, 94, 0.25)",
+                    letterSpacing: "0.04em",
                   }}
                 >
                   LIVE RAG
                 </span>
               </div>
               <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                Real-Time Aviation Intelligence & MoSPI Methodology Explainer
+                Real-Time Price Intelligence &amp; MoSPI Methodology
               </div>
             </div>
           </div>
 
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{
-              background: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
               borderRadius: "50%",
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -291,7 +405,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
               transition: "all 0.15s ease",
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
               close
             </span>
           </button>
@@ -299,15 +413,18 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
 
         {/* Message Thread */}
         <div
+          className="no-scrollbar"
           style={{
             flex: 1,
             overflowY: "auto",
-            padding: "20px 24px",
+            padding: "18px 20px",
             display: "flex",
             flexDirection: "column",
-            gap: 16,
-            minHeight: 340,
-            maxHeight: 480,
+            gap: 14,
+            minHeight: 320,
+            maxHeight: 460,
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
           }}
         >
           {messages.map((m, idx) => {
@@ -324,11 +441,11 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 {!isUser && (
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 26,
+                      height: 26,
                       borderRadius: 8,
-                      background: "rgba(56, 189, 248, 0.15)",
-                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                      background: "rgba(56, 189, 248, 0.12)",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -337,7 +454,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                       marginTop: 2,
                     }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
                       auto_awesome
                     </span>
                   </div>
@@ -345,19 +462,18 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
 
                 <div
                   style={{
-                    maxWidth: "84%",
+                    maxWidth: "86%",
                     padding: "12px 16px",
                     borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                    backgroundColor: isUser ? "#0284c7" : "rgba(30, 41, 59, 0.8)",
-                    border: `1px solid ${isUser ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.08)"}`,
+                    backgroundColor: isUser ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
+                    border: `1px solid ${isUser ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.08)"}`,
                     color: "#ffffff",
-                    fontSize: 13.5,
+                    fontSize: 13,
                     lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
                   }}
                 >
-                  {m.content}
+                  {isUser ? m.content : renderFormattedContent(m.content)}
                   <div
                     style={{
                       fontSize: 10,
@@ -377,25 +493,26 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 26,
+                  height: 26,
                   borderRadius: 8,
-                  background: "rgba(56, 189, 248, 0.15)",
+                  background: "rgba(56, 189, 248, 0.12)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   color: "#38bdf8",
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
                   auto_awesome
                 </span>
               </div>
               <div
                 style={{
-                  padding: "10px 16px",
-                  borderRadius: 14,
-                  backgroundColor: "rgba(30, 41, 59, 0.8)",
+                  padding: "8px 14px",
+                  borderRadius: 12,
+                  backgroundColor: "rgba(255, 255, 255, 0.04)",
+                  border: "1px solid rgba(255, 255, 255, 0.06)",
                   color: "#94a3b8",
                   fontSize: 12,
                   display: "flex",
@@ -403,10 +520,10 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                   gap: 6,
                 }}
               >
-                <span className="typing-dot">●</span>
-                <span className="typing-dot" style={{ animationDelay: "0.2s" }}>●</span>
-                <span className="typing-dot" style={{ animationDelay: "0.4s" }}>●</span>
-                <span style={{ marginLeft: 6 }}>Analyzing live flight observations...</span>
+                <span style={{ fontSize: 14 }}>●</span>
+                <span style={{ fontSize: 14 }}>●</span>
+                <span style={{ fontSize: 14 }}>●</span>
+                <span style={{ marginLeft: 4 }}>Analyzing flight observations...</span>
               </div>
             </div>
           )}
@@ -414,15 +531,18 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggested Quick Prompt Chips */}
+        {/* Minimalist Suggested Prompt Chips */}
         <div
+          className="no-scrollbar"
           style={{
-            padding: "10px 24px",
-            background: "rgba(15, 23, 42, 0.6)",
+            padding: "8px 16px",
+            background: "rgba(10, 15, 29, 0.8)",
             borderTop: "1px solid rgba(255, 255, 255, 0.05)",
             display: "flex",
-            gap: 8,
+            gap: 6,
             overflowX: "auto",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
           }}
         >
           {PRESET_PROMPTS.map((p, idx) => (
@@ -430,74 +550,92 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
               key={idx}
               onClick={() => handleSend(p.query)}
               style={{
-                padding: "6px 12px",
-                borderRadius: 20,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 11px",
+                borderRadius: 14,
                 fontSize: 11.5,
                 fontWeight: 600,
-                color: "#93c5fd",
-                backgroundColor: "rgba(56, 189, 248, 0.08)",
-                border: "1px solid rgba(56, 189, 248, 0.25)",
+                color: "#cbd5e1",
+                backgroundColor: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
                 whiteSpace: "nowrap",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
+                flexShrink: 0,
               }}
             >
-              {p.label}
+              <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#38bdf8" }}>
+                {p.icon}
+              </span>
+              <span>{p.label}</span>
             </button>
           ))}
         </div>
 
-        {/* Input Bar */}
+        {/* Unified Minimalist Input Bar */}
         <div
           style={{
-            padding: "16px 24px",
-            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            backgroundColor: "#080d1a",
+            padding: "12px 16px 16px",
+            borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+            backgroundColor: "#070b14",
           }}
         >
-          <input
-            type="text"
-            value={inputQuery}
-            onChange={(e) => setInputQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask about route fares, MoSPI methodology, advance windows, or carrier pricing..."
+          <div
             style={{
-              flex: 1,
-              padding: "12px 18px",
-              borderRadius: 12,
-              backgroundColor: "rgba(30, 41, 59, 0.7)",
-              border: "1px solid rgba(56, 189, 248, 0.2)",
-              color: "#ffffff",
-              fontSize: 13.5,
-              outline: "none",
-            }}
-          />
-          <button
-            onClick={() => handleSend()}
-            disabled={!inputQuery.trim() || isTyping}
-            style={{
-              padding: "12px 20px",
-              borderRadius: 12,
-              backgroundColor: inputQuery.trim() && !isTyping ? "#0284c7" : "rgba(255, 255, 255, 0.08)",
-              color: inputQuery.trim() && !isTyping ? "#ffffff" : "#64748b",
-              border: "none",
-              fontWeight: 700,
-              fontSize: 13.5,
-              cursor: inputQuery.trim() && !isTyping ? "pointer" : "not-allowed",
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              transition: "all 0.15s ease",
+              gap: 8,
+              padding: "4px 6px 4px 14px",
+              borderRadius: 12,
+              backgroundColor: "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              transition: "border-color 0.15s ease",
             }}
           >
-            <span>Ask</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              send
-            </span>
-          </button>
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputQuery}
+              onChange={(e) => setInputQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Ask about route fares, MoSPI methodology, advance windows, or carrier pricing..."
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                backgroundColor: "transparent",
+                border: "none",
+                color: "#ffffff",
+                fontSize: 13,
+                outline: "none",
+              }}
+            />
+
+            <button
+              onClick={() => handleSend()}
+              disabled={!inputQuery.trim() || isTyping}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                backgroundColor: inputQuery.trim() && !isTyping ? "#0284c7" : "rgba(255, 255, 255, 0.05)",
+                color: inputQuery.trim() && !isTyping ? "#ffffff" : "#64748b",
+                border: "none",
+                cursor: inputQuery.trim() && !isTyping ? "pointer" : "default",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.15s ease",
+                flexShrink: 0,
+              }}
+              title="Send Message"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                arrow_upward
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
