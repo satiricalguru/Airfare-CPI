@@ -3463,53 +3463,6 @@ export default function StitchAirfareCPIApp() {
         onSetWatch={handleSetWatchFromRoute}
       />
 
-      {/* ── Floating AI Copilot Quick Launcher (Bottom Right) ── */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          zIndex: 90,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        <button
-          onClick={() => setIsCopilotOpen(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "12px 20px",
-            borderRadius: 30,
-            background: "linear-gradient(135deg, #006591, #0284c7)",
-            color: "#ffffff",
-            fontSize: 14,
-            fontWeight: 800,
-            border: "1px solid rgba(56, 189, 248, 0.4)",
-            boxShadow: "0 8px 30px rgba(2, 132, 199, 0.5), 0 0 20px rgba(56, 189, 248, 0.3)",
-            cursor: "pointer",
-            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-          }}
-          title="Open AI Copilot"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-            smart_toy
-          </span>
-          <span>Ask AI Copilot</span>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: "#22c55e",
-              boxShadow: "0 0 8px #22c55e",
-            }}
-          />
-        </button>
-      </div>
-
       {/* ── Dynamic In-App Toast Notification ── */}
       {toastMessage && (
         <div
