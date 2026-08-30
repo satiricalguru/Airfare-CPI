@@ -3188,7 +3188,7 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
 }
 
 .copilot-symbol-body {
-  fill: #172019;
+  fill: #111813;
   transition: fill 0.2s ease;
 }
 
@@ -3198,14 +3198,17 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   transform-origin: 50% 50%;
 }
 
-/* Light mode defaults for copilot avatar/header */
+/* Light mode explicit black body with white eyes everywhere */
+html.light .copilot-symbol-body,
 .copilot-header-icon .copilot-symbol-body,
 .copilot-avatar .copilot-symbol-body {
-  fill: #3b6d4d;
+  fill: #111813 !important;
 }
+
+html.light .copilot-symbol-eye,
 .copilot-header-icon .copilot-symbol-eye,
 .copilot-avatar .copilot-symbol-eye {
-  fill: #ffffff;
+  fill: #ffffff !important;
 }
 
 /* Dark mode: high-contrast emerald body with deep eyes */
