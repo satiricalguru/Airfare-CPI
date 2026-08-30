@@ -339,30 +339,58 @@ async def get_routes():
 
 
 # ═══════════════════════════════════════════════════════════
+# BASE PERIOD REBASING HELPERS
+# ═══════════════════════════════════════════════════════════
+
+BASE_YEAR_FACTORS = {
+    "2026": {"factor": 1.0550, "name": "2026 = 100 (Current Year / YTD Base)", "period": "2026 = 100"},
+    "2025": {"factor": 1.0414, "name": "2025 = 100 (Recent Annual Base)", "period": "2025 = 100"},
+    "2024": {"factor": 1.0000, "name": "2024 = 100 (Official DGCA Benchmark)", "period": "2024 = 100"},
+    "2023": {"factor": 0.9410, "name": "2023 = 100 (Historical Base)", "period": "2023 = 100"},
+}
+
+def apply_base_year(index_dict: dict, base_year: str = "2024") -> dict:
+    """Dynamically rebase CPI index according to selected baseline year."""
+    info = BASE_YEAR_FACTORS.get(str(base_year), BASE_YEAR_FACTORS["2024"])
+    factor = info["factor"]
+    rebased = dict(index_dict)
+    if "national_cpi" in rebased and isinstance(rebased["national_cpi"], (int, float)):
+        rebased["national_cpi"] = round(rebased["national_cpi"] / factor, 2)
+    if "jevons_index" in rebased and isinstance(rebased["jevons_index"], (int, float)):
+        rebased["jevons_index"] = round(rebased["jevons_index"] / factor, 2)
+    rebased["base_period"] = info["period"]
+    rebased["base_year"] = base_year
+    return rebased
+
+
+# ═══════════════════════════════════════════════════════════
 # NATIONAL INDEX ENDPOINTS
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/v1/index/national")
-async def get_national_index():
-    """Get the latest national Airfare CPI."""
+async def get_national_index(
+    base_year: str = Query(default="2024", description="Base period year (2026, 2025, 2024, 2023)")
+):
+    """Get the latest national Airfare CPI rebased to selected base year."""
     if not store.national_indices:
         raise HTTPException(status_code=404, detail="No index data available")
     
     latest = store.national_indices[-1]
-    return latest
+    return apply_base_year(latest, base_year)
 
 
 @app.get("/api/v1/index/national/history")
 async def get_national_history(
     days: int = Query(default=30, ge=1, le=365),
+    base_year: str = Query(default="2024", description="Base period year (2026, 2025, 2024, 2023)"),
 ):
-    """Get historical national CPI series."""
+    """Get historical national CPI series rebased to selected base year."""
     cutoff = (date.today() - timedelta(days=days)).isoformat()
     history = [
-        idx for idx in store.national_indices
+        apply_base_year(idx, base_year) for idx in store.national_indices
         if idx["index_date"] >= cutoff
     ]
-    return {"data": history, "count": len(history)}
+    return {"data": history, "count": len(history), "base_year": base_year}
 
 
 # ═══════════════════════════════════════════════════════════
