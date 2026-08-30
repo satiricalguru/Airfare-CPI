@@ -2,186 +2,161 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { 
+  ArrowLeft, 
+  Sun, 
+  Moon, 
+  ShieldCheck
+} from "lucide-react";
 import { getAssetPath } from "../utils/assetPath";
 
 export default function PrivacyPolicyPage() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add("dark");
-      root.classList.remove("light");
-    } else {
-      root.classList.remove("dark");
-      root.classList.add("light");
-    }
-  }, [isDarkMode]);
-
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
-  };
+    document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.classList.toggle("light", !dark);
+  }, [dark]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", backgroundColor: isDarkMode ? "#0d121f" : "#f7f9fb", color: isDarkMode ? "#dae2fd" : "#131b2e", transition: "background-color 0.3s ease, color 0.3s ease" }}>
-      {/* Navigation Header */}
-      <nav
-        style={{
-          position: "sticky",
-          top: 0,
-          height: 64,
-          zIndex: 50,
-          backgroundColor: isDarkMode ? "rgba(19, 27, 46, 0.94)" : "rgba(255, 255, 255, 0.94)",
-          backdropFilter: "blur(12px)",
-          borderBottom: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"}`,
-          padding: "0 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "inherit" }}>
-          <img
-            src={getAssetPath(isDarkMode ? "/logo_dark.png" : "/logo.png")}
-            alt="Airfare CPI Logo"
-            className="logo-animated-glow"
-            style={{
-              width: 36,
-              height: 36,
-              objectFit: "contain",
-            }}
-          />
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-heading)", letterSpacing: "-0.02em" }}>Airfare CPI</div>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: isDarkMode ? "#bec6e0" : "#76777d" }}>
-              India · MoSPI Prototype
+    <div className="app-shell">
+      {/* Site Header matching application design */}
+      <header className="site-header">
+        <div className="header-inner">
+          <Link href="/" className="brand-lockup" style={{ textDecoration: "none" }}>
+            <img
+              src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")}
+              alt="Airfare CPI Logo"
+              className="brand-logo-img"
+            />
+            <span>
+              <strong>Airfare CPI</strong>
+              <small>India / MoSPI</small>
+            </span>
+          </Link>
+
+          <div className="header-actions">
+            <button
+              className="icon-button"
+              onClick={() => setDark((prev) => !prev)}
+              aria-label="Toggle theme"
+            >
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+
+            <Link href="/" className="button button-dark" style={{ textDecoration: "none" }}>
+              <ArrowLeft size={15} /> Back to dashboard
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content matching Methodology & About reading layouts */}
+      <main className="main-content">
+        <div className="page-wrap page-wrap-reading">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Legal &amp; Regulatory Framework · DPDPA 2023</p>
+              <h2>Privacy policy &amp; data governance</h2>
+              <p className="section-description">
+                Official data handling practices, zero-PII guarantees, and ethical web scraping protocols under the Ministry of Statistics &amp; Programme Implementation.
+              </p>
+            </div>
+            <span className="status-pill status-pill-success" style={{ height: "fit-content", padding: "6px 12px" }}>
+              <ShieldCheck size={14} /> DPDPA 2023 Compliant
+            </span>
+          </div>
+
+          <div className="about-hero">
+            <div className="about-spotlight-card">
+              <p className="eyebrow">Statutory Data Policy</p>
+              <h3>Zero Personally Identifiable Information (PII) Guarantee</h3>
+              <p>
+                The platform operates strictly as a statistical research engine. It neither collects, processes, nor retains passenger names, contact details, payment credentials, or booking PNRs. All ingestion is confined to public carrier quotations.
+              </p>
+            </div>
+            <div>
+              <p className="eyebrow">Institutional Mandate</p>
+              <h3>Empirical measurement without citizen surveillance.</h3>
+              <p>
+                Price statistics measure the market, not the traveler. High-frequency price signals are derived from public airfare offers across 25 DGCA corridors to calculate unbiased Laspeyres-Jevons inflation indexes.
+              </p>
             </div>
           </div>
-        </Link>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={toggleTheme}
-            style={{
-              background: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)",
-              border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}`,
-              borderRadius: "50%",
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: isDarkMode ? "#ffddb8" : "#131b2e",
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-              {isDarkMode ? "light_mode" : "dark_mode"}
-            </span>
-          </button>
+          <div className="methodology-grid">
+            <article className="method-card">
+              <span>01</span>
+              <h3>Mandate &amp; Scope</h3>
+              <p>
+                Governs data practices for the Real-Time Airfare CPI Augmentation Platform in support of MoSPI, Government of India, strictly for macroeconomic research and inflation measurement.
+              </p>
+            </article>
 
-          <Link
-            href="/"
-            style={{
-              backgroundColor: isDarkMode ? "#39b8fd" : "#131b2e",
-              color: isDarkMode ? "#001e2f" : "#ffffff",
-              padding: "7px 16px",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_back</span>
-            Back to Dashboard
-          </Link>
-        </div>
-      </nav>
+            <article className="method-card">
+              <span>02</span>
+              <h3>DPDPA Compliance</h3>
+              <p>
+                Full compliance with India’s Digital Personal Data Protection Act, 2023. No individual identity vectors are stored, queried, or processed at any stage of the data lifecycle.
+              </p>
+            </article>
 
-      {/* Main Privacy Document Content */}
-      <main style={{ maxWidth: 860, margin: "0 auto", padding: "48px 24px 80px", flexGrow: 1 }}>
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#39b8fd" : "#006591", marginBottom: 6 }}>
-            Legal &amp; Regulatory Framework
-          </div>
-          <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.03em", color: isDarkMode ? "#ffffff" : "#131b2e", margin: 0 }}>
-            Privacy Policy &amp; Data Governance
-          </h1>
-          <p style={{ fontSize: 13, color: isDarkMode ? "#bec6e0" : "#76777d", marginTop: 8 }}>
-            Effective Date: August 28, 2026 · Ministry of Statistics &amp; Programme Implementation (MoSPI)
-          </p>
-        </div>
+            <article className="method-card">
+              <span>03</span>
+              <h3>Ethical Scraping</h3>
+              <p>
+                Polite crawl intervals, rate-limiting, and exponential backoff protect airline servers. No login walls, CAPTCHAs, or authenticated passenger portals are ever accessed.
+              </p>
+            </article>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Section 1 */}
-          <div className="stitch-card" style={{ padding: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 0, marginBottom: 12 }}>
-              1. Institutional Mandate &amp; Scope
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d" }}>
-              This policy governs data handling practices for the <strong>Real-Time Airfare Consumer Price Index (CPI) Augmentation Platform</strong>, developed in support of the Ministry of Statistics and Programme Implementation (MoSPI), Government of India. The platform is designed strictly for statistical research, macro-economic price measurement, and transport inflation monitoring.
-            </p>
+            <article className="method-card">
+              <span>04</span>
+              <h3>Audit Provenance</h3>
+              <p>
+                Every observation carries an immutable cryptographic timestamp, carrier attribution, and horizon classification in an append-only audit ledger for statistical reproducibility.
+              </p>
+            </article>
           </div>
 
-          {/* Section 2 */}
-          <div className="stitch-card" style={{ padding: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 0, marginBottom: 12 }}>
-              2. Zero Personally Identifiable Information (PII) Guarantee
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d", marginBottom: 12 }}>
-              In full compliance with India’s <strong>Digital Personal Data Protection Act (DPDPA), 2023</strong>:
-            </p>
-            <ul style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d", paddingLeft: 20 }}>
-              <li><strong>No Passenger Data:</strong> The platform neither collects, processes, nor stores any passenger names, contact numbers, email addresses, payment credentials, or booking PNRs.</li>
-              <li><strong>Public Market Quotes Only:</strong> Data ingestion is strictly confined to publicly visible, unauthenticated airline fare quotations published across carrier websites and online travel aggregators (OTAs).</li>
-              <li><strong>Anonymous Price Relatives:</strong> All calculations operate exclusively on aggregated price levels, route codes, departure horizons, and statistical weight vectors.</li>
-            </ul>
-          </div>
+          <div className="formula-grid" style={{ marginTop: 24, marginBottom: 40 }}>
+            <article className="formula-panel">
+              <p className="eyebrow">Data Retention &amp; Storage</p>
+              <h3>Encrypted ledger architecture</h3>
+              <p>
+                Raw observation tables are encrypted using TLS 1.3 in transit and AES-256 at rest within sovereign Indian cloud infrastructure. Elementary Jevons relatives and aggregated national index time-series are retained indefinitely for longitudinal research.
+              </p>
+            </article>
 
-          {/* Section 3 */}
-          <div className="stitch-card" style={{ padding: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 0, marginBottom: 12 }}>
-              3. Ethical Web Scraping &amp; Data Collection Standards
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d" }}>
-              Automated data extraction protocols adhere to strict fair-use and ethical scraping guidelines:
-            </p>
-            <ul style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d", paddingLeft: 20 }}>
-              <li><strong>Rate-Limiting &amp; Backoff:</strong> Ingestion cycles employ polite crawl intervals and exponential backoff to ensure zero impact on airline booking engine performance.</li>
-              <li><strong>Respect for Authentication:</strong> Scraping adapters only access unauthenticated, public fare query endpoints. No access controls, CAPTCHAs, or login gates are bypassed.</li>
-              <li><strong>Provenance &amp; Audit Logs:</strong> Every collected quote is timestamped with source provenance and stored in an immutable audit ledger for statistical reproducibility.</li>
-            </ul>
-          </div>
-
-          {/* Section 4 */}
-          <div className="stitch-card" style={{ padding: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 0, marginBottom: 12 }}>
-              4. Data Retention &amp; Security
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d" }}>
-              Raw observations are stored in encrypted PostgreSQL database instances with TLS 1.3 encryption in transit and AES-256 encryption at rest. Aggregated elementary Jevons indices and national time series are retained indefinitely to enable longitudinal econometric studies.
-            </p>
-          </div>
-
-          {/* Section 5 */}
-          <div className="stitch-card" style={{ padding: 28 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: isDarkMode ? "#ffffff" : "#131b2e", marginTop: 0, marginBottom: 12 }}>
-              5. Contact &amp; Grievance Redressal
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: isDarkMode ? "#bec6e0" : "#45464d" }}>
-              For statistical inquiries, methodology clarifications, or data policy queries, contact the Price Statistics Division, National Statistical Office (NSO), MoSPI, New Delhi at <a href="mailto:price-statistics@mospi.gov.in" style={{ color: isDarkMode ? "#39b8fd" : "#006591", textDecoration: "none", fontWeight: 600 }}>price-statistics@mospi.gov.in</a>.
-            </p>
+            <article className="formula-panel formula-panel-dark">
+              <p className="eyebrow">Institutional Redressal</p>
+              <h3>Price Statistics Division</h3>
+              <p>
+                For statistical inquiries, methodology clarifications, or data governance queries, contact the Price Statistics Division, National Statistical Office (NSO), MoSPI, New Delhi:
+              </p>
+              <code style={{ background: "rgba(255,255,255,0.08)", color: "#9ac3a0" }}>
+                Email: price-statistics@mospi.gov.in · New Delhi, India
+              </code>
+            </article>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer style={{ backgroundColor: "#131b2e", color: "#ffffff", padding: "24px", textAlign: "center", fontSize: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-        <div>Government of India · Ministry of Statistics &amp; Programme Implementation</div>
-        <div style={{ color: "rgba(255,255,255,0.6)", marginTop: 4 }}>Airfare Consumer Price Index Research Prototype v1.0</div>
+      {/* Site Footer matching application design */}
+      <footer className="site-footer">
+        <div>
+          <Link href="/" className="footer-brand" style={{ textDecoration: "none" }}>
+            <img src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")} alt="Airfare CPI Logo" className="brand-logo-img" />
+            <span><strong>Airfare CPI</strong> <span>India / MoSPI</span></span>
+          </Link>
+          <p>Research prototype for transparent, real-time aviation price intelligence.</p>
+        </div>
+        <div className="footer-links">
+          <Link href="/?tab=methodology">Methodology</Link>
+          <Link href="/?tab=monitoring">API access</Link>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </div>
+        <span className="footer-meta">v1.0 / provisional · DPDPA 2023</span>
       </footer>
     </div>
   );
