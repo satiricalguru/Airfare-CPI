@@ -44,8 +44,16 @@ body {
   margin: 0;
 }
 
-button, a {
+button, input, select, textarea {
   font: inherit;
+  color: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+button, a {
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -651,6 +659,7 @@ a.button-quiet:visited {
   cursor: pointer;
   text-align: left;
   background: none;
+  color: var(--ink);
   min-height: 260px;
   padding: 25px;
   transition: background-color .25s, transform .25s;
@@ -686,6 +695,7 @@ a.button-quiet:visited {
 
 .corridor-card h3 {
   font-family: var(--serif);
+  color: var(--ink);
   margin-bottom: 8px;
   font-size: 27px;
 }
@@ -705,6 +715,7 @@ a.button-quiet:visited {
 
 .corridor-number span {
   font-family: var(--serif);
+  color: var(--ink);
   font-size: 27px;
 }
 
