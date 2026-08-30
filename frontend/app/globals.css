@@ -3046,6 +3046,48 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  position: relative;
+  animation: copilot-beacon 3s ease-in-out infinite;
+}
+
+@keyframes copilot-beacon {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 109, 77, 0.35);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 109, 77, 0);
+    transform: scale(1.04);
+  }
+}
+
+/* Animated Copilot Eyes & Body */
+.copilot-symbol-svg {
+  display: inline-block;
+  vertical-align: middle;
+  transition: transform 0.2s ease;
+}
+
+.copilot-symbol-body {
+  transition: transform 0.2s ease;
+}
+
+.copilot-symbol-eye {
+  transform-origin: 50% 50%;
+  animation: copilot-blink 3.8s ease-in-out infinite;
+}
+
+.copilot-eye-right {
+  animation-delay: 0.08s;
+}
+
+@keyframes copilot-blink {
+  0%, 88%, 94%, 100% {
+    transform: scaleY(1);
+  }
+  91% {
+    transform: scaleY(0.12);
+  }
 }
 
 .copilot-header-title-row {
@@ -3144,6 +3186,16 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   place-items: center;
   flex-shrink: 0;
   margin-top: 2px;
+  animation: copilot-avatar-float 3.5s ease-in-out infinite;
+}
+
+@keyframes copilot-avatar-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
 }
 
 .copilot-bubble {
@@ -3263,23 +3315,36 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   border-radius: 12px;
   background: var(--surface-subtle, rgba(0, 0, 0, 0.025));
   border: 1px solid var(--line);
-  transition: all 0.15s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .copilot-input-shell:focus-within {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(59, 109, 77, 0.12);
+  border-color: rgba(0, 0, 0, 0.25) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
   background: var(--paper-bright);
+}
+
+html.dark .copilot-input-shell:focus-within {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
 }
 
 .copilot-input {
   flex: 1;
   padding: 8px 0;
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--ink);
   font-size: 13px;
-  outline: none;
+}
+
+.copilot-input:focus,
+.copilot-input:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .copilot-input::placeholder {
@@ -3290,8 +3355,8 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: var(--green);
-  color: #ffffff;
+  background: var(--ink);
+  color: var(--paper);
   border: none;
   cursor: pointer;
   display: flex;
@@ -3299,6 +3364,12 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   justify-content: center;
   transition: all 0.15s ease;
   flex-shrink: 0;
+}
+
+.copilot-send:hover:not(:disabled) {
+  background: var(--green);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .copilot-send:disabled {

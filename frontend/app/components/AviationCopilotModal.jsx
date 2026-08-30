@@ -236,7 +236,7 @@ function parseBoldText(text) {
   });
 }
 
-// Custom Vector AI Copilot Symbol matching user icon
+// Custom Animated Vector AI Copilot Symbol
 export function CopilotSymbol({ size = 15, className = "", style = {} }) {
   return (
     <svg
@@ -245,14 +245,35 @@ export function CopilotSymbol({ size = 15, className = "", style = {} }) {
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
+      className={`copilot-symbol-svg ${className}`}
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, overflow: "visible", ...style }}
     >
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M7.5 3C3.5 3 2.5 4 2.5 8V16C2.5 20 3.5 21 7.5 21H16.5C20.5 21 21.5 20 21.5 16V8C21.5 4 20.5 3 16.5 3H7.5ZM8.5 8.75C9.33 8.75 10 9.42 10 10.25V13.75C10 14.58 9.33 15.25 8.5 15.25C7.67 15.25 7 14.58 7 13.75V10.25C7 9.42 7.67 8.75 8.5 8.75ZM15.5 8.75C16.33 8.75 17 9.42 17 10.25V13.75C17 14.58 16.33 15.25 15.5 15.25C14.67 15.25 14 14.58 14 13.75V10.25C14 9.42 14.67 8.75 15.5 8.75Z"
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="6"
         fill="currentColor"
+        className="copilot-symbol-body"
+      />
+      <rect
+        x="7.5"
+        y="8.5"
+        width="2.5"
+        height="7"
+        rx="1.25"
+        fill="#ffffff"
+        className="copilot-symbol-eye copilot-eye-left"
+      />
+      <rect
+        x="14"
+        y="8.5"
+        width="2.5"
+        height="7"
+        rx="1.25"
+        fill="#ffffff"
+        className="copilot-symbol-eye copilot-eye-right"
       />
     </svg>
   );
