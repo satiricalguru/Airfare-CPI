@@ -3153,25 +3153,13 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: var(--green-soft);
-  border: 1px solid rgba(59, 109, 77, 0.25);
-  color: var(--green);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--line);
+  color: var(--ink);
   display: grid;
   place-items: center;
   flex-shrink: 0;
   position: relative;
-  animation: copilot-beacon 3s ease-in-out infinite;
-}
-
-@keyframes copilot-beacon {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 109, 77, 0.35);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(59, 109, 77, 0);
-    transform: scale(1.04);
-  }
 }
 
 /* Animated Copilot Eyes & Body */
@@ -3376,23 +3364,13 @@ html.dark .copilot-trigger:hover,
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: var(--green-soft);
-  border: 1px solid rgba(59, 109, 77, 0.25);
-  color: var(--green);
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--line);
+  color: var(--ink);
   display: grid;
   place-items: center;
   flex-shrink: 0;
   margin-top: 2px;
-  animation: copilot-avatar-float 3.5s ease-in-out infinite;
-}
-
-@keyframes copilot-avatar-float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-1.5px);
-  }
 }
 
 .copilot-bubble {
