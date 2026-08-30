@@ -90,4 +90,4 @@ Incorporate and enhance the key features identified from **Nivora Fare Pulse** (
 2. **Velocity Radar**: Verify "Routes Heating Up" and "Routes Cooling Down" display accurate percentage changes and color-coded momentum badges.
 3. **Alert Engine**: Create an alert (e.g. `DEL → BOM` at `₹4,500`), verify it appears in Active Watches, and verify delete/dismiss functionality.
 4. **Route Detail Modal**: Click on any route from the India Map, Velocity Radar, or Heatmap table and verify the detailed charts render seamlessly in both Light and Dark modes.
-5. **CI/CD Deployment**: Push to `main` and verify automatic deployment to GitHub Pages (`https://satiricalguru.github.io/Prototype-2/`).
+5. **CI/CD Deployment**: Push to `main` and verify automatic deployment to GitHub Pages (`https://satiricalguru.github.io/Airfare-CPI/`).

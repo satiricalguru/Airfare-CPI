@@ -5,8 +5,8 @@
   # ✈️ Real-Time Airfare Consumer Price Index (Airfare CPI)
   ### *Developed by Team Sprint Zero · Automated Price Intelligence & CPI Augmentation for MoSPI*
 
-  [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-22c55e.svg?style=for-the-badge&logo=github&logoColor=white)](https://satiricalguru.github.io/Prototype-2/)
-  [![Deploy with Vercel](https://img.shields.io/badge/Vercel-Deploy%20Ready-black.svg?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsatiricalguru%2FPrototype-2)
+  [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-22c55e.svg?style=for-the-badge&logo=github&logoColor=white)](https://satiricalguru.github.io/Airfare-CPI/)
+  [![Deploy with Vercel](https://img.shields.io/badge/Vercel-Deploy%20Ready-black.svg?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsatiricalguru%2FAirfare-CPI)
   [![Gemini 3.5 Flash Lite](https://img.shields.io/badge/Google%20AI-Gemini%203.5%20Flash%20Lite-4285F4.svg?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
   [![MoSPI](https://img.shields.io/badge/Ministry-MoSPI-blue.svg?style=for-the-badge&logo=government)](https://mospi.gov.in)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3%20(Turbopack)-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
@@ -299,8 +299,8 @@ This script starts both the FastAPI backend and Next.js frontend, performs autom
 
 ```bash
 # Clone the repository
-git clone https://github.com/satiricalguru/Prototype-2.git
-cd Prototype-2
+git clone https://github.com/satiricalguru/Airfare-CPI.git
+cd Airfare-CPI
 
 # Launch full system
 ./start.sh
@@ -309,7 +309,7 @@ cd Prototype-2
 ---
 
 ### 🌐 Option 2: Live Cloud Deployments
-- **GitHub Pages (Static Export)**: [https://satiricalguru.github.io/Prototype-2/](https://satiricalguru.github.io/Prototype-2/)
+- **GitHub Pages (Static Export)**: [https://satiricalguru.github.io/Airfare-CPI/](https://satiricalguru.github.io/Airfare-CPI/)
 - **Vercel Deploy**: Connect the repository to Vercel with Root Directory set to `frontend/`.
 
 ---

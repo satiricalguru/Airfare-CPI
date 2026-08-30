@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
 const isGhPages = process.env.DEPLOY_TARGET === 'gh-pages';
-const basePath = isGhPages ? '/Prototype-2' : '';
+const basePath = isGhPages ? '/Airfare-CPI' : '';
 
 const nextConfig = {
   output: isGhPages ? 'export' : undefined,
   basePath: basePath,
-  assetPrefix: isGhPages ? '/Prototype-2/' : undefined,
+  assetPrefix: isGhPages ? '/Airfare-CPI/' : undefined,
   images: {
     unoptimized: true,
   },

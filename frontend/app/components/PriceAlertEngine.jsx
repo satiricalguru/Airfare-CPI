@@ -18,23 +18,23 @@ export default function PriceAlertEngine({ isDarkMode, onTriggerToast }) {
   const [surgeThreshold, setSurgeThreshold] = useState("5");
   const [horizon, setHorizon] = useState("T+15");
 
-  const [activeWatches, setActiveWatches] = useState(DEFAULT_WATCHES);
-  const [storageReady, setStorageReady] = useState(false);
+  const [activeWatches, setActiveWatches] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_WATCHES;
+    try {
+      const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : DEFAULT_WATCHES;
+    } catch {
+      return DEFAULT_WATCHES;
+    }
+  });
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      if (stored) setActiveWatches(JSON.parse(stored));
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(activeWatches));
     } catch {
       // Keep the benchmark watchlist when browser storage is unavailable.
-    } finally {
-      setStorageReady(true);
     }
-  }, []);
-
-  useEffect(() => {
-    if (storageReady) window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(activeWatches));
-  }, [activeWatches, storageReady]);
+  }, [activeWatches]);
 
   const handleCreateWatch = (e) => {
     e.preventDefault();

@@ -1,5 +1,5 @@
 /**
- * Universal asset path resolver supporting GitHub Pages subpath deployment (/Prototype-2)
+ * Universal asset path resolver supporting GitHub Pages subpath deployment (/Airfare-CPI)
  * and root domain deployments (Vercel, custom domain).
  */
 export function getAssetPath(path) {

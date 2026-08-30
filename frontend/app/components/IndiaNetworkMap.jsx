@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { INDIA_MAP_DATA } from "../data/indiaMapData";
 import { ROUTE_HEATMAP_DATA, NETWORK_ROUTES } from "../data/mockData";
 
@@ -31,37 +31,35 @@ const HUBS_CONFIG = [
   { code: "SXR", city: "Srinagar", state: "Jammu and Kashmir", x: 168.0, y: 65.0, pax: "190K", cpi: 105.1, labelPos: "top" },
 ];
 
+const HUB_MAP = Object.fromEntries(HUBS_CONFIG.map((h) => [h.code, h]));
+
+function subscribeToDocumentDark(callback) {
+  if (typeof MutationObserver === "undefined") return () => {};
+  const observer = new MutationObserver(callback);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
+
+function getDocumentDarkSnapshot() {
+  return typeof document !== "undefined" ? document.documentElement.classList.contains("dark") : false;
+}
+
+function getDocumentDarkServerSnapshot() {
+  return false;
+}
+
 export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
   const [selectedRoute, setSelectedRoute] = useState(routesList[0] || null);
   const [hoveredHub, setHoveredHub] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
-  const [isDarkMode, setIsDarkMode] = useState(propDarkMode ?? false);
+  const domDarkMode = useSyncExternalStore(subscribeToDocumentDark, getDocumentDarkSnapshot, getDocumentDarkServerSnapshot);
+  const isDarkMode = propDarkMode !== undefined ? propDarkMode : domDarkMode;
   const canvasRef = useRef(null);
-
-  // Sync dark mode from props or DOM
-  useEffect(() => {
-    if (propDarkMode !== undefined) {
-      setIsDarkMode(propDarkMode);
-      return;
-    }
-    const checkDark = () => {
-      setIsDarkMode(document.documentElement.classList.contains("dark"));
-    };
-    checkDark();
-    const observer = new MutationObserver(checkDark);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, [propDarkMode]);
-
-  const hubMap = {};
-  HUBS_CONFIG.forEach((h) => {
-    hubMap[h.code] = h;
-  });
 
   const activeFrom = selectedRoute?.from || "DEL";
   const activeTo = selectedRoute?.to || "BOM";
-  const fromHub = hubMap[activeFrom] || HUBS_CONFIG[0];
-  const toHub = hubMap[activeTo] || HUBS_CONFIG[1];
+  const fromHub = HUB_MAP[activeFrom] || HUBS_CONFIG[0];
+  const toHub = HUB_MAP[activeTo] || HUBS_CONFIG[1];
 
   // 60FPS Particle Stream Animation on Canvas
   useEffect(() => {
@@ -125,8 +123,8 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
 
       // 1. Draw Flight Stream Arcs
       routesList.forEach((r) => {
-        const h1 = hubMap[r.from];
-        const h2 = hubMap[r.to];
+        const h1 = HUB_MAP[r.from];
+        const h2 = HUB_MAP[r.to];
         if (!h1 || !h2) return;
 
         const isSelected =
@@ -168,8 +166,8 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
 
       // 2. Animate Photon Flight Particles along Arcs
       particles.forEach((p) => {
-        const h1 = hubMap[p.route.from];
-        const h2 = hubMap[p.route.to];
+        const h1 = HUB_MAP[p.route.from];
+        const h2 = HUB_MAP[p.route.to];
         if (!h1 || !h2) return;
 
         const isSelected =
@@ -411,37 +409,36 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
         />
 
         {/* Layer 4: Hover Hub Telemetry Tooltip */}
-        {hoveredHub && hubMap[hoveredHub] && (
+        {hoveredHub && HUB_MAP[hoveredHub] && (
           <div
             style={{
               position: "absolute",
-              top: 10,
-              right: 10,
-              padding: "10px 14px",
+              top: 24,
+              right: 24,
+              backgroundColor: isDarkMode ? "rgba(21, 27, 24, 0.95)" : "rgba(255, 253, 248, 0.95)",
+              border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.3)" : "rgba(59, 109, 77, 0.2)"}`,
               borderRadius: 12,
-              backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
-              backdropFilter: "blur(16px)",
-              border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.35)" : "rgba(59, 109, 77, 0.24)"}`,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-              zIndex: 20,
+              padding: "12px 16px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
               pointerEvents: "none",
+              zIndex: 10,
+              backdropFilter: "blur(8px)",
+              minWidth: 160,
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 800, color: isDarkMode ? "#f3f1e9" : "#191917" }}>
-              {hubMap[hoveredHub].city} ({hubMap[hoveredHub].code})
+            <div style={{ fontWeight: 600, fontSize: 13, color: isDarkMode ? "#f3f1e9" : "#172019", marginBottom: 2 }}>
+              {HUB_MAP[hoveredHub].city} ({HUB_MAP[hoveredHub].code})
             </div>
-            <div style={{ fontSize: 11, color: isDarkMode ? "#aaa9a0" : "#77746d", marginTop: 2 }}>
-              State: {hubMap[hoveredHub].state}
+            <div style={{ fontSize: 11, color: isDarkMode ? "#9ca3af" : "#6b7280", marginBottom: 8 }}>
+              State: {HUB_MAP[hoveredHub].state}
             </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 11 }}>
-              <div>
-                <span style={{ color: isDarkMode ? "#777f78" : "#aaa69b" }}>Monthly Pax: </span>
-                <strong style={{ color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>{hubMap[hoveredHub].pax}</strong>
-              </div>
-              <div>
-                <span style={{ color: isDarkMode ? "#777f78" : "#aaa69b" }}>Hub CPI: </span>
-                <strong style={{ color: "#22c55e" }}>{hubMap[hoveredHub].cpi}</strong>
-              </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+              <span style={{ color: isDarkMode ? "#9ca3af" : "#6b7280" }}>Mo. Traffic:</span>
+              <strong style={{ color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>{HUB_MAP[hoveredHub].pax}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginTop: 2 }}>
+              <span style={{ color: isDarkMode ? "#9ca3af" : "#6b7280" }}>Sub-Index:</span>
+              <strong style={{ color: "#22c55e" }}>{HUB_MAP[hoveredHub].cpi}</strong>
             </div>
           </div>
         )}
