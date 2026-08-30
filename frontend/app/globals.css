@@ -1603,53 +1603,73 @@ h1 em, .alert-intro em {
 
 .site-footer {
   border-top: 1px solid var(--line);
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper-bright);
+  color: var(--ink);
   justify-content: space-between;
-  align-items: end;
+  align-items: center;
   gap: 30px;
   padding: 35px 34px;
   display: flex;
 }
 
 .footer-brand {
-  color: var(--paper);
+  color: var(--ink);
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.footer-brand strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .footer-brand span {
-  color: #aab4a8;
+  color: var(--muted);
   font-family: var(--sans);
-  margin-left: 7px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-left: 6px;
 }
 
 .site-footer p {
-  color: #abb2a9;
+  color: var(--muted);
   margin: 8px 0 0;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .footer-links {
   flex-wrap: wrap;
-  gap: 18px;
+  align-items: center;
+  gap: 20px;
   display: flex;
 }
 
 .footer-links button, .footer-links a {
-  color: #c3c8c0;
+  color: var(--muted);
   cursor: pointer;
   background: none;
   border: 0;
   padding: 0;
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 500;
   text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.footer-links button:hover, .footer-links a:hover {
+  color: var(--ink);
 }
 
 .footer-meta {
-  color: #89958a;
+  color: var(--muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .modal-backdrop {
