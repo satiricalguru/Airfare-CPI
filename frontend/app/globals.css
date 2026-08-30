@@ -48,12 +48,15 @@ button, input, select {
   font: inherit;
 }
 
-button {
+button, a {
   color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button, a {
-  -webkit-tap-highlight-color: transparent;
+a:visited, a:hover, a:active {
+  color: inherit;
+  text-decoration: none;
 }
 
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
@@ -95,37 +98,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 10px;
   padding: 0;
   display: inline-flex;
+  color: var(--ink) !important;
+  text-decoration: none !important;
 }
 
-.brand-lockup > span:last-child,
-.footer-brand > span:last-child {
+.brand-lockup:visited, .footer-brand:visited {
+  color: var(--ink) !important;
+}
+
+.brand-lockup > span:last-child {
   gap: 3px;
   display: grid;
 }
 
-.brand-lockup strong,
-.footer-brand strong {
-  color: #4c1d95;
+.brand-lockup strong {
+  color: var(--ink) !important;
   letter-spacing: -.03em;
   font-size: 15px;
-  font-weight: 800;
 }
 
-html.dark .brand-lockup strong,
-.dark .brand-lockup strong,
-html.dark .footer-brand strong,
-.dark .footer-brand strong {
-  color: #c084fc;
-}
-
-.brand-lockup small,
-.footer-brand small,
-.footer-brand span {
-  color: var(--muted);
+.brand-lockup small, .footer-brand span {
+  color: var(--muted) !important;
   letter-spacing: .16em;
   text-transform: uppercase;
   font-size: 9px;
-  font-weight: 600;
 }
 
 .brand-logo-img {
