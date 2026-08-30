@@ -3065,29 +3065,54 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
 .copilot-symbol-svg {
   display: inline-block;
   vertical-align: middle;
-  transition: transform 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+
+.copilot-symbol-svg.is-hovered {
+  transform: scale(1.1) rotate(2deg);
 }
 
 .copilot-symbol-body {
-  transition: transform 0.2s ease;
+  transition: fill 0.2s ease;
+}
+
+.copilot-eyes-group {
+  will-change: transform;
+}
+
+.copilot-eyes-thinking {
+  animation: copilot-eye-scan 1s ease-in-out infinite alternate !important;
+}
+
+@keyframes copilot-eye-scan {
+  0% {
+    transform: translateX(-2.5px);
+  }
+  100% {
+    transform: translateX(2.5px);
+  }
+}
+
+.copilot-symbol-svg.is-thinking .copilot-symbol-body {
+  animation: copilot-thinking-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes copilot-thinking-pulse {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .copilot-symbol-eye {
   transform-origin: 50% 50%;
-  animation: copilot-blink 3.8s ease-in-out infinite;
 }
 
 .copilot-eye-right {
   animation-delay: 0.08s;
-}
-
-@keyframes copilot-blink {
-  0%, 88%, 94%, 100% {
-    transform: scaleY(1);
-  }
-  91% {
-    transform: scaleY(0.12);
-  }
 }
 
 .copilot-header-title-row {

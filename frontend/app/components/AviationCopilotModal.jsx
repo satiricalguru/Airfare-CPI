@@ -236,17 +236,89 @@ function parseBoldText(text) {
   });
 }
 
-// Custom Animated Vector AI Copilot Symbol
-export function CopilotSymbol({ size = 15, className = "", style = {} }) {
+// Custom Animated Vector AI Copilot Symbol with Interactive Eye Tracking
+export function CopilotSymbol({
+  size = 15,
+  className = "",
+  style = {},
+  interactive = true,
+  isThinking = false,
+}) {
+  const svgRef = useRef(null);
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
+  const [blinking, setBlinking] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  // Smooth pointer tracking for interactive eyes
+  useEffect(() => {
+    if (!interactive || isThinking) return;
+    let frameId;
+    const handlePointer = (e) => {
+      if (!svgRef.current) return;
+      const rect = svgRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const dx = e.clientX - centerX;
+      const dy = e.clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+      const maxOffset = 2.4;
+      const factor = Math.min(1, dist / 140);
+      const angle = Math.atan2(dy, dx);
+      const targetX = Math.cos(angle) * maxOffset * factor;
+      const targetY = Math.sin(angle) * maxOffset * factor;
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        setEyeOffset({ x: Number(targetX.toFixed(2)), y: Number(targetY.toFixed(2)) });
+      });
+    };
+
+    window.addEventListener("pointermove", handlePointer, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointer);
+      cancelAnimationFrame(frameId);
+    };
+  }, [interactive, isThinking]);
+
+  // Autonomous periodic blinking
+  useEffect(() => {
+    let timer;
+    const scheduleBlink = () => {
+      const nextDelay = 2200 + Math.random() * 3200;
+      timer = setTimeout(() => {
+        setBlinking(true);
+        setTimeout(() => {
+          setBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, nextDelay);
+    };
+    scheduleBlink();
+    return () => clearTimeout(timer);
+  }, []);
+
+  const eyeTransform = isThinking
+    ? undefined
+    : `translate(${eyeOffset.x}px, ${eyeOffset.y}px) ${blinking ? "scaleY(0.1)" : hovered ? "scale(1.12)" : "scale(1)"}`;
+
   return (
     <svg
+      ref={svgRef}
       width={size}
       height={size}
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`copilot-symbol-svg ${className}`}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, overflow: "visible", ...style }}
+      className={`copilot-symbol-svg ${isThinking ? "is-thinking" : ""} ${hovered ? "is-hovered" : ""} ${className}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        overflow: "visible",
+        transformOrigin: "center",
+        ...style,
+      }}
     >
       <rect
         x="3"
@@ -257,24 +329,39 @@ export function CopilotSymbol({ size = 15, className = "", style = {} }) {
         fill="currentColor"
         className="copilot-symbol-body"
       />
-      <rect
-        x="7.5"
-        y="8.5"
-        width="2.5"
-        height="7"
-        rx="1.25"
-        fill="#ffffff"
-        className="copilot-symbol-eye copilot-eye-left"
-      />
-      <rect
-        x="14"
-        y="8.5"
-        width="2.5"
-        height="7"
-        rx="1.25"
-        fill="#ffffff"
-        className="copilot-symbol-eye copilot-eye-right"
-      />
+      <g
+        className={`copilot-eyes-group ${isThinking ? "copilot-eyes-thinking" : ""}`}
+        style={{
+          transform: eyeTransform,
+          transformOrigin: "12px 12px",
+          transition: isThinking ? "none" : "transform 0.1s cubic-bezier(0.2, 0.9, 0.4, 1.1)",
+        }}
+      >
+        <rect
+          x="7.5"
+          y="8.5"
+          width="2.5"
+          height="7"
+          rx="1.25"
+          fill="#ffffff"
+          className="copilot-symbol-eye copilot-eye-left"
+          style={{
+            transformOrigin: "8.75px 12px",
+          }}
+        />
+        <rect
+          x="14"
+          y="8.5"
+          width="2.5"
+          height="7"
+          rx="1.25"
+          fill="#ffffff"
+          className="copilot-symbol-eye copilot-eye-right"
+          style={{
+            transformOrigin: "15.25px 12px",
+          }}
+        />
+      </g>
     </svg>
   );
 }
@@ -363,7 +450,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         <div className="copilot-modal-header">
           <div className="copilot-header-lockup">
             <div className="copilot-header-icon">
-              <CopilotSymbol size={18} />
+              <CopilotSymbol size={20} isThinking={isTyping} />
             </div>
             <div>
               <div className="copilot-header-title-row">
@@ -397,6 +484,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         <div className="no-scrollbar copilot-thread">
           {messages.map((m, idx) => {
             const isUser = m.role === "user";
+            const isLatestAssistant = !isUser && idx === messages.length - 1;
             return (
               <div
                 className={`copilot-message-row ${isUser ? "copilot-row-user" : "copilot-row-assistant"}`}
@@ -404,7 +492,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
               >
                 {!isUser && (
                   <div className="copilot-avatar">
-                    <CopilotSymbol size={15} />
+                    <CopilotSymbol size={15} isThinking={isTyping && isLatestAssistant} />
                   </div>
                 )}
 
@@ -423,7 +511,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
           {isTyping && (
             <div className="copilot-typing-row">
               <div className="copilot-avatar">
-                <CopilotSymbol size={15} />
+                <CopilotSymbol size={15} isThinking={true} />
               </div>
               <div className="copilot-typing-bubble">
                 <span className="copilot-typing-dots">● ● ●</span>
