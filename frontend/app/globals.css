@@ -97,21 +97,35 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: inline-flex;
 }
 
-.brand-lockup > span:last-child {
+.brand-lockup > span:last-child,
+.footer-brand > span:last-child {
   gap: 3px;
   display: grid;
 }
 
-.brand-lockup strong {
+.brand-lockup strong,
+.footer-brand strong {
+  color: #4c1d95;
   letter-spacing: -.03em;
   font-size: 15px;
+  font-weight: 800;
 }
 
-.brand-lockup small, .footer-brand span {
+html.dark .brand-lockup strong,
+.dark .brand-lockup strong,
+html.dark .footer-brand strong,
+.dark .footer-brand strong {
+  color: #c084fc;
+}
+
+.brand-lockup small,
+.footer-brand small,
+.footer-brand span {
   color: var(--muted);
   letter-spacing: .16em;
   text-transform: uppercase;
   font-size: 9px;
+  font-weight: 600;
 }
 
 .brand-logo-img {
