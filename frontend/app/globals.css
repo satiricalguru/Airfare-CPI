@@ -3180,6 +3180,7 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   vertical-align: middle;
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   cursor: pointer;
+  overflow: visible;
 }
 
 .copilot-symbol-svg.is-hovered {
@@ -3187,7 +3188,66 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
 }
 
 .copilot-symbol-body {
+  fill: #172019;
   transition: fill 0.2s ease;
+}
+
+.copilot-symbol-eye {
+  fill: #ffffff;
+  transition: fill 0.2s ease;
+  transform-origin: 50% 50%;
+}
+
+/* Light mode defaults for copilot avatar/header */
+.copilot-header-icon .copilot-symbol-body,
+.copilot-avatar .copilot-symbol-body {
+  fill: #3b6d4d;
+}
+.copilot-header-icon .copilot-symbol-eye,
+.copilot-avatar .copilot-symbol-eye {
+  fill: #ffffff;
+}
+
+/* Dark mode: high-contrast emerald body with deep eyes */
+html.dark .copilot-symbol-body,
+.dark .copilot-symbol-body {
+  fill: #10b981 !important;
+}
+
+html.dark .copilot-symbol-eye,
+.dark .copilot-symbol-eye {
+  fill: #062816 !important;
+}
+
+html.dark .copilot-header-icon .copilot-symbol-body,
+html.dark .copilot-avatar .copilot-symbol-body,
+.dark .copilot-header-icon .copilot-symbol-body,
+.dark .copilot-avatar .copilot-symbol-body {
+  fill: #10b981 !important;
+}
+
+html.dark .copilot-header-icon .copilot-symbol-eye,
+html.dark .copilot-avatar .copilot-symbol-eye,
+.dark .copilot-header-icon .copilot-symbol-eye,
+.dark .copilot-avatar .copilot-symbol-eye {
+  fill: #062816 !important;
+}
+
+/* Dark mode header copilot trigger */
+html.dark .copilot-trigger,
+.dark .copilot-trigger {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #f3f1e9;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.06);
+}
+
+html.dark .copilot-trigger:hover,
+.dark .copilot-trigger:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2);
 }
 
 .copilot-eyes-group {
@@ -3218,10 +3278,6 @@ html.dark .hero-pulse-details, html.dark .hero-index-link {
   100% {
     opacity: 1;
   }
-}
-
-.copilot-symbol-eye {
-  transform-origin: 50% 50%;
 }
 
 .copilot-eye-right {

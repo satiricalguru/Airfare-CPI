@@ -326,7 +326,6 @@ export function CopilotSymbol({
         width="18"
         height="18"
         rx="6"
-        fill="currentColor"
         className="copilot-symbol-body"
       />
       <g
@@ -343,7 +342,6 @@ export function CopilotSymbol({
           width="2.5"
           height="7"
           rx="1.25"
-          fill="#ffffff"
           className="copilot-symbol-eye copilot-eye-left"
           style={{
             transformOrigin: "8.75px 12px",
@@ -355,7 +353,6 @@ export function CopilotSymbol({
           width="2.5"
           height="7"
           rx="1.25"
-          fill="#ffffff"
           className="copilot-symbol-eye copilot-eye-right"
           style={{
             transformOrigin: "15.25px 12px",
