@@ -11,7 +11,7 @@ const routesList = rawRoutes.map((r) => ({
   to: r.to || r.destination || "BOM",
   status: r.status || (r.cpi > 107 ? "Surging" : "Stable"),
   fare: r.fare || (r.avgFare ? `₹${r.avgFare.toLocaleString()}` : "₹6,240"),
-  change: r.change || "+2.5%",
+  change: r.change || "+3.2%",
   cpi: r.cpi ? (typeof r.cpi === "number" ? r.cpi.toFixed(1) : r.cpi) : "106.0",
 }));
 
@@ -138,25 +138,25 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
         ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
 
         if (isSelected) {
-          // Luminous glowing active corridor
+          // Luminous glowing active corridor (MoSPI Emerald)
           ctx.strokeStyle = isDarkMode ? "#9ac3a0" : "#3b6d4d";
-          ctx.lineWidth = 3.5;
-          ctx.shadowColor = isDarkMode ? "rgba(154, 195, 160, 0.9)" : "rgba(59, 109, 77, 0.6)";
-          ctx.shadowBlur = 12;
+          ctx.lineWidth = 3.2;
+          ctx.shadowColor = isDarkMode ? "rgba(154, 195, 160, 0.7)" : "rgba(59, 109, 77, 0.45)";
+          ctx.shadowBlur = 10;
           ctx.stroke();
 
-          // Outer secondary glow
+          // Outer secondary soft glow
           ctx.beginPath();
           ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
           ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
-          ctx.strokeStyle = isDarkMode ? "rgba(154, 195, 160, 0.3)" : "rgba(59, 109, 77, 0.2)";
-          ctx.lineWidth = 8;
+          ctx.strokeStyle = isDarkMode ? "rgba(154, 195, 160, 0.25)" : "rgba(59, 109, 77, 0.16)";
+          ctx.lineWidth = 7;
           ctx.shadowBlur = 0;
           ctx.stroke();
         } else {
           // Subtle background route mesh
-          ctx.strokeStyle = isDarkMode ? "rgba(185, 200, 186, 0.22)" : "rgba(104, 119, 101, 0.27)";
-          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = isDarkMode ? "rgba(185, 200, 186, 0.18)" : "rgba(104, 119, 101, 0.22)";
+          ctx.lineWidth = 1.1;
           ctx.setLineDash([4, 4]);
           ctx.shadowBlur = 0;
           ctx.stroke();
@@ -174,7 +174,7 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
           (p.route.from === activeFrom && p.route.to === activeTo) ||
           (p.route.from === activeTo && p.route.to === activeFrom);
 
-        p.progress += p.speed * (isSelected ? 1.5 : 1.0);
+        p.progress += p.speed * (isSelected ? 1.4 : 1.0);
         if (p.progress > 1) p.progress = 0;
 
         const cp = getControlPoint(h1, h2);
@@ -183,12 +183,12 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
         const screenX = pt.x * scaleX;
         const screenY = pt.y * scaleY;
 
-        // Draw particle trail
+        // Draw particle
         ctx.beginPath();
-        ctx.arc(screenX, screenY, isSelected ? 4.5 : p.size, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? (isDarkMode ? "#f3f1e9" : "#3b6d4d") : (isDarkMode ? "#9ac3a0" : "#6f9974");
+        ctx.arc(screenX, screenY, isSelected ? 4 : p.size, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? (isDarkMode ? "#fffdf8" : "#3b6d4d") : (isDarkMode ? "#9ac3a0" : "#6f9974");
         ctx.shadowColor = isDarkMode ? "#9ac3a0" : "#3b6d4d";
-        ctx.shadowBlur = isSelected ? 16 : 8;
+        ctx.shadowBlur = isSelected ? 12 : 6;
         ctx.fill();
         ctx.shadowBlur = 0;
       });
@@ -196,14 +196,14 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
       // 3. Expanding Radar Pulse on Selected Hubs
       [fromHub, toHub].forEach((hub, idx) => {
         if (!hub) return;
-        const phase = (time * 1.8 + idx * 0.8) % 1;
-        const radius = (10 + phase * 32) * ((scaleX + scaleY) / 2);
-        const opacity = (1 - phase) * 0.7;
+        const phase = (time * 1.6 + idx * 0.8) % 1;
+        const radius = (8 + phase * 28) * ((scaleX + scaleY) / 2);
+        const opacity = (1 - phase) * 0.6;
 
         ctx.beginPath();
         ctx.arc(hub.x * scaleX, hub.y * scaleY, radius, 0, Math.PI * 2);
         ctx.strokeStyle = isDarkMode ? `rgba(154, 195, 160, ${opacity})` : `rgba(59, 109, 77, ${opacity})`;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.8;
         ctx.stroke();
       });
 
@@ -225,11 +225,11 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
       style={{
         position: "relative",
         width: "100%",
-        borderRadius: 20,
+        borderRadius: 16,
         overflow: "hidden",
-        backgroundColor: isDarkMode ? "#151b18" : "#fffdf8",
-        border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.2)" : "rgba(59, 109, 77, 0.16)"}`,
-        boxShadow: isDarkMode ? "0 20px 50px rgba(0,0,0,0.35)" : "0 18px 50px rgba(31, 31, 24, 0.08)",
+        backgroundColor: "var(--paper-bright)",
+        border: "1px solid var(--line)",
+        boxShadow: isDarkMode ? "0 20px 50px rgba(0,0,0,0.35)" : "0 18px 50px rgba(31, 31, 24, 0.06)",
       }}
     >
       {/* Background Radar Grid Pattern */}
@@ -266,24 +266,9 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
             inset: 0,
             width: "100%",
             height: "100%",
-            filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(154, 195, 160, 0.12))" : "drop-shadow(0 4px 16px rgba(59, 109, 77, 0.1))",
+            filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(154, 195, 160, 0.1))" : "drop-shadow(0 4px 16px rgba(59, 109, 77, 0.08))",
           }}
         >
-          <defs>
-            <filter id="india-glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-            <linearGradient id="state-gradient-dark" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#0f172a" />
-              <stop offset="100%" stopColor="#1e293b" />
-            </linearGradient>
-            <linearGradient id="state-gradient-light" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#f4f1e8" />
-              <stop offset="100%" stopColor="#e4e9df" />
-            </linearGradient>
-          </defs>
-
           {/* Layer 1: 36 Indian State Polygons */}
           <g id="india-states">
             {INDIA_MAP_DATA.locations.map((loc) => {
@@ -325,7 +310,7 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
             })}
           </g>
 
-          {/* Layer 2: Airport Hub Interactive Nodes (inside same SVG!) */}
+          {/* Layer 2: Airport Hub Interactive Nodes */}
           <g id="airport-hubs">
             {HUBS_CONFIG.map((hub) => {
               const isOrigin = hub.code === activeFrom;
@@ -349,21 +334,20 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
                   {/* Active Hub Radar Ring */}
                   {isSelected && (
                     <circle
-                      r={14}
-                      fill={isDarkMode ? "rgba(56, 189, 248, 0.15)" : "rgba(0, 101, 145, 0.12)"}
-                      stroke={isDarkMode ? "#38bdf8" : "#006591"}
-                      strokeWidth={1.5}
+                      r={13}
+                      fill={isDarkMode ? "rgba(154, 195, 160, 0.16)" : "rgba(59, 109, 77, 0.12)"}
+                      stroke={isDarkMode ? "#9ac3a0" : "#3b6d4d"}
+                      strokeWidth={1.4}
                       strokeDasharray="3 3"
                     />
                   )}
 
                   {/* Hub Beacon Pin */}
                   <circle
-                    r={isSelected ? 6 : (isHovered ? 5 : 3.5)}
-                    fill={isSelected ? (isDarkMode ? "#ffffff" : "#006591") : (isDarkMode ? "#38bdf8" : "#0284c7")}
-                    stroke={isSelected ? (isDarkMode ? "#38bdf8" : "#ffffff") : (isDarkMode ? "#0f172a" : "#ffffff")}
-                    strokeWidth={2}
-                    filter={isSelected ? "url(#india-glow)" : undefined}
+                    r={isSelected ? 5.5 : (isHovered ? 4.5 : 3.5)}
+                    fill={isSelected ? (isDarkMode ? "#9ac3a0" : "#3b6d4d") : (isDarkMode ? "#4a5d4e" : "#5d7362")}
+                    stroke={isSelected ? "#ffffff" : (isDarkMode ? "#151b18" : "#ffffff")}
+                    strokeWidth={isSelected ? 2 : 1.5}
                   />
 
                   {/* Hub IATA Label Pill */}
@@ -374,18 +358,18 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
                       width={24}
                       height={14}
                       rx={3}
-                      fill={isSelected ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(15,23,42,0.88)" : "rgba(255,255,255,0.9)")}
-                      stroke={isSelected ? "#ffffff" : (isDarkMode ? "rgba(56, 189, 248, 0.4)" : "rgba(0, 101, 145, 0.25)")}
+                      fill={isSelected ? (isDarkMode ? "#9ac3a0" : "#3b6d4d") : (isDarkMode ? "rgba(21, 27, 24, 0.92)" : "rgba(255, 253, 248, 0.94)")}
+                      stroke={isSelected ? (isDarkMode ? "#9ac3a0" : "#3b6d4d") : (isDarkMode ? "rgba(154, 195, 160, 0.3)" : "rgba(59, 109, 77, 0.22)")}
                       strokeWidth={0.8}
                     />
                     <text
                       x={10}
                       y={0}
                       textAnchor="middle"
-                      fill={isSelected ? "#ffffff" : (isDarkMode ? "#e2e8f0" : "#1e293b")}
+                      fill={isSelected ? (isDarkMode ? "#151b18" : "#ffffff") : (isDarkMode ? "#f3f1e9" : "#172019")}
                       fontSize={8.5}
-                      fontWeight={900}
-                      fontFamily="var(--font-mono)"
+                      fontWeight={700}
+                      fontFamily="var(--mono)"
                     >
                       {hub.code}
                     </text>
@@ -396,7 +380,7 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
           </g>
         </svg>
 
-        {/* Layer 3: 60FPS Flight Stream Canvas (exact same frame) */}
+        {/* Layer 3: 60FPS Flight Stream Canvas */}
         <canvas
           ref={canvasRef}
           style={{
@@ -413,92 +397,166 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
           <div
             style={{
               position: "absolute",
-              top: 24,
-              right: 24,
-              backgroundColor: isDarkMode ? "rgba(21, 27, 24, 0.95)" : "rgba(255, 253, 248, 0.95)",
-              border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.3)" : "rgba(59, 109, 77, 0.2)"}`,
-              borderRadius: 12,
-              padding: "12px 16px",
-              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+              top: 20,
+              right: 20,
+              backgroundColor: "var(--paper-bright)",
+              border: "1px solid var(--line)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.12)",
               pointerEvents: "none",
               zIndex: 10,
               backdropFilter: "blur(8px)",
-              minWidth: 160,
+              minWidth: 155,
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: 13, color: isDarkMode ? "#f3f1e9" : "#172019", marginBottom: 2 }}>
+            <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--ink)", fontFamily: "var(--sans)", marginBottom: 2 }}>
               {HUB_MAP[hoveredHub].city} ({HUB_MAP[hoveredHub].code})
             </div>
-            <div style={{ fontSize: 11, color: isDarkMode ? "#9ca3af" : "#6b7280", marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, color: "var(--muted)", fontFamily: "var(--sans)", marginBottom: 6 }}>
               State: {HUB_MAP[hoveredHub].state}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: isDarkMode ? "#9ca3af" : "#6b7280" }}>Mo. Traffic:</span>
-              <strong style={{ color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>{HUB_MAP[hoveredHub].pax}</strong>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, fontFamily: "var(--sans)" }}>
+              <span style={{ color: "var(--muted)" }}>Monthly Pax:</span>
+              <strong style={{ color: "var(--ink)", fontFamily: "var(--mono)" }}>{HUB_MAP[hoveredHub].pax}</strong>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginTop: 2 }}>
-              <span style={{ color: isDarkMode ? "#9ca3af" : "#6b7280" }}>Sub-Index:</span>
-              <strong style={{ color: "#22c55e" }}>{HUB_MAP[hoveredHub].cpi}</strong>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, fontFamily: "var(--sans)", marginTop: 2 }}>
+              <span style={{ color: "var(--muted)" }}>Sub-Index:</span>
+              <strong style={{ color: "var(--green)", fontFamily: "var(--mono)" }}>{HUB_MAP[hoveredHub].cpi}</strong>
             </div>
           </div>
         )}
       </div>
 
-      {/* Interactive Bottom HUD Control Card */}
+      {/* Interactive Bottom HUD Control Card - MoSPI Design Theme */}
       <div
         style={{
-          margin: "0 16px 16px",
-          padding: "16px 20px",
+          margin: "0 14px 14px",
+          padding: "14px 18px",
           borderRadius: 12,
-          backgroundColor: isDarkMode ? "rgba(28, 33, 29, 0.94)" : "rgba(255, 253, 248, 0.96)",
-          backdropFilter: "blur(16px)",
-          border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.2)" : "rgba(59, 109, 77, 0.16)"}`,
-          boxShadow: isDarkMode ? "0 8px 30px rgba(0,0,0,0.5)" : "0 4px 16px rgba(31, 31, 24, 0.06)",
+          backgroundColor: "var(--paper-bright)",
+          border: "1px solid var(--line)",
+          boxShadow: isDarkMode ? "0 8px 30px rgba(0,0,0,0.4)" : "0 4px 16px rgba(31, 31, 24, 0.04)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
           {/* Active Corridor Details */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#9ac3a0" : "#3b6d4d", marginBottom: 2 }}>
+            <div
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--muted)",
+                fontFamily: "var(--sans)",
+                marginBottom: 2,
+              }}
+            >
               Active Aviation Corridor
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20, fontWeight: 900, color: isDarkMode ? "#f3f1e9" : "#191917", fontFamily: "var(--font-mono)" }}>
+              <span
+                style={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: "var(--ink)",
+                  fontFamily: "var(--sans)",
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 {activeFrom} → {activeTo}
               </span>
               <span
                 style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  backgroundColor: selectedRoute?.status === "Surging" ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
-                  color: selectedRoute?.status === "Surging" ? "#ef4444" : "#22c55e",
-                  border: `1px solid ${selectedRoute?.status === "Surging" ? "rgba(239, 68, 68, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  backgroundColor: selectedRoute?.status === "Surging" ? "rgba(200, 75, 49, 0.12)" : "var(--green-soft)",
+                  color: selectedRoute?.status === "Surging" ? "var(--red, #c84b31)" : "var(--green)",
+                  border: `1px solid ${selectedRoute?.status === "Surging" ? "rgba(200, 75, 49, 0.25)" : "rgba(59, 109, 77, 0.2)"}`,
+                  fontFamily: "var(--sans)",
                 }}
               >
-                {(selectedRoute?.status || "Stable").toUpperCase()}
+                {selectedRoute?.status || "Stable"}
               </span>
             </div>
           </div>
 
           {/* Metric Stats */}
-          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>Jevons Index</div>
-              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  fontFamily: "var(--sans)",
+                }}
+              >
+                Jevons Index
+              </div>
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  fontFamily: "var(--serif)",
+                  color: "var(--ink)",
+                }}
+              >
                 {selectedRoute?.cpi || "106.0"}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>Average Fare</div>
-              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#f3f1e9" : "#191917" }}>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  fontFamily: "var(--sans)",
+                }}
+              >
+                Average Fare
+              </div>
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  fontFamily: "var(--serif)",
+                  color: "var(--ink)",
+                }}
+              >
                 {selectedRoute?.fare || "₹6,240"}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>MoM Movement</div>
-              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: "#22c55e" }}>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  fontFamily: "var(--sans)",
+                }}
+              >
+                MoM Movement
+              </div>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  fontFamily: "var(--sans)",
+                  color: "var(--green)",
+                }}
+              >
                 {selectedRoute?.change || "+3.2%"}
               </div>
             </div>
@@ -506,7 +564,7 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
         </div>
 
         {/* Quick Corridor Selector Pills */}
-        <div style={{ display: "flex", gap: 8, marginTop: 14, overflowX: "auto", paddingBottom: 2 }}>
+        <div style={{ display: "flex", gap: 6, marginTop: 12, overflowX: "auto", paddingBottom: 2 }}>
           {routesList.slice(0, 6).map((r) => {
             const isCurrent = r.from === activeFrom && r.to === activeTo;
             return (
@@ -515,17 +573,17 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
                 onClick={() => setSelectedRoute(r)}
                 data-testid={`india-map-route-${r.from.toLowerCase()}-${r.to.toLowerCase()}-button`}
                 style={{
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  fontFamily: "var(--font-mono)",
+                  padding: "5px 11px",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: "var(--mono)",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  backgroundColor: isCurrent ? "#3b6d4d" : (isDarkMode ? "rgba(154, 195, 160, 0.08)" : "rgba(59,109,77,0.06)"),
-                  color: isCurrent ? "#ffffff" : (isDarkMode ? "#f3f1e9" : "#191917"),
-                  border: isCurrent ? `1px solid ${isDarkMode ? "#9ac3a0" : "#3b6d4d"}` : `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.15)" : "rgba(59,109,77,0.12)"}`,
-                  transition: "all 0.2s ease",
+                  backgroundColor: isCurrent ? "var(--green)" : "var(--surface-subtle, rgba(0, 0, 0, 0.025))",
+                  color: isCurrent ? "#ffffff" : "var(--ink)",
+                  border: isCurrent ? "1px solid var(--green)" : "1px solid var(--line)",
+                  transition: "all 0.15s ease",
                 }}
               >
                 {r.from} ⇄ {r.to}
