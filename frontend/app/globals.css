@@ -512,7 +512,7 @@ h1 em, .alert-intro em {
   padding: 17px;
   display: grid;
   position: absolute;
-  top: 34px;
+  bottom: 64px;
   right: 32px;
 }
 
@@ -2411,7 +2411,7 @@ h1 em, .alert-intro em {
   }
 
   .hero-index-stamp {
-    top: 16px;
+    bottom: 48px;
     right: 16px;
   }
 
@@ -3864,7 +3864,7 @@ html.dark .copilot-input-shell:focus-within {
   min-width: 186px;
   padding: 16px 18px 15px;
   position: absolute;
-  top: 34px;
+  bottom: 64px;
   right: 5vw;
   overflow: hidden;
 }
@@ -3967,7 +3967,7 @@ html.dark .hero-index-stamp span, html.dark .hero-index-stamp small {
   }
 
   .hero-index-stamp {
-    top: 22px;
+    bottom: 56px;
     right: 22px;
   }
 
