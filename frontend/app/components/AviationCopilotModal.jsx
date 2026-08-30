@@ -332,99 +332,31 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
       aria-modal="true"
       aria-label="Airfare CPI Copilot"
       data-testid="copilot-modal"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        backgroundColor: "rgba(3, 7, 18, 0.72)",
-        backdropFilter: "blur(16px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        animation: "fadeIn 0.15s ease-out",
-      }}
       onClick={onClose}
     >
       <div
         className="copilot-modal"
-        style={{
-          width: "100%",
-          maxWidth: 720,
-          maxHeight: "88vh",
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: 20,
-          overflow: "hidden",
-          backgroundColor: "#0b101b",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
-          boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.9), 0 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
-        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Minimalist Modal Header */}
-        <div
-          className="copilot-modal-header"
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 9,
-                background: "var(--green-soft, rgba(59, 109, 77, 0.12))",
-                border: "1px solid rgba(59, 109, 77, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--green, #3b6d4d)",
-              }}
-            >
+        <div className="copilot-modal-header">
+          <div className="copilot-header-lockup">
+            <div className="copilot-header-icon">
               <CopilotSymbol size={18} />
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink, #ffffff)", letterSpacing: "-0.01em" }}>
+              <div className="copilot-header-title-row">
+                <span className="copilot-header-title">
                   Airfare CPI Copilot
                 </span>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    backgroundColor: "var(--green-soft, rgba(59, 109, 77, 0.12))",
-                    color: "var(--green, #3b6d4d)",
-                    border: "1px solid rgba(59, 109, 77, 0.25)",
-                    letterSpacing: "0.04em",
-                  }}
-                >
+                <span className="copilot-badge-model">
                   GEMINI 3.5 FLASH LITE
                 </span>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    backgroundColor: "rgba(34, 197, 94, 0.12)",
-                    color: "#34d399",
-                    border: "1px solid rgba(34, 197, 94, 0.25)",
-                    letterSpacing: "0.04em",
-                  }}
-                >
+                <span className="copilot-badge-rag">
                   LIVE RAG
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: "var(--muted, #94a3b8)", marginTop: 2 }}>
+              <div className="copilot-header-desc">
                 Real-Time Aviation Intelligence Grounded with MoSPI 2024=100
               </div>
             </div>
@@ -435,94 +367,31 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
             onClick={onClose}
             aria-label="Close modal"
             data-testid="copilot-close-button"
-            style={{
-              background: "transparent",
-              border: "1px solid var(--line, rgba(255, 255, 255, 0.08))",
-              borderRadius: "50%",
-              width: 30,
-              height: 30,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--muted, #94a3b8)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
           >
             <X size={15} />
           </button>
         </div>
 
         {/* Message Thread */}
-        <div
-          className="no-scrollbar copilot-thread"
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "18px 20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-            minHeight: 320,
-            maxHeight: 460,
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
+        <div className="no-scrollbar copilot-thread">
           {messages.map((m, idx) => {
             const isUser = m.role === "user";
             return (
               <div
-                className="copilot-message-row"
+                className={`copilot-message-row ${isUser ? "copilot-row-user" : "copilot-row-assistant"}`}
                 key={idx}
-                style={{
-                  display: "flex",
-                  justifyContent: isUser ? "flex-end" : "flex-start",
-                  gap: 10,
-                }}
               >
                 {!isUser && (
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 8,
-                      background: "rgba(56, 189, 248, 0.12)",
-                      border: "1px solid rgba(56, 189, 248, 0.25)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      marginTop: 2,
-                    }}
-                  >
+                  <div className="copilot-avatar">
                     <CopilotSymbol size={15} />
                   </div>
                 )}
 
                 <div
                   className={`copilot-bubble ${isUser ? "copilot-bubble-user" : "copilot-bubble-assistant"}`}
-                  style={{
-                    maxWidth: "86%",
-                    padding: "12px 16px",
-                    borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                    backgroundColor: isUser ? "#0284c7" : "rgba(255, 255, 255, 0.04)",
-                    border: `1px solid ${isUser ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.08)"}`,
-                    color: "#ffffff",
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    wordBreak: "break-word",
-                  }}
                 >
                   {isUser ? m.content : renderFormattedContent(m.content)}
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: isUser ? "rgba(255,255,255,0.7)" : "#64748b",
-                      marginTop: 6,
-                      textAlign: "right",
-                    }}
-                  >
+                  <div className="copilot-timestamp">
                     {m.timestamp}
                   </div>
                 </div>
@@ -531,37 +400,13 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
           })}
 
           {isTyping && (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 8,
-                  background: "rgba(56, 189, 248, 0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+            <div className="copilot-typing-row">
+              <div className="copilot-avatar">
                 <CopilotSymbol size={15} />
               </div>
-              <div
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 12,
-                  backgroundColor: "rgba(255, 255, 255, 0.04)",
-                  border: "1px solid rgba(255, 255, 255, 0.06)",
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span style={{ fontSize: 14 }}>●</span>
-                <span style={{ fontSize: 14 }}>●</span>
-                <span style={{ fontSize: 14 }}>●</span>
-                <span style={{ marginLeft: 4 }}>Gemini 3.5 Flash Lite is reasoning with live RAG telemetry...</span>
+              <div className="copilot-typing-bubble">
+                <span className="copilot-typing-dots">● ● ●</span>
+                <span>Gemini 3.5 Flash Lite is reasoning with live RAG telemetry...</span>
               </div>
             </div>
           )}
@@ -570,52 +415,24 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         </div>
 
         {/* Minimalist Suggested Prompt Chips */}
-        <div
-          className="no-scrollbar copilot-prompts"
-          style={{
-            padding: "8px 16px",
-            background: "rgba(10, 15, 29, 0.8)",
-            borderTop: "1px solid var(--line, rgba(255, 255, 255, 0.05))",
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
+        <div className="no-scrollbar copilot-prompts">
           {PRESET_PROMPTS.map((p, idx) => (
             <button
               className="copilot-prompt"
               key={idx}
               onClick={() => handleSend(p.query)}
               data-testid={`copilot-preset-prompt-${idx}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "5px 11px",
-                borderRadius: 14,
-                fontSize: 11.5,
-                fontWeight: 600,
-                color: "var(--ink, #cbd5e1)",
-                backgroundColor: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid var(--line, rgba(255, 255, 255, 0.08))",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                flexShrink: 0,
-              }}
             >
               {p.icon === "flight_takeoff" || p.icon === "airlines" ? (
-                <Plane size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+                <Plane size={13} className="copilot-prompt-icon" />
               ) : p.icon === "trending_up" ? (
-                <TrendingUp size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+                <TrendingUp size={13} className="copilot-prompt-icon" />
               ) : p.icon === "schedule" ? (
-                <Clock size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+                <Clock size={13} className="copilot-prompt-icon" />
               ) : p.icon === "calculate" ? (
-                <Calculator size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+                <Calculator size={13} className="copilot-prompt-icon" />
               ) : (
-                <CopilotSymbol size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+                <CopilotSymbol size={13} className="copilot-prompt-icon" />
               )}
               <span>{p.label}</span>
             </button>
@@ -623,26 +440,8 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         </div>
 
         {/* Unified Minimalist Input Bar */}
-        <div
-          className="copilot-composer"
-          style={{
-            padding: "12px 16px 16px",
-            borderTop: "1px solid var(--line, rgba(255, 255, 255, 0.06))",
-          }}
-        >
-          <div
-            className="copilot-input-shell"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 6px 4px 14px",
-              borderRadius: 12,
-              backgroundColor: "rgba(255, 255, 255, 0.04)",
-              border: "1px solid var(--line, rgba(255, 255, 255, 0.1))",
-              transition: "border-color 0.15s ease",
-            }}
-          >
+        <div className="copilot-composer">
+          <div className="copilot-input-shell">
             <input
               className="copilot-input"
               ref={inputRef}
@@ -651,35 +450,12 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
               onChange={(e) => setInputQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend(inputQuery)}
               placeholder="Ask about route fares, MoSPI methodology, advance windows, or carrier pricing..."
-              style={{
-                flex: 1,
-                padding: "8px 0",
-                backgroundColor: "transparent",
-                border: "none",
-                color: "var(--ink, #ffffff)",
-                fontSize: 13,
-                outline: "none",
-              }}
             />
 
             <button
               className="copilot-send"
               onClick={() => handleSend(inputQuery)}
               disabled={!inputQuery.trim() || isTyping}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                backgroundColor: inputQuery.trim() && !isTyping ? "var(--green, #3b6d4d)" : "rgba(255, 255, 255, 0.05)",
-                color: inputQuery.trim() && !isTyping ? "#ffffff" : "var(--muted, #64748b)",
-                border: "none",
-                cursor: inputQuery.trim() && !isTyping ? "pointer" : "default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all 0.15s ease",
-                flexShrink: 0,
-              }}
               title="Send Message"
               aria-label="Send message"
               data-testid="copilot-send-button"
