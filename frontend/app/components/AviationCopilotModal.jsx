@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { X, ArrowUp, Plane, TrendingUp, Clock, Calculator } from "lucide-react";
 import {
   STATISTICAL_CONSTANTS,
   AIRPORTS_LIST,
@@ -215,97 +216,13 @@ $$\\mathcal{I}_{\\text{Jevons}} = \\prod_{i=1}^{n} \\left( \\frac{p_{i,t}}{p_{i,
 
 // Minimalist Markdown Renderer
 function renderFormattedContent(rawText) {
-  const lines = rawText.split("\n");
-
-  return lines.map((line, idx) => {
+  return rawText.split("\n").map((line, idx) => {
     const trimmed = line.trim();
-
-    if (!trimmed) {
-      return <div key={idx} style={{ height: 6 }} />;
-    }
-
-    // Heading 3
-    if (trimmed.startsWith("### ")) {
-      return (
-        <div
-          key={idx}
-          style={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "#38bdf8",
-            marginTop: idx === 0 ? 0 : 10,
-            marginBottom: 4,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          {trimmed.replace("### ", "")}
-        </div>
-      );
-    }
-
-    // Bullet points
-    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      const content = trimmed.substring(2);
-      return (
-        <div
-          key={idx}
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 7,
-            fontSize: 12.5,
-            lineHeight: 1.55,
-            color: "#e2e8f0",
-            marginBottom: 3,
-          }}
-        >
-          <span style={{ color: "#38bdf8", fontSize: 9, marginTop: 4 }}>◆</span>
-          <div>{parseBoldText(content)}</div>
-        </div>
-      );
-    }
-
-    // Numbered lists
-    if (/^\d+\.\s/.test(trimmed)) {
-      const match = trimmed.match(/^(\d+\.)\s(.*)/);
-      return (
-        <div
-          key={idx}
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 7,
-            fontSize: 12.5,
-            lineHeight: 1.55,
-            color: "#e2e8f0",
-            marginBottom: 4,
-          }}
-        >
-          <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 11.5, minWidth: 16 }}>
-            {match ? match[1] : "•"}
-          </span>
-          <div>{parseBoldText(match ? match[2] : trimmed)}</div>
-        </div>
-      );
-    }
-
-    // Standard paragraph
-    return (
-      <p
-        key={idx}
-        style={{
-          fontSize: 12.5,
-          lineHeight: 1.55,
-          color: "#e2e8f0",
-          margin: "0 0 5px 0",
-        }}
-      >
-        {parseBoldText(trimmed)}
-      </p>
-    );
+    if (!trimmed) return <div key={idx} className="copilot-spacer" />;
+    if (trimmed.startsWith("### ")) return <div key={idx} className="copilot-message-heading">{trimmed.replace("### ", "")}</div>;
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) return <div key={idx} className="copilot-message-list"><span>◆</span><div>{parseBoldText(trimmed.substring(2))}</div></div>;
+    if (/^\d+\.\s/.test(trimmed)) { const match = trimmed.match(/^(\d+\.)\s(.*)/); return <div key={idx} className="copilot-message-list"><span>{match?.[1] || "•"}</span><div>{parseBoldText(match?.[2] || trimmed)}</div></div>; }
+    return <p key={idx} className="copilot-message-paragraph">{parseBoldText(trimmed)}</p>;
   });
 }
 
@@ -313,18 +230,14 @@ function parseBoldText(text) {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} style={{ color: "#ffffff", fontWeight: 700 }}>
-          {part.slice(2, -2)}
-        </strong>
-      );
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
     return part;
   });
 }
 
-// Elegant Vector AI Copilot Symbol
-export function CopilotSymbol({ size = 16, className = "" }) {
+// Custom Vector AI Copilot Symbol matching user icon
+export function CopilotSymbol({ size = 15, className = "", style = {} }) {
   return (
     <svg
       width={size}
@@ -333,28 +246,14 @@ export function CopilotSymbol({ size = 16, className = "" }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
     >
-      <defs>
-        <linearGradient id="aiCopilotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="50%" stopColor="#0ea5e9" />
-          <stop offset="100%" stopColor="#34d399" />
-        </linearGradient>
-      </defs>
-      {/* Primary Radiant Intelligence Star */}
       <path
-        d="M12 2C12.45 7.15 16.85 11.55 22 12C16.85 12.45 12.45 16.85 12 22C11.55 16.85 7.15 12.45 2 12C7.15 11.55 11.55 7.15 12 2Z"
-        fill="url(#aiCopilotGradient)"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M7.5 3C3.5 3 2.5 4 2.5 8V16C2.5 20 3.5 21 7.5 21H16.5C20.5 21 21.5 20 21.5 16V8C21.5 4 20.5 3 16.5 3H7.5ZM8.5 8.75C9.33 8.75 10 9.42 10 10.25V13.75C10 14.58 9.33 15.25 8.5 15.25C7.67 15.25 7 14.58 7 13.75V10.25C7 9.42 7.67 8.75 8.5 8.75ZM15.5 8.75C16.33 8.75 17 9.42 17 10.25V13.75C17 14.58 16.33 15.25 15.5 15.25C14.67 15.25 14 14.58 14 13.75V10.25C14 9.42 14.67 8.75 15.5 8.75Z"
+        fill="currentColor"
       />
-      {/* Precision Micro Sparkle */}
-      <path
-        d="M19.5 3.5C19.75 5 21 6.25 22.5 6.5C21 6.75 19.75 8 19.5 9.5C19.25 8 18 6.75 16.5 6.5C18 6.25 19.25 5 19.5 3.5Z"
-        fill="#38bdf8"
-        opacity="0.9"
-      />
-      {/* Luminous Core Light */}
-      <circle cx="12" cy="12" r="2.2" fill="#ffffff" />
     </svg>
   );
 }
@@ -373,23 +272,10 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    if (initialQuery) {
-      handleSend(initialQuery);
-    }
-  }, [initialQuery]);
+  const processedQueryRef = useRef("");
 
-  useEffect(() => {
-    if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [messages, isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSend = async (textToSend) => {
-    const queryText = (textToSend || inputQuery).trim();
+  const handleSend = useCallback(async (textToSend) => {
+    const queryText = (typeof textToSend === "string" ? textToSend : "").trim();
     if (!queryText) return;
 
     const userMsg = {
@@ -413,10 +299,39 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
       },
     ]);
     setIsTyping(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      processedQueryRef.current = "";
+      return;
+    }
+
+    if (initialQuery && processedQueryRef.current !== initialQuery) {
+      processedQueryRef.current = initialQuery;
+      const timer = setTimeout(() => {
+        handleSend(initialQuery);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, initialQuery, handleSend]);
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [messages, isOpen]);
+
+  if (!isOpen) return null;
 
   return (
     <div
+      className="copilot-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Airfare CPI Copilot"
+      data-testid="copilot-modal"
       style={{
         position: "fixed",
         inset: 0,
@@ -432,6 +347,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
       onClick={onClose}
     >
       <div
+        className="copilot-modal"
         style={{
           width: "100%",
           maxWidth: 720,
@@ -448,6 +364,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
       >
         {/* Minimalist Modal Header */}
         <div
+          className="copilot-modal-header"
           style={{
             padding: "16px 20px",
             borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
@@ -463,19 +380,19 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 width: 32,
                 height: 32,
                 borderRadius: 9,
-                background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(2, 132, 199, 0.35))",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
+                background: "var(--green-soft, rgba(59, 109, 77, 0.12))",
+                border: "1px solid rgba(59, 109, 77, 0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 14px rgba(56, 189, 248, 0.25)",
+                color: "var(--green, #3b6d4d)",
               }}
             >
               <CopilotSymbol size={18} />
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.01em" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink, #ffffff)", letterSpacing: "-0.01em" }}>
                   Airfare CPI Copilot
                 </span>
                 <span
@@ -484,9 +401,9 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                     fontWeight: 700,
                     padding: "1px 6px",
                     borderRadius: 4,
-                    backgroundColor: "rgba(56, 189, 248, 0.12)",
-                    color: "#38bdf8",
-                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    backgroundColor: "var(--green-soft, rgba(59, 109, 77, 0.12))",
+                    color: "var(--green, #3b6d4d)",
+                    border: "1px solid rgba(59, 109, 77, 0.25)",
                     letterSpacing: "0.04em",
                   }}
                 >
@@ -507,38 +424,38 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                   LIVE RAG
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>
+              <div style={{ fontSize: 11, color: "var(--muted, #94a3b8)", marginTop: 2 }}>
                 Real-Time Aviation Intelligence Grounded with MoSPI 2024=100
               </div>
             </div>
           </div>
 
           <button
+            className="copilot-close"
             onClick={onClose}
             aria-label="Close modal"
+            data-testid="copilot-close-button"
             style={{
-              background: "rgba(255, 255, 255, 0.04)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              background: "transparent",
+              border: "1px solid var(--line, rgba(255, 255, 255, 0.08))",
               borderRadius: "50%",
-              width: 28,
-              height: 28,
+              width: 30,
+              height: 30,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#94a3b8",
+              color: "var(--muted, #94a3b8)",
               cursor: "pointer",
               transition: "all 0.15s ease",
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              close
-            </span>
+            <X size={15} />
           </button>
         </div>
 
         {/* Message Thread */}
         <div
-          className="no-scrollbar"
+          className="no-scrollbar copilot-thread"
           style={{
             flex: 1,
             overflowY: "auto",
@@ -556,6 +473,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
             const isUser = m.role === "user";
             return (
               <div
+                className="copilot-message-row"
                 key={idx}
                 style={{
                   display: "flex",
@@ -583,6 +501,7 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 )}
 
                 <div
+                  className={`copilot-bubble ${isUser ? "copilot-bubble-user" : "copilot-bubble-assistant"}`}
                   style={{
                     maxWidth: "86%",
                     padding: "12px 16px",
@@ -652,11 +571,11 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
 
         {/* Minimalist Suggested Prompt Chips */}
         <div
-          className="no-scrollbar"
+          className="no-scrollbar copilot-prompts"
           style={{
             padding: "8px 16px",
             background: "rgba(10, 15, 29, 0.8)",
-            borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+            borderTop: "1px solid var(--line, rgba(255, 255, 255, 0.05))",
             display: "flex",
             gap: 6,
             overflowX: "auto",
@@ -666,8 +585,10 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
         >
           {PRESET_PROMPTS.map((p, idx) => (
             <button
+              className="copilot-prompt"
               key={idx}
               onClick={() => handleSend(p.query)}
+              data-testid={`copilot-preset-prompt-${idx}`}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -676,18 +597,26 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 borderRadius: 14,
                 fontSize: 11.5,
                 fontWeight: 600,
-                color: "#cbd5e1",
+                color: "var(--ink, #cbd5e1)",
                 backgroundColor: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--line, rgba(255, 255, 255, 0.08))",
                 whiteSpace: "nowrap",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
                 flexShrink: 0,
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#38bdf8" }}>
-                {p.icon}
-              </span>
+              {p.icon === "flight_takeoff" || p.icon === "airlines" ? (
+                <Plane size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+              ) : p.icon === "trending_up" ? (
+                <TrendingUp size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+              ) : p.icon === "schedule" ? (
+                <Clock size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+              ) : p.icon === "calculate" ? (
+                <Calculator size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+              ) : (
+                <CopilotSymbol size={13} style={{ color: "var(--green, #3b6d4d)" }} />
+              )}
               <span>{p.label}</span>
             </button>
           ))}
@@ -695,13 +624,14 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
 
         {/* Unified Minimalist Input Bar */}
         <div
+          className="copilot-composer"
           style={{
             padding: "12px 16px 16px",
-            borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-            backgroundColor: "#070b14",
+            borderTop: "1px solid var(--line, rgba(255, 255, 255, 0.06))",
           }}
         >
           <div
+            className="copilot-input-shell"
             style={{
               display: "flex",
               alignItems: "center",
@@ -709,37 +639,39 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
               padding: "4px 6px 4px 14px",
               borderRadius: 12,
               backgroundColor: "rgba(255, 255, 255, 0.04)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              border: "1px solid var(--line, rgba(255, 255, 255, 0.1))",
               transition: "border-color 0.15s ease",
             }}
           >
             <input
+              className="copilot-input"
               ref={inputRef}
               type="text"
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              onKeyDown={(e) => e.key === "Enter" && handleSend(inputQuery)}
               placeholder="Ask about route fares, MoSPI methodology, advance windows, or carrier pricing..."
               style={{
                 flex: 1,
                 padding: "8px 0",
                 backgroundColor: "transparent",
                 border: "none",
-                color: "#ffffff",
+                color: "var(--ink, #ffffff)",
                 fontSize: 13,
                 outline: "none",
               }}
             />
 
             <button
-              onClick={() => handleSend()}
+              className="copilot-send"
+              onClick={() => handleSend(inputQuery)}
               disabled={!inputQuery.trim() || isTyping}
               style={{
                 width: 32,
                 height: 32,
                 borderRadius: 8,
-                backgroundColor: inputQuery.trim() && !isTyping ? "#0284c7" : "rgba(255, 255, 255, 0.05)",
-                color: inputQuery.trim() && !isTyping ? "#ffffff" : "#64748b",
+                backgroundColor: inputQuery.trim() && !isTyping ? "var(--green, #3b6d4d)" : "rgba(255, 255, 255, 0.05)",
+                color: inputQuery.trim() && !isTyping ? "#ffffff" : "var(--muted, #64748b)",
                 border: "none",
                 cursor: inputQuery.trim() && !isTyping ? "pointer" : "default",
                 display: "flex",
@@ -749,10 +681,10 @@ export default function AviationCopilotModal({ isOpen, onClose, initialQuery = "
                 flexShrink: 0,
               }}
               title="Send Message"
+              aria-label="Send message"
+              data-testid="copilot-send-button"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                arrow_upward
-              </span>
+              <ArrowUp size={16} />
             </button>
           </div>
         </div>

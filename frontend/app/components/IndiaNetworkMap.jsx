@@ -31,15 +31,19 @@ const HUBS_CONFIG = [
   { code: "SXR", city: "Srinagar", state: "Jammu and Kashmir", x: 168.0, y: 65.0, pax: "190K", cpi: 105.1, labelPos: "top" },
 ];
 
-export default function IndiaNetworkMap() {
+export default function IndiaNetworkMap({ isDarkMode: propDarkMode }) {
   const [selectedRoute, setSelectedRoute] = useState(routesList[0] || null);
   const [hoveredHub, setHoveredHub] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(propDarkMode ?? false);
   const canvasRef = useRef(null);
 
-  // Sync dark mode
+  // Sync dark mode from props or DOM
   useEffect(() => {
+    if (propDarkMode !== undefined) {
+      setIsDarkMode(propDarkMode);
+      return;
+    }
     const checkDark = () => {
       setIsDarkMode(document.documentElement.classList.contains("dark"));
     };
@@ -47,7 +51,7 @@ export default function IndiaNetworkMap() {
     const observer = new MutationObserver(checkDark);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
-  }, []);
+  }, [propDarkMode]);
 
   const hubMap = {};
   HUBS_CONFIG.forEach((h) => {
@@ -137,9 +141,9 @@ export default function IndiaNetworkMap() {
 
         if (isSelected) {
           // Luminous glowing active corridor
-          ctx.strokeStyle = isDarkMode ? "#38bdf8" : "#006591";
+          ctx.strokeStyle = isDarkMode ? "#9ac3a0" : "#3b6d4d";
           ctx.lineWidth = 3.5;
-          ctx.shadowColor = isDarkMode ? "rgba(56, 189, 248, 0.9)" : "rgba(0, 101, 145, 0.6)";
+          ctx.shadowColor = isDarkMode ? "rgba(154, 195, 160, 0.9)" : "rgba(59, 109, 77, 0.6)";
           ctx.shadowBlur = 12;
           ctx.stroke();
 
@@ -147,13 +151,13 @@ export default function IndiaNetworkMap() {
           ctx.beginPath();
           ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
           ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
-          ctx.strokeStyle = isDarkMode ? "rgba(56, 189, 248, 0.3)" : "rgba(0, 101, 145, 0.2)";
+          ctx.strokeStyle = isDarkMode ? "rgba(154, 195, 160, 0.3)" : "rgba(59, 109, 77, 0.2)";
           ctx.lineWidth = 8;
           ctx.shadowBlur = 0;
           ctx.stroke();
         } else {
           // Subtle background route mesh
-          ctx.strokeStyle = isDarkMode ? "rgba(148, 163, 184, 0.22)" : "rgba(100, 116, 139, 0.25)";
+          ctx.strokeStyle = isDarkMode ? "rgba(185, 200, 186, 0.22)" : "rgba(104, 119, 101, 0.27)";
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
           ctx.shadowBlur = 0;
@@ -184,8 +188,8 @@ export default function IndiaNetworkMap() {
         // Draw particle trail
         ctx.beginPath();
         ctx.arc(screenX, screenY, isSelected ? 4.5 : p.size, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? (isDarkMode ? "#ffffff" : "#0284c7") : (isDarkMode ? "#38bdf8" : "#0ea5e9");
-        ctx.shadowColor = isDarkMode ? "#38bdf8" : "#0284c7";
+        ctx.fillStyle = isSelected ? (isDarkMode ? "#f3f1e9" : "#3b6d4d") : (isDarkMode ? "#9ac3a0" : "#6f9974");
+        ctx.shadowColor = isDarkMode ? "#9ac3a0" : "#3b6d4d";
         ctx.shadowBlur = isSelected ? 16 : 8;
         ctx.fill();
         ctx.shadowBlur = 0;
@@ -200,7 +204,7 @@ export default function IndiaNetworkMap() {
 
         ctx.beginPath();
         ctx.arc(hub.x * scaleX, hub.y * scaleY, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = isDarkMode ? `rgba(56, 189, 248, ${opacity})` : `rgba(0, 101, 145, ${opacity})`;
+        ctx.strokeStyle = isDarkMode ? `rgba(154, 195, 160, ${opacity})` : `rgba(59, 109, 77, ${opacity})`;
         ctx.lineWidth = 2;
         ctx.stroke();
       });
@@ -218,15 +222,16 @@ export default function IndiaNetworkMap() {
 
   return (
     <div
-      className="stitch-card"
+      className="stitch-card network-map-card"
+      data-testid="india-network-map"
       style={{
         position: "relative",
         width: "100%",
         borderRadius: 20,
         overflow: "hidden",
-        backgroundColor: isDarkMode ? "#080d1a" : "#f8fafc",
-        border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.2)" : "rgba(0, 101, 145, 0.12)"}`,
-        boxShadow: isDarkMode ? "0 20px 50px rgba(0,0,0,0.5)" : "0 12px 36px rgba(0, 101, 145, 0.08)",
+        backgroundColor: isDarkMode ? "#151b18" : "#fffdf8",
+        border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.2)" : "rgba(59, 109, 77, 0.16)"}`,
+        boxShadow: isDarkMode ? "0 20px 50px rgba(0,0,0,0.35)" : "0 18px 50px rgba(31, 31, 24, 0.08)",
       }}
     >
       {/* Background Radar Grid Pattern */}
@@ -235,8 +240,8 @@ export default function IndiaNetworkMap() {
           position: "absolute",
           inset: 0,
           backgroundImage: isDarkMode
-            ? "radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08) 1px, transparent 1px)"
-            : "radial-gradient(circle at 50% 50%, rgba(0, 101, 145, 0.06) 1px, transparent 1px)",
+            ? "radial-gradient(circle at 50% 50%, rgba(154, 195, 160, 0.08) 1px, transparent 1px)"
+            : "radial-gradient(circle at 50% 50%, rgba(59, 109, 77, 0.08) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
           pointerEvents: "none",
         }}
@@ -263,7 +268,7 @@ export default function IndiaNetworkMap() {
             inset: 0,
             width: "100%",
             height: "100%",
-            filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(56, 189, 248, 0.12))" : "drop-shadow(0 4px 16px rgba(0, 101, 145, 0.08))",
+            filter: isDarkMode ? "drop-shadow(0 4px 24px rgba(154, 195, 160, 0.12))" : "drop-shadow(0 4px 16px rgba(59, 109, 77, 0.1))",
           }}
         >
           <defs>
@@ -276,8 +281,8 @@ export default function IndiaNetworkMap() {
               <stop offset="100%" stopColor="#1e293b" />
             </linearGradient>
             <linearGradient id="state-gradient-light" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#f1f5f9" />
-              <stop offset="100%" stopColor="#e2e8f0" />
+              <stop offset="0%" stopColor="#f4f1e8" />
+              <stop offset="100%" stopColor="#e4e9df" />
             </linearGradient>
           </defs>
 
@@ -287,16 +292,16 @@ export default function IndiaNetworkMap() {
               const isHovered = hoveredState === loc.id;
               const hasActiveHub = (fromHub?.state === loc.name) || (toHub?.state === loc.name);
 
-              let fillColor = isDarkMode ? "#0f172a" : "#f1f5f9";
+              let fillColor = isDarkMode ? "#1b241e" : "#f4f1e8";
               if (hasActiveHub) {
-                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.18)" : "rgba(0, 101, 145, 0.12)";
+                fillColor = isDarkMode ? "rgba(154, 195, 160, 0.18)" : "rgba(59, 109, 77, 0.13)";
               } else if (isHovered) {
-                fillColor = isDarkMode ? "rgba(56, 189, 248, 0.1)" : "rgba(0, 101, 145, 0.08)";
+                fillColor = isDarkMode ? "rgba(154, 195, 160, 0.1)" : "rgba(59, 109, 77, 0.08)";
               }
 
-              let strokeColor = isDarkMode ? "rgba(56, 189, 248, 0.28)" : "rgba(148, 163, 184, 0.65)";
+              let strokeColor = isDarkMode ? "rgba(154, 195, 160, 0.28)" : "rgba(104, 119, 101, 0.62)";
               if (hasActiveHub) {
-                strokeColor = isDarkMode ? "#38bdf8" : "#006591";
+                strokeColor = isDarkMode ? "#9ac3a0" : "#3b6d4d";
               }
 
               return (
@@ -312,6 +317,7 @@ export default function IndiaNetworkMap() {
                     transition: "fill 0.25s ease, stroke 0.25s ease",
                     cursor: "pointer",
                   }}
+                  data-testid={`india-map-state-${loc.id}`}
                   onMouseEnter={() => setHoveredState(loc.id)}
                   onMouseLeave={() => setHoveredState(null)}
                 >
@@ -334,6 +340,7 @@ export default function IndiaNetworkMap() {
                   key={hub.code}
                   transform={`translate(${hub.x}, ${hub.y})`}
                   style={{ cursor: "pointer" }}
+                  data-testid={`india-map-hub-${hub.code.toLowerCase()}`}
                   onMouseEnter={() => setHoveredHub(hub.code)}
                   onMouseLeave={() => setHoveredHub(null)}
                   onClick={() => {
@@ -414,25 +421,25 @@ export default function IndiaNetworkMap() {
               borderRadius: 12,
               backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
               backdropFilter: "blur(16px)",
-              border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.35)" : "rgba(0, 101, 145, 0.2)"}`,
+              border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.35)" : "rgba(59, 109, 77, 0.24)"}`,
               boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
               zIndex: 20,
               pointerEvents: "none",
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 800, color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: isDarkMode ? "#f3f1e9" : "#191917" }}>
               {hubMap[hoveredHub].city} ({hubMap[hoveredHub].code})
             </div>
-            <div style={{ fontSize: 11, color: isDarkMode ? "#94a3b8" : "#64748b", marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: isDarkMode ? "#aaa9a0" : "#77746d", marginTop: 2 }}>
               State: {hubMap[hoveredHub].state}
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 11 }}>
               <div>
-                <span style={{ color: isDarkMode ? "#64748b" : "#94a3b8" }}>Monthly Pax: </span>
-                <strong style={{ color: isDarkMode ? "#38bdf8" : "#006591" }}>{hubMap[hoveredHub].pax}</strong>
+                <span style={{ color: isDarkMode ? "#777f78" : "#aaa69b" }}>Monthly Pax: </span>
+                <strong style={{ color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>{hubMap[hoveredHub].pax}</strong>
               </div>
               <div>
-                <span style={{ color: isDarkMode ? "#64748b" : "#94a3b8" }}>Hub CPI: </span>
+                <span style={{ color: isDarkMode ? "#777f78" : "#aaa69b" }}>Hub CPI: </span>
                 <strong style={{ color: "#22c55e" }}>{hubMap[hoveredHub].cpi}</strong>
               </div>
             </div>
@@ -445,21 +452,21 @@ export default function IndiaNetworkMap() {
         style={{
           margin: "0 16px 16px",
           padding: "16px 20px",
-          borderRadius: 16,
-          backgroundColor: isDarkMode ? "rgba(15, 23, 42, 0.9)" : "rgba(255, 255, 255, 0.95)",
+          borderRadius: 12,
+          backgroundColor: isDarkMode ? "rgba(28, 33, 29, 0.94)" : "rgba(255, 253, 248, 0.96)",
           backdropFilter: "blur(16px)",
-          border: `1px solid ${isDarkMode ? "rgba(56, 189, 248, 0.25)" : "rgba(0, 101, 145, 0.15)"}`,
-          boxShadow: isDarkMode ? "0 8px 30px rgba(0,0,0,0.4)" : "0 4px 16px rgba(0,0,0,0.04)",
+          border: `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.2)" : "rgba(59, 109, 77, 0.16)"}`,
+          boxShadow: isDarkMode ? "0 8px 30px rgba(0,0,0,0.5)" : "0 4px 16px rgba(31, 31, 24, 0.06)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           {/* Active Corridor Details */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#38bdf8" : "#006591", marginBottom: 2 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: isDarkMode ? "#9ac3a0" : "#3b6d4d", marginBottom: 2 }}>
               Active Aviation Corridor
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20, fontWeight: 900, color: isDarkMode ? "#ffffff" : "#0f172a", fontFamily: "var(--font-mono)" }}>
+              <span style={{ fontSize: 20, fontWeight: 900, color: isDarkMode ? "#f3f1e9" : "#191917", fontFamily: "var(--font-mono)" }}>
                 {activeFrom} → {activeTo}
               </span>
               <span
@@ -481,19 +488,19 @@ export default function IndiaNetworkMap() {
           {/* Metric Stats */}
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>Jevons Index</div>
-              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#38bdf8" : "#006591" }}>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>Jevons Index</div>
+              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#9ac3a0" : "#3b6d4d" }}>
                 {selectedRoute?.cpi || "106.0"}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>Average Fare</div>
-              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#ffffff" : "#0f172a" }}>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>Average Fare</div>
+              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: isDarkMode ? "#f3f1e9" : "#191917" }}>
                 {selectedRoute?.fare || "₹6,240"}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: isDarkMode ? "#94a3b8" : "#64748b", textTransform: "uppercase" }}>MoM Movement</div>
+              <div style={{ fontSize: 10, color: isDarkMode ? "#aaa9a0" : "#77746d", textTransform: "uppercase" }}>MoM Movement</div>
               <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--font-mono)", color: "#22c55e" }}>
                 {selectedRoute?.change || "+3.2%"}
               </div>
@@ -509,6 +516,7 @@ export default function IndiaNetworkMap() {
               <button
                 key={`${r.from}-${r.to}`}
                 onClick={() => setSelectedRoute(r)}
+                data-testid={`india-map-route-${r.from.toLowerCase()}-${r.to.toLowerCase()}-button`}
                 style={{
                   padding: "6px 12px",
                   borderRadius: 8,
@@ -517,9 +525,9 @@ export default function IndiaNetworkMap() {
                   fontFamily: "var(--font-mono)",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  backgroundColor: isCurrent ? (isDarkMode ? "#0284c7" : "#006591") : (isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"),
-                  color: isCurrent ? "#ffffff" : (isDarkMode ? "#cbd5e1" : "#475569"),
-                  border: isCurrent ? `1px solid ${isDarkMode ? "#38bdf8" : "#006591"}` : `1px solid ${isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                  backgroundColor: isCurrent ? "#3b6d4d" : (isDarkMode ? "rgba(154, 195, 160, 0.08)" : "rgba(59,109,77,0.06)"),
+                  color: isCurrent ? "#ffffff" : (isDarkMode ? "#f3f1e9" : "#191917"),
+                  border: isCurrent ? `1px solid ${isDarkMode ? "#9ac3a0" : "#3b6d4d"}` : `1px solid ${isDarkMode ? "rgba(154, 195, 160, 0.15)" : "rgba(59,109,77,0.12)"}`,
                   transition: "all 0.2s ease",
                 }}
               >

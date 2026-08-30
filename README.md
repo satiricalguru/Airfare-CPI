@@ -58,9 +58,60 @@ Air transport is one of the most volatile and complex consumer service categorie
   3. **Carrier Pricing Spread**: Visual pricing distribution across IndiGo, Air India, Vistara, Akasa, and SpiceJet with official logos.
   4. **IQR Anomaly Fencing**: Statistical boxplot and outlier detection gate.
 
-### 5. ✈️ Cinematic Aerodynamic Flight Hero
-- **High-Definition Sprint Zero Aircraft**: Smooth day/night flight imagery with seamless theme persistence.
-- **Realistic Flight Cruise Physics**: 20-second alternating multi-phase aerodynamic banking, gentle pitch/roll shifts, and altitude drift simulating cruise flight.
+### 5. 🗺️ Interactive India Domestic Network Map
+- **Live Corridor Topology**: Interactive SVG map rendering India's top 25 high-density domestic aviation routes with key metropolitan hubs (`DEL`, `BOM`, `BLR`, `HYD`, `CCU`, `MAA`, `GOI`).
+- **Dynamic Arc Visualizations**: Route density visualizers and hub traffic share indicators reflecting DGCA passenger weight allocations.
+
+### 6. ✈️ Cinematic Aerodynamic Flight Hero
+- **High-Definition Aircraft Visuals**: Dynamic day/night horizon imagery with seamless theme persistence.
+- **Realistic Interactive Dynamics**: Responsive cursor parallax, subtle aerodynamic drift, and instant headline CPI status badges.
+
+---
+
+## 📂 Repository Structure
+
+```text
+Airfare CPI/
+├── backend/                        # High-Performance FastAPI Econometric Engine
+│   ├── api/
+│   │   ├── main.py                 # 13 REST API endpoints & route controllers
+│   │   └── schemas.py              # Pydantic data schemas & response models
+│   ├── database/
+│   │   ├── db.py                   # SQLite & PostgreSQL asynchronous store
+│   │   └── models.py               # ORM data models (Fares, Routes, Indices)
+│   ├── engine/
+│   │   ├── aggregator.py           # DGCA Laspeyres upper-level aggregation engine
+│   │   ├── jevons.py               # Elementary Jevons geometric mean calculator
+│   │   └── validator.py            # IQR anomaly fencing & data hygiene rules
+│   ├── reports/
+│   │   └── generator.py            # Official MoSPI press bulletin & PDF generator
+│   ├── scraper/
+│   │   ├── pipeline.py             # Playwright stealth collector & scheduler
+│   │   └── seeds.py                # 25 DGCA city-pairs & carrier configs
+│   ├── tests/                      # 30 Comprehensive Pytest Unit & Integration Tests
+│   └── requirements.txt            # Python dependencies (FastAPI, Uvicorn, Playwright)
+│
+├── frontend/                       # Modern Next.js 16 (Turbopack) Dashboard
+│   ├── app/
+│   │   ├── components/
+│   │   │   ├── AviationCopilotModal.jsx  # Gemini 3.5 Flash Lite RAG Copilot
+│   │   │   ├── IndiaNetworkMap.jsx       # Interactive SVG corridor network map
+│   │   │   ├── PriceAlertEngine.jsx      # Automated threshold & price dip watcher
+│   │   │   └── RouteDetailModal.jsx      # 4-tab route intelligence deep-dive
+│   │   ├── data/
+│   │   │   └── mockData.js         # DGCA constants, route matrix & time-series
+│   │   ├── layout.js               # Root layout, Google Fonts & metadata
+│   │   ├── page.js                 # Unified responsive multi-view dashboard
+│   │   └── globals.css             # Editorial Swiss-inspired design system & dark mode
+│   ├── public/                     # High-res day/night aircraft assets & logos
+│   └── package.json                # Frontend dependencies (Next 16, Recharts, Lucide)
+│
+├── data/                           # Historical fare benchmarks & DGCA weighting tables
+├── docs/                           # Architectural diagrams, methodology notes & assets
+├── start.sh                        # 1-Click Automated startup script (Backend + Frontend)
+├── docker-compose.yml              # Container orchestration for production deployments
+└── README.md                       # Comprehensive project documentation & specifications
+```
 
 ---
 

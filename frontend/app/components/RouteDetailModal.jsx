@@ -68,6 +68,11 @@ export default function RouteDetailModal({ route, isOpen, onClose, isDarkMode, o
 
   return (
     <div
+      className="route-detail-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Route analysis for ${originCode} to ${destCode}`}
+      data-testid="route-detail-modal"
       style={{
         position: "fixed",
         inset: 0,
