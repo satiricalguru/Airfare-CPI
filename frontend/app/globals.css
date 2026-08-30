@@ -491,21 +491,15 @@ h1 em, .alert-intro em {
   background: #dad6c8;
   position: relative;
   overflow: hidden;
-}
-
-.hero-visual img {
-  object-fit: cover;
-  filter: saturate(.72) contrast(.94);
-  width: 100%;
-  height: 100%;
-  min-height: 520px;
-  animation: 13s ease-in-out infinite alternate breathe;
+  pointer-events: none;
+  user-select: none;
 }
 
 .hero-visual-overlay {
   background: linear-gradient(90deg, #0d140f1a, #0000 38%, #0d140f33);
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 
 .hero-index-stamp {
@@ -3612,24 +3606,66 @@ html.dark .copilot-input-shell:focus-within {
   background-color: var(--paper);
   min-height: 0;
   box-shadow: none;
-  background-image: url("/hero_day.jpg");
-  background-position: center;
-  background-size: cover;
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
 }
 
-.hero-visual img {
-  object-fit: cover;
-  opacity: 0;
+/* Aerodynamic continuous flight container */
+.hero-plane-flight-wrap {
+  position: absolute;
+  inset: -6% -8%;
+  width: 116%;
+  height: 112%;
   pointer-events: none;
+  overflow: hidden;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  animation: airplaneCruiseFlight 20s cubic-bezier(0.42, 0, 0.58, 1) infinite alternate;
+}
+
+.hero-plane-img {
   width: 100%;
   height: 100%;
-  min-height: 0;
+  object-fit: cover;
+  object-position: center 38%;
+  display: block;
+  pointer-events: none;
+  opacity: 1;
+  filter: saturate(0.85) contrast(1.02);
+  transform-origin: 55% 45%;
+  will-change: transform;
+  animation: airplaneAtmosphericGlide 9s ease-in-out infinite alternate;
+}
+
+/* Atmospheric cloud drift and sun glint layers */
+.hero-cloud-drift {
+  position: absolute;
+  inset: -10% -20%;
+  width: 140%;
+  height: 120%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 65% 45% at 65% 40%, rgba(255, 255, 255, 0.16), transparent 70%);
+  mix-blend-mode: soft-light;
+  will-change: transform, opacity;
+  animation: heroCloudDrift 22s ease-in-out infinite alternate;
+}
+
+.hero-sun-glint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.14) 50%, transparent 60%);
+  mix-blend-mode: overlay;
+  will-change: transform, opacity;
+  animation: heroSunGlint 12s ease-in-out infinite alternate;
 }
 
 .hero-visual-overlay {
   background: linear-gradient(90deg, #f7f5f05c, #f7f5f00a 62%, #0d140f38);
+  pointer-events: none;
 }
 
 .hero-copy, .hero-index-stamp, .hero-caption {
@@ -3693,11 +3729,6 @@ html.dark .copilot-input-shell:focus-within {
   right: 5vw;
 }
 
-.hero-visual {
-  will-change: transform, background-position;
-  animation: 22s ease-in-out infinite alternate hero-background-pan;
-}
-
 html.dark .page-wrap-home > .hero-section:after {
   background: linear-gradient(90deg, #0e120fed 0%, #0e120fc9 28%, #0e120f47 64%, #070c1261 100%);
 }
@@ -3706,8 +3737,12 @@ html.dark .hero-visual-overlay {
   background: linear-gradient(90deg, #080e1438, #080e140a 58%, #04080e66);
 }
 
-html.dark .hero-visual {
-  background-image: url("/hero_night.jpg");
+html.dark .hero-plane-img {
+  filter: saturate(0.92) brightness(0.95) contrast(1.05);
+}
+
+html.dark .hero-cloud-drift {
+  background: radial-gradient(ellipse 55% 38% at 65% 40%, rgba(138, 180, 248, 0.1), transparent 70%);
 }
 
 html.dark .hero-index-stamp {
@@ -3738,10 +3773,10 @@ html.dark .hero-index-stamp span, html.dark .hero-index-stamp small {
     max-width: 680px;
   }
 
-  .hero-visual {
-    background-position: 68%;
-    min-height: 0;
-    animation-name: hero-background-pan-mobile;
+  .hero-plane-flight-wrap {
+    inset: -4% -15%;
+    width: 130%;
+    height: 108%;
   }
 
   .hero-index-stamp {
@@ -3756,33 +3791,72 @@ html.dark .hero-index-stamp span, html.dark .hero-index-stamp small {
   }
 }
 
-@keyframes hero-background-pan {
+/* Authentic aerodynamic flight physics */
+@keyframes airplaneCruiseFlight {
   0% {
-    background-position: 52%;
+    transform: translate3d(-32px, 14px, 0) rotate(-0.9deg) scale(1.05);
   }
-
+  25% {
+    transform: translate3d(-10px, -6px, 0) rotate(-0.25deg) scale(1.065);
+  }
+  50% {
+    transform: translate3d(10px, 8px, 0) rotate(0.4deg) scale(1.075);
+  }
+  75% {
+    transform: translate3d(24px, -10px, 0) rotate(0.75deg) scale(1.085);
+  }
   100% {
-    background-position: 58% 47%;
+    transform: translate3d(36px, -4px, 0) rotate(1.15deg) scale(1.095);
   }
 }
 
-@keyframes hero-background-pan-mobile {
-  0% {
-    background-position: 64%;
+@keyframes airplaneAtmosphericGlide {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
   }
+  33% {
+    transform: translate3d(3px, -4px, 0) rotate(0.2deg);
+  }
+  66% {
+    transform: translate3d(-3px, 3px, 0) rotate(-0.2deg);
+  }
+}
 
+@keyframes heroCloudDrift {
+  0% {
+    transform: translate3d(-40px, 0, 0);
+    opacity: 0.35;
+  }
   100% {
-    background-position: 70% 47%;
+    transform: translate3d(40px, -12px, 0);
+    opacity: 0.75;
+  }
+}
+
+@keyframes heroSunGlint {
+  0% {
+    opacity: 0.08;
+    transform: translateX(-25%);
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0.15;
+    transform: translateX(25%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-visual {
+  .hero-plane-flight-wrap,
+  .hero-plane-img,
+  .hero-cloud-drift,
+  .hero-sun-glint {
     animation: none !important;
     transform: none !important;
   }
 
-  .hero-visual, .hero-visual img, .button, .text-button, .icon-button {
+  .hero-visual, .hero-plane-img, .button, .text-button, .icon-button {
     transition: none !important;
   }
 }
