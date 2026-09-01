@@ -1,227 +1,514 @@
 """
-SIH26056 — Fare Observation Validator
+SIH26056 — Fare observation validation.
 
-Validates incoming fare observations before they enter the index pipeline.
-Classification: scraping error → exclude | genuine anomaly → flag + preserve.
+Philosophy, unchanged from the original and still correct: a scraping/parsing error
+is EXCLUDED; genuine market volatility is FLAGGED and kept. Airfares really are
+volatile, and an index that quietly deletes real volatility is not measuring the
+market.
+
+What changed
+------------
+* ``max_daily_change_pct`` is enforced per route AND per booking horizon. Comparing a
+  same-day fare against yesterday's 30-day-advance median would flag the horizon
+  gap, not a price movement.
+* The IQR reference distribution no longer admits observations that were themselves
+  flagged as outliers. Previously each accepted outlier widened the fences, which
+  progressively desensitised the filter — a slow drift toward accepting anything.
+* Validator state is serialisable (:meth:`FareValidator.export_state` /
+  :meth:`restore_state`) and persisted, so fences do not reset on restart. Previously
+  the first ten observations after every restart went unchecked and results were not
+  reproducible.
+* Missing data has an explicit, enumerated policy (:class:`MissingDataReason`)
+  instead of being silently absorbed. Nothing is imputed at the basket average.
 """
 
-import numpy as np
+from __future__ import annotations
+
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
+from enum import Enum
+from typing import Any, Iterable, Optional
+
+import numpy as np
 from loguru import logger
+
+from config import ValidationSettings, get_settings
+from scraper.base import FareObservation
+
+
+class ValidationAction(str, Enum):
+    ACCEPTED = "accepted"
+    FLAGGED = "flagged"
+    EXCLUDED = "excluded"
+
+
+class MissingDataReason(str, Enum):
+    """
+    Enumerated reasons an index value may be unavailable.
+
+    Every one of these produces a recorded, published reason rather than an imputed
+    number. The previous aggregator divided by the active weight sum, which silently
+    imputed an absent route at the basket average — a fabricated observation wearing
+    the basket's clothes.
+    """
+
+    # No observation at all for a route in the period.
+    ROUTE_NOT_COLLECTED = "route_not_collected"
+    # A source failed for this route; distinct from the route not being in the basket.
+    SOURCE_FAILURE = "source_failure"
+    # Route was withdrawn from the basket; it exits the index rather than being
+    # carried forward at a stale level.
+    ROUTE_DISCONTINUED = "route_discontinued"
+    # Observations exist but too few products matched between base and current period.
+    INSUFFICIENT_MATCHED_OBSERVATIONS = "insufficient_matched_observations"
+    # Fewer horizons than the policy minimum.
+    INSUFFICIENT_HORIZONS = "insufficient_horizons"
+    # No base-period observation for this product/route, so no relative is computable.
+    NO_BASE_PERIOD_DATA = "no_base_period_data"
+    # A component (base fare / taxes) was absent, so the record could not be used.
+    MISSING_FARE_COMPONENT = "missing_fare_component"
+
+    @property
+    def description(self) -> str:
+        return _MISSING_DATA_DESCRIPTIONS[self]
+
+
+_MISSING_DATA_DESCRIPTIONS: dict[MissingDataReason, str] = {
+    MissingDataReason.ROUTE_NOT_COLLECTED: (
+        "No observations were collected for this route in the period. The route is "
+        "omitted from the aggregate and its absence is recorded; its weight is NOT "
+        "redistributed as an implied basket-average price movement."
+    ),
+    MissingDataReason.SOURCE_FAILURE: (
+        "Collection was attempted and failed. The route is omitted and the failure is "
+        "recorded against the collection run. No value is substituted."
+    ),
+    MissingDataReason.ROUTE_DISCONTINUED: (
+        "The route has left the basket. It exits the index from this period onward "
+        "rather than being carried forward at its last observed level."
+    ),
+    MissingDataReason.INSUFFICIENT_MATCHED_OBSERVATIONS: (
+        "Observations exist but fewer than the minimum number of products could be "
+        "matched between the base and current periods, so no defensible price "
+        "relative can be formed."
+    ),
+    MissingDataReason.INSUFFICIENT_HORIZONS: (
+        "Fewer booking horizons produced an index than the horizon policy requires, so "
+        "the combined route index would be dominated by whichever horizons happened to "
+        "be present."
+    ),
+    MissingDataReason.NO_BASE_PERIOD_DATA: (
+        "No base-period observation exists for this route or product, so there is no "
+        "reference price against which to compute a relative."
+    ),
+    MissingDataReason.MISSING_FARE_COMPONENT: (
+        "A required fare component was absent from the source payload and the "
+        "observation could not be used."
+    ),
+}
 
 
 @dataclass
 class ValidationResult:
-    """Result of validating a fare observation."""
+    """Outcome of validating one observation."""
+
     is_valid: bool
-    flags: list[str] = field(default_factory=list)
+    action: ValidationAction
+    flags: tuple[str, ...] = ()
     anomaly_type: Optional[str] = None
     severity: Optional[str] = None
-    action: str = "accepted"  # accepted / flagged / excluded
+    # Populated for exclusions and flags: the numbers that triggered the decision, so
+    # a review can reproduce the judgement.
+    detail: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def excluded(self) -> bool:
+        return self.action is ValidationAction.EXCLUDED
+
+
+@dataclass
+class ValidationBatchResult:
+    accepted: list[FareObservation] = field(default_factory=list)
+    flagged: list[FareObservation] = field(default_factory=list)
+    excluded: list[FareObservation] = field(default_factory=list)
+    # observation index -> result, aligned with the sorted processing order
+    results: list[ValidationResult] = field(default_factory=list)
+
+    @property
+    def usable(self) -> list[FareObservation]:
+        """Observations admitted to the index: accepted plus flagged-but-genuine."""
+        return self.accepted + self.flagged
+
+    @property
+    def total(self) -> int:
+        return len(self.accepted) + len(self.flagged) + len(self.excluded)
+
+    def summary(self) -> dict[str, Any]:
+        flag_counts: dict[str, int] = {}
+        for obs in self.flagged:
+            for flag in obs.validation_flags:
+                key = flag.split("_")[0] if flag[0].isalpha() else flag
+                flag_counts[flag] = flag_counts.get(flag, 0) + 1
+        return {
+            "total": self.total,
+            "accepted": len(self.accepted),
+            "flagged": len(self.flagged),
+            "excluded": len(self.excluded),
+            "valid_pct": (
+                round(len(self.usable) / self.total * 100, 2) if self.total else None
+            ),
+            "flag_counts": flag_counts,
+        }
+
+
+@dataclass
+class RouteHorizonStats:
+    """
+    Rolling reference distribution for one (route, horizon) pair.
+
+    ``prices`` holds only CLEAN observations — those not flagged as statistical
+    outliers. That is the contamination fix: an outlier is judged against the clean
+    distribution and then withheld from it, so the fences cannot ratchet outward.
+    """
+
+    clean_prices: deque[float]
+    daily_medians: dict[str, float] = field(default_factory=dict)
+    daily_prices: dict[str, list[float]] = field(default_factory=dict)
+    outliers_withheld: int = 0
+
+    @property
+    def count(self) -> int:
+        return len(self.clean_prices)
+
+    def fences(self, multiplier: float) -> Optional[tuple[float, float, float]]:
+        """Returns (lower_fence, upper_fence, median) or None if underpowered."""
+        if len(self.clean_prices) < 4:
+            return None
+        arr = np.asarray(self.clean_prices, dtype=float)
+        q1 = float(np.percentile(arr, 25))
+        q3 = float(np.percentile(arr, 75))
+        iqr = q3 - q1
+        return q1 - multiplier * iqr, q3 + multiplier * iqr, float(np.median(arr))
 
 
 class FareValidator:
     """
-    Validates fare observations for data quality.
-    
-    Rules:
-    1. EXCLUDE: Clearly bad data (zero fares, impossible values, scrape errors)
-    2. FLAG: Unusual but potentially genuine (spikes, deep discounts)
-    3. ACCEPT: Normal observations that pass all checks
-    
-    Philosophy: Never automatically remove genuine market volatility.
-    Airfares ARE volatile — the index should reflect this.
+    Validates observations before they reach the index.
+
+    State is explicitly exportable so the reference distributions survive process
+    restarts. A price index whose outlier filter behaves differently depending on how
+    recently the server was restarted is not reproducible.
     """
-    
+
     def __init__(
         self,
-        min_fare: float = 500.0,        # ₹500 minimum for domestic economy
-        max_fare: float = 80000.0,       # ₹80,000 cap for domestic economy
-        max_daily_change_pct: float = 300.0,  # Flag if >300% change from prior day
-        iqr_multiplier: float = 3.0,     # IQR fence multiplier
+        settings: Optional[ValidationSettings] = None,
+        history_window: Optional[int] = None,
     ):
-        self.min_fare = min_fare
-        self.max_fare = max_fare
-        self.max_daily_change_pct = max_daily_change_pct
-        self.iqr_multiplier = iqr_multiplier
-        
-        # Rolling statistics per route (populated as data flows through)
-        self._route_stats: dict[int, dict] = {}
-    
-    def validate(
-        self,
-        fare_total: float,
-        fare_base: Optional[float],
-        fare_taxes: Optional[float],
-        route_id: int,
-        airline_code: str,
-        booking_horizon: int,
-        departure_date: date,
-        cabin_class: str = "Economy",
-    ) -> ValidationResult:
+        cfg = settings or get_settings().validation
+        self.min_fare = cfg.min_fare_inr
+        self.max_fare = cfg.max_fare_inr
+        self.max_daily_change_pct = cfg.max_daily_change_pct
+        self.iqr_multiplier = cfg.iqr_multiplier
+        self.min_observations_for_iqr = cfg.min_observations_for_iqr
+        self.history_window = history_window or cfg.route_history_window
+
+        # (route_id, horizon) -> RouteHorizonStats
+        self._stats: dict[tuple[int, int], RouteHorizonStats] = {}
+
+    # ── state persistence ──
+
+    def export_state(self) -> dict[str, Any]:
         """
-        Validate a single fare observation.
-        
-        Returns ValidationResult with is_valid, flags, and action.
+        Serialise reference distributions for persistence.
+
+        Keys are ``"routeid:horizon"`` strings so the structure survives a JSON round
+        trip.
         """
-        flags = []
-        
-        # ── HARD EXCLUSIONS (data errors) ──
-        
-        # Zero or negative fare
-        if fare_total <= 0:
-            return ValidationResult(
-                is_valid=False,
-                flags=["zero_or_negative_fare"],
-                anomaly_type="scrape_error",
-                severity="critical",
-                action="excluded",
+        return {
+            "version": 2,
+            "iqr_multiplier": self.iqr_multiplier,
+            "max_daily_change_pct": self.max_daily_change_pct,
+            "stats": {
+                f"{route_id}:{horizon}": {
+                    "clean_prices": list(stats.clean_prices),
+                    "daily_medians": dict(stats.daily_medians),
+                    "outliers_withheld": stats.outliers_withheld,
+                }
+                for (route_id, horizon), stats in self._stats.items()
+            },
+        }
+
+    def restore_state(self, state: dict[str, Any]) -> None:
+        """Rehydrate reference distributions saved by :meth:`export_state`."""
+        if not state or state.get("version") != 2:
+            if state:
+                logger.warning(
+                    f"Ignoring validator state with unsupported version "
+                    f"{state.get('version')!r}; fences will rebuild from new data."
+                )
+            return
+
+        restored = 0
+        for key, payload in (state.get("stats") or {}).items():
+            try:
+                route_part, _, horizon_part = str(key).partition(":")
+                route_id, horizon = int(route_part), int(horizon_part)
+            except ValueError:
+                logger.warning(f"Skipping unparseable validator state key {key!r}")
+                continue
+            self._stats[(route_id, horizon)] = RouteHorizonStats(
+                clean_prices=deque(
+                    [float(p) for p in payload.get("clean_prices", [])],
+                    maxlen=self.history_window,
+                ),
+                daily_medians={
+                    str(k): float(v) for k, v in (payload.get("daily_medians") or {}).items()
+                },
+                outliers_withheld=int(payload.get("outliers_withheld", 0)),
             )
-        
-        # Below absolute minimum
-        if fare_total < self.min_fare:
-            return ValidationResult(
-                is_valid=False,
-                flags=[f"below_minimum_fare_{self.min_fare}"],
-                anomaly_type="scrape_error",
-                severity="high",
-                action="excluded",
-            )
-        
-        # Above absolute maximum
-        if fare_total > self.max_fare:
-            return ValidationResult(
-                is_valid=False,
-                flags=[f"above_maximum_fare_{self.max_fare}"],
-                anomaly_type="scrape_error",
-                severity="high",
-                action="excluded",
-            )
-        
-        # Tax/base consistency check
-        if fare_base is not None and fare_taxes is not None:
-            expected_total = fare_base + fare_taxes
-            if abs(fare_total - expected_total) > 1.0:  # Allow ₹1 rounding
-                flags.append("fare_total_mismatch")
-        
-        # Taxes > 50% of total (suspicious)
-        if fare_taxes is not None and fare_total > 0:
-            tax_pct = fare_taxes / fare_total
-            if tax_pct > 0.50:
-                flags.append("high_tax_ratio")
-            if tax_pct < 0.05:
-                flags.append("suspiciously_low_tax")
-        
-        # ── SOFT FLAGS (genuine but unusual) ──
-        
-        # Statistical outlier check against route history
-        route_stat = self._route_stats.get(route_id)
-        if route_stat and route_stat.get("count", 0) >= 10:
-            median = route_stat["median"]
-            q1 = route_stat["q1"]
-            q3 = route_stat["q3"]
-            iqr = q3 - q1
-            
-            lower_fence = q1 - self.iqr_multiplier * iqr
-            upper_fence = q3 + self.iqr_multiplier * iqr
-            
-            if fare_total < lower_fence:
-                flags.append(f"statistical_low_outlier_iqr{self.iqr_multiplier}")
-            elif fare_total > upper_fence:
-                flags.append(f"statistical_high_outlier_iqr{self.iqr_multiplier}")
-        
-        # Booking horizon sanity
-        if booking_horizon == 30 and fare_total > 25000:
-            flags.append("high_fare_for_30day_advance")
-        if booking_horizon == 0 and fare_total < 1500:
-            flags.append("suspiciously_low_sameday_fare")
-        
-        # ── UPDATE ROUTE STATS ──
-        self._update_route_stats(route_id, fare_total)
-        
-        # ── DETERMINE RESULT ──
-        if flags:
-            severity = "low" if len(flags) == 1 else "medium"
-            return ValidationResult(
-                is_valid=True,  # Flagged but not excluded
-                flags=flags,
-                anomaly_type="potential_anomaly",
-                severity=severity,
-                action="flagged",
-            )
-        
-        return ValidationResult(
-            is_valid=True,
-            flags=[],
-            action="accepted",
-        )
-    
-    def validate_batch(
-        self,
-        observations: list[dict],
-    ) -> tuple[list[dict], list[dict], list[dict]]:
-        """
-        Validate a batch of observations.
-        
-        Returns:
-            (accepted, flagged, excluded) — three lists
-        """
-        accepted = []
-        flagged = []
-        excluded = []
-        
-        for obs in observations:
-            result = self.validate(
-                fare_total=obs.get("fare_total", 0),
-                fare_base=obs.get("fare_base"),
-                fare_taxes=obs.get("fare_taxes"),
-                route_id=obs.get("route_id", 0),
-                airline_code=obs.get("airline_code", ""),
-                booking_horizon=obs.get("booking_horizon_days", 0),
-                departure_date=date.fromisoformat(obs.get("departure_date", "2026-01-01")),
-                cabin_class=obs.get("cabin_class", "Economy"),
-            )
-            
-            obs["is_valid"] = result.is_valid
-            obs["validation_flags"] = result.flags
-            
-            if result.action == "excluded":
-                excluded.append(obs)
-            elif result.action == "flagged":
-                flagged.append(obs)
-            else:
-                accepted.append(obs)
-        
+            restored += 1
+
         logger.info(
-            f"Validation: {len(accepted)} accepted, "
-            f"{len(flagged)} flagged, {len(excluded)} excluded "
-            f"(of {len(observations)} total)"
+            f"Restored validator reference distributions for {restored} "
+            f"(route, horizon) pair(s); IQR fences are continuous across restart"
         )
-        
-        return accepted, flagged, excluded
-    
-    def _update_route_stats(self, route_id: int, fare: float):
-        """Update rolling statistics for a route."""
-        if route_id not in self._route_stats:
-            self._route_stats[route_id] = {
-                "prices": [],
-                "count": 0,
-                "median": 0,
-                "q1": 0,
-                "q3": 0,
-            }
-        
-        stats = self._route_stats[route_id]
-        stats["prices"].append(fare)
-        
-        # Keep only last 500 observations per route
-        if len(stats["prices"]) > 500:
-            stats["prices"] = stats["prices"][-500:]
-        
-        prices = np.array(stats["prices"])
-        stats["count"] = len(prices)
-        stats["median"] = float(np.median(prices))
-        stats["q1"] = float(np.percentile(prices, 25))
-        stats["q3"] = float(np.percentile(prices, 75))
+
+    # ── single observation ──
+
+    def validate(self, obs: FareObservation) -> ValidationResult:
+        """Validate one observation against hard limits and rolling statistics."""
+        flags: list[str] = []
+        detail: dict[str, Any] = {}
+
+        fare = obs.fare_total
+
+        # ── hard exclusions: these indicate a collection or parsing error ──
+        if fare <= 0:
+            return ValidationResult(
+                is_valid=False,
+                action=ValidationAction.EXCLUDED,
+                flags=("zero_or_negative_fare",),
+                anomaly_type="collection_error",
+                severity="critical",
+                detail={"fare_total": fare},
+            )
+
+        if fare < self.min_fare:
+            return ValidationResult(
+                is_valid=False,
+                action=ValidationAction.EXCLUDED,
+                flags=(f"below_minimum_fare_{self.min_fare:.0f}",),
+                anomaly_type="collection_error",
+                severity="high",
+                detail={"fare_total": fare, "min_fare": self.min_fare},
+            )
+
+        if fare > self.max_fare:
+            return ValidationResult(
+                is_valid=False,
+                action=ValidationAction.EXCLUDED,
+                flags=(f"above_maximum_fare_{self.max_fare:.0f}",),
+                anomaly_type="collection_error",
+                severity="high",
+                detail={"fare_total": fare, "max_fare": self.max_fare},
+            )
+
+        # ── component consistency ──
+        if obs.fare_base is not None and obs.fare_taxes is not None:
+            expected = obs.fare_base + obs.fare_taxes
+            if abs(fare - expected) > 1.0:  # allow INR 1 of rounding
+                flags.append("fare_component_mismatch")
+                detail["component_sum"] = round(expected, 2)
+
+        if obs.fare_taxes is not None and fare > 0:
+            tax_share = obs.fare_taxes / fare
+            if tax_share > 0.50:
+                flags.append("high_tax_ratio")
+                detail["tax_share"] = round(tax_share, 4)
+            elif tax_share < 0.05:
+                flags.append("suspiciously_low_tax_ratio")
+                detail["tax_share"] = round(tax_share, 4)
+
+        key = (obs.route_id, obs.booking_horizon_days)
+        stats = self._stats.get(key)
+        is_statistical_outlier = False
+
+        # ── IQR fencing against the CLEAN distribution ──
+        if stats and stats.count >= self.min_observations_for_iqr:
+            fence = stats.fences(self.iqr_multiplier)
+            if fence:
+                lower, upper, median = fence
+                if fare < lower:
+                    flags.append(f"statistical_low_outlier_iqr{self.iqr_multiplier:g}")
+                    is_statistical_outlier = True
+                elif fare > upper:
+                    flags.append(f"statistical_high_outlier_iqr{self.iqr_multiplier:g}")
+                    is_statistical_outlier = True
+                if is_statistical_outlier:
+                    detail.update({
+                        "iqr_lower_fence": round(lower, 2),
+                        "iqr_upper_fence": round(upper, 2),
+                        "reference_median": round(median, 2),
+                        "reference_sample_size": stats.count,
+                    })
+
+        # ── day-over-day movement, per route AND horizon ──
+        prior_median = self._prior_day_median(key, obs.collection_date)
+        if prior_median and prior_median > 0:
+            change_pct = abs(fare - prior_median) / prior_median * 100
+            if change_pct > self.max_daily_change_pct:
+                direction = "spike" if fare > prior_median else "collapse"
+                flags.append(
+                    f"daily_change_{direction}_{change_pct:.0f}pct"
+                    f"_exceeds_{self.max_daily_change_pct:.0f}pct"
+                )
+                detail.update({
+                    "prior_day_median": round(prior_median, 2),
+                    "daily_change_pct": round(change_pct, 2),
+                })
+
+        # ── horizon plausibility ──
+        if obs.booking_horizon_days >= 30 and fare > 25000:
+            flags.append("high_fare_for_advance_purchase")
+        if obs.booking_horizon_days == 0 and fare < 1500:
+            flags.append("suspiciously_low_same_day_fare")
+
+        # ── update reference state ──
+        # Order matters: the observation is judged first, then recorded, so it never
+        # participates in judging itself. Outliers update the daily series (they are
+        # real quotes) but are withheld from the IQR reference distribution.
+        self._record(key, obs.collection_date, fare, is_clean=not is_statistical_outlier)
+
+        if flags:
+            return ValidationResult(
+                is_valid=True,  # flagged, not excluded: genuine volatility is kept
+                action=ValidationAction.FLAGGED,
+                flags=tuple(flags),
+                anomaly_type="potential_anomaly",
+                severity="low" if len(flags) == 1 else "medium",
+                detail=detail,
+            )
+
+        return ValidationResult(is_valid=True, action=ValidationAction.ACCEPTED)
+
+    # ── batch ──
+
+    def validate_batch(
+        self, observations: Iterable[FareObservation]
+    ) -> ValidationBatchResult:
+        """
+        Validate a batch in collection-date order.
+
+        Sorting first is what makes the day-over-day check meaningful: the comparison
+        must be against a genuinely earlier day, not against whatever order the batch
+        happened to arrive in.
+        """
+        ordered = sorted(
+            observations,
+            key=lambda o: (o.collection_datetime, o.route_id, o.booking_horizon_days),
+        )
+
+        batch = ValidationBatchResult()
+        for obs in ordered:
+            result = self.validate(obs)
+            annotated = obs.with_validation(result.is_valid, result.flags)
+            batch.results.append(result)
+
+            if result.action is ValidationAction.EXCLUDED:
+                batch.excluded.append(annotated)
+            elif result.action is ValidationAction.FLAGGED:
+                batch.flagged.append(annotated)
+            else:
+                batch.accepted.append(annotated)
+
+        if batch.total:
+            logger.info(
+                f"Validation: {len(batch.accepted)} accepted, {len(batch.flagged)} "
+                f"flagged, {len(batch.excluded)} excluded (of {batch.total})"
+            )
+        return batch
+
+    # ── internal state helpers ──
+
+    def _stats_for(self, key: tuple[int, int]) -> RouteHorizonStats:
+        if key not in self._stats:
+            self._stats[key] = RouteHorizonStats(
+                clean_prices=deque(maxlen=self.history_window)
+            )
+        return self._stats[key]
+
+    def _prior_day_median(
+        self, key: tuple[int, int], observation_date: date
+    ) -> Optional[float]:
+        """
+        Median for this (route, horizon) on the most recent day strictly before
+        ``observation_date``. None on the first day: there is nothing to compare to,
+        so no flag is warranted.
+        """
+        stats = self._stats.get(key)
+        if not stats or not stats.daily_medians:
+            return None
+        current = observation_date.isoformat()
+        prior = [d for d in stats.daily_medians if d < current]
+        if not prior:
+            return None
+        return stats.daily_medians[max(prior)]
+
+    def _record(
+        self, key: tuple[int, int], observation_date: date, fare: float, is_clean: bool
+    ) -> None:
+        stats = self._stats_for(key)
+        day = observation_date.isoformat()
+
+        # Daily medians include outliers: they are real quotes and the day-over-day
+        # check should reflect the actual market level.
+        prices = stats.daily_prices.setdefault(day, [])
+        prices.append(fare)
+        stats.daily_medians[day] = float(np.median(prices))
+
+        if is_clean:
+            stats.clean_prices.append(fare)
+        else:
+            stats.outliers_withheld += 1
+
+        # Bounded retention: 90 days of daily reference levels per (route, horizon).
+        if len(stats.daily_medians) > 90:
+            for stale in sorted(stats.daily_medians)[:-90]:
+                stats.daily_medians.pop(stale, None)
+                stats.daily_prices.pop(stale, None)
+
+    # ── introspection, surfaced by the API ──
+
+    def diagnostics(self) -> dict[str, Any]:
+        """Reference-distribution state, for the monitoring endpoint."""
+        pairs = len(self._stats)
+        ready = sum(
+            1 for s in self._stats.values() if s.count >= self.min_observations_for_iqr
+        )
+        return {
+            "tracked_route_horizon_pairs": pairs,
+            "pairs_with_active_iqr_fences": ready,
+            "min_observations_for_iqr": self.min_observations_for_iqr,
+            "iqr_multiplier": self.iqr_multiplier,
+            "max_daily_change_pct": self.max_daily_change_pct,
+            "min_fare_inr": self.min_fare,
+            "max_fare_inr": self.max_fare,
+            "outliers_withheld_from_reference": sum(
+                s.outliers_withheld for s in self._stats.values()
+            ),
+            "reference_distribution_is_outlier_free": True,
+        }
+
+
+def missing_data_policy() -> list[dict[str, str]]:
+    """The enumerated missing-data policy, exposed on the methodology endpoint."""
+    return [
+        {
+            "reason": reason.value,
+            "policy": reason.description,
+            "imputation": "none",
+        }
+        for reason in MissingDataReason
+    ]

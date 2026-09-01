@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-page-custom-font */
 import "./globals.css";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
@@ -29,7 +30,6 @@ export default function RootLayout({ children }) {
         <link rel="icon" type="image/png" sizes="32x32" href={`${basePath}/favicon-32x32.png?v=2`} />
         <link rel="icon" type="image/png" sizes="192x192" href={`${basePath}/favicon.png?v=2`} />
         <link rel="icon" type="image/x-icon" href={`${basePath}/favicon.ico?v=2`} />
-        <link rel="shortcut icon" href={`${basePath}/favicon.ico?v=2`} />
         <link rel="apple-touch-icon" sizes="180x180" href={`${basePath}/apple-touch-icon.png?v=2`} />
       </head>
       <body className="antialiased" suppressHydrationWarning>{children}</body>

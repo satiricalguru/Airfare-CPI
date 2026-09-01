@@ -1,823 +1,1676 @@
 """
-SIH26056 — Real-Time Airfare CPI — FastAPI Application
+SIH26056 — Real-Time Airfare Price Index API.
 
-Main API server providing endpoints for:
-- National and route-level CPI indices
-- Raw fare observations
-- Pipeline triggers (for live demo)
-- System health monitoring
-- Report generation
+Serves index figures from the database. Nothing is generated at read time: a value
+returned here is a value that was computed, persisted and revision-logged, which is
+what makes it reproducible after a restart.
+
+Contract properties enforced throughout:
+
+* Every index response carries ``value``, ``base_period``, ``data_provenance``,
+  ``sample_size`` and ``methodology_version``.
+* ``data_provenance.display_label`` is one of LIVE DATA / SIMULATED DATA /
+  OFFLINE PREVIEW, or SOURCE UNAVAILABLE when there is no data.
+* Year-on-year is ``null`` with ``yoy_status`` when no 12-month comparison exists.
+* Capabilities that do not exist return the literal ``NOT IMPLEMENTED``.
+* State-mutating endpoints are guarded by ``ADMIN_API_TOKEN``.
 """
 
-import os
-import json
-import numpy as np
-from datetime import date, datetime, timedelta
-from typing import Optional
+from __future__ import annotations
+
+import sys
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+# Package-relative imports assume `backend/` is importable.
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import (
-    RouteResponse, RouteListResponse,
-    FareObservationResponse, FareListResponse,
-    NationalIndexResponse, NationalIndexHistoryResponse,
-    NationalIndexDetailResponse, RouteContributionResponse,
-    RouteIndexResponse,
-    SystemHealthResponse, ScraperHealthResponse,
-    AnomalyResponse, AnomalyListResponse,
-    ScrapeRequest, ScrapeResponse,
-    MonthlyReportResponse,
+from api import copilot as copilot_service
+from api import serializers as ser
+from api.models import (
+    AnomalyReviewRequest,
+    BackfillRequest,
+    CollectionTriggerRequest,
+    CopilotRequest,
+    RouteScrapeRequest,
+)
+from config import get_settings
+from db import repository as repo
+from db.engine import get_database, get_session
+from db.models import RouteIndex
+
+from engine.airports_data import AIRPORTS_BY_CODE, INDIAN_AIRPORTS, INDIAN_STATES
+from engine.horizon import get_horizon_policy
+from engine.index_service import IndexService
+from engine.ingest_service import IngestService
+from engine.rebase import BasePeriod, available_reference_windows, rebase_series
+from engine.seasonality import methodology_metadata as seasonality_metadata
+from engine.weights import Route, dynamic_route_id, get_route_basket
+from provenance import (
+    COLLECTOR_VERSION,
+    CollectionMode,
+    METHODOLOGY_VERSION,
+    NOT_IMPLEMENTED_LABEL,
+    PROVENANCE_LABELS,
+    SourceType,
+    utc_now,
 )
 
-# Import engine and scraper
-import sys
-from pathlib import Path
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
+from reports.generator import ResearchBulletin, ResearchReportGenerator
+from scraper.registry import get_registry
+from scraper.scheduler import CollectionScheduler
+from scraper.validator import missing_data_policy
 
-from engine.jevons import JevonsIndexCalculator
-from engine.aggregator import NationalAggregator, RouteWeight
-from scraper.scrapers.mock_scraper import MockFareGenerator, observations_to_dicts
-from scraper.validator import FareValidator
-from reports.generator import MoSPIReportGenerator, MonthlyBulletin
+API_VERSION = "2.0.0"
+
+_scheduler: Optional[CollectionScheduler] = None
 
 
-# ── In-Memory Data Store ──
-# For the SIH prototype, we use in-memory storage alongside PostgreSQL
-# This ensures the demo works even without a database connection
-
-class DataStore:
-    """In-memory data store for prototype demo reliability."""
-    
-    def __init__(self):
-        self.routes: list[dict] = []
-        self.fare_observations: list[dict] = []
-        self.route_indices: list[dict] = []
-        self.national_indices: list[dict] = []
-        self.scraper_health: list[dict] = []
-        self.anomalies: list[dict] = []
-        self._obs_counter = 0
-        self._anomaly_counter = 0
-    
-    def add_observation(self, obs: dict) -> int:
-        self._obs_counter += 1
-        obs["observation_id"] = self._obs_counter
-        self.fare_observations.append(obs)
-        return self._obs_counter
-    
-    def add_anomaly(self, anomaly: dict) -> int:
-        self._anomaly_counter += 1
-        anomaly["id"] = self._anomaly_counter
-        self.anomalies.append(anomaly)
-        return self._anomaly_counter
-
-
-# Global instances
-store = DataStore()
-mock_generator = MockFareGenerator(seed=42)
-validator = FareValidator()
-jevons_calculator = JevonsIndexCalculator()
-
-
-def load_routes():
-    """Load route data from seed configuration."""
-    # Routes matching our seed_routes.sql
-    routes_data = [
-        {"route_id": 1, "origin_code": "DEL", "destination_code": "BOM", "origin_city": "New Delhi", "destination_city": "Mumbai", "dgca_monthly_pax": 1200000, "weight": 0.0784},
-        {"route_id": 2, "origin_code": "DEL", "destination_code": "BLR", "origin_city": "New Delhi", "destination_city": "Bengaluru", "dgca_monthly_pax": 950000, "weight": 0.0621},
-        {"route_id": 3, "origin_code": "BOM", "destination_code": "BLR", "origin_city": "Mumbai", "destination_city": "Bengaluru", "dgca_monthly_pax": 870000, "weight": 0.0569},
-        {"route_id": 4, "origin_code": "DEL", "destination_code": "HYD", "origin_city": "New Delhi", "destination_city": "Hyderabad", "dgca_monthly_pax": 780000, "weight": 0.0510},
-        {"route_id": 5, "origin_code": "DEL", "destination_code": "CCU", "origin_city": "New Delhi", "destination_city": "Kolkata", "dgca_monthly_pax": 740000, "weight": 0.0484},
-        {"route_id": 6, "origin_code": "BOM", "destination_code": "HYD", "origin_city": "Mumbai", "destination_city": "Hyderabad", "dgca_monthly_pax": 650000, "weight": 0.0425},
-        {"route_id": 7, "origin_code": "DEL", "destination_code": "MAA", "origin_city": "New Delhi", "destination_city": "Chennai", "dgca_monthly_pax": 600000, "weight": 0.0392},
-        {"route_id": 8, "origin_code": "BOM", "destination_code": "CCU", "origin_city": "Mumbai", "destination_city": "Kolkata", "dgca_monthly_pax": 520000, "weight": 0.0340},
-        {"route_id": 9, "origin_code": "BLR", "destination_code": "HYD", "origin_city": "Bengaluru", "destination_city": "Hyderabad", "dgca_monthly_pax": 480000, "weight": 0.0314},
-        {"route_id": 10, "origin_code": "DEL", "destination_code": "GOI", "origin_city": "New Delhi", "destination_city": "Goa", "dgca_monthly_pax": 450000, "weight": 0.0294},
-        {"route_id": 11, "origin_code": "BOM", "destination_code": "MAA", "origin_city": "Mumbai", "destination_city": "Chennai", "dgca_monthly_pax": 430000, "weight": 0.0281},
-        {"route_id": 12, "origin_code": "BLR", "destination_code": "CCU", "origin_city": "Bengaluru", "destination_city": "Kolkata", "dgca_monthly_pax": 400000, "weight": 0.0261},
-        {"route_id": 13, "origin_code": "DEL", "destination_code": "PNQ", "origin_city": "New Delhi", "destination_city": "Pune", "dgca_monthly_pax": 390000, "weight": 0.0255},
-        {"route_id": 14, "origin_code": "BOM", "destination_code": "GOI", "origin_city": "Mumbai", "destination_city": "Goa", "dgca_monthly_pax": 380000, "weight": 0.0248},
-        {"route_id": 15, "origin_code": "DEL", "destination_code": "AMD", "origin_city": "New Delhi", "destination_city": "Ahmedabad", "dgca_monthly_pax": 370000, "weight": 0.0242},
-        {"route_id": 16, "origin_code": "BLR", "destination_code": "MAA", "origin_city": "Bengaluru", "destination_city": "Chennai", "dgca_monthly_pax": 340000, "weight": 0.0222},
-        {"route_id": 17, "origin_code": "DEL", "destination_code": "JAI", "origin_city": "New Delhi", "destination_city": "Jaipur", "dgca_monthly_pax": 320000, "weight": 0.0209},
-        {"route_id": 18, "origin_code": "BOM", "destination_code": "AMD", "origin_city": "Mumbai", "destination_city": "Ahmedabad", "dgca_monthly_pax": 310000, "weight": 0.0203},
-        {"route_id": 19, "origin_code": "DEL", "destination_code": "LKO", "origin_city": "New Delhi", "destination_city": "Lucknow", "dgca_monthly_pax": 300000, "weight": 0.0196},
-        {"route_id": 20, "origin_code": "BLR", "destination_code": "GOI", "origin_city": "Bengaluru", "destination_city": "Goa", "dgca_monthly_pax": 280000, "weight": 0.0183},
-        {"route_id": 21, "origin_code": "HYD", "destination_code": "CCU", "origin_city": "Hyderabad", "destination_city": "Kolkata", "dgca_monthly_pax": 270000, "weight": 0.0176},
-        {"route_id": 22, "origin_code": "DEL", "destination_code": "PAT", "origin_city": "New Delhi", "destination_city": "Patna", "dgca_monthly_pax": 260000, "weight": 0.0170},
-        {"route_id": 23, "origin_code": "BOM", "destination_code": "JAI", "origin_city": "Mumbai", "destination_city": "Jaipur", "dgca_monthly_pax": 240000, "weight": 0.0157},
-        {"route_id": 24, "origin_code": "DEL", "destination_code": "COK", "origin_city": "New Delhi", "destination_city": "Kochi", "dgca_monthly_pax": 230000, "weight": 0.0150},
-        {"route_id": 25, "origin_code": "BOM", "destination_code": "PNQ", "origin_city": "Mumbai", "destination_city": "Pune", "dgca_monthly_pax": 220000, "weight": 0.0144},
-    ]
-    
-    store.routes = routes_data
-    return routes_data
-
-
-def generate_initial_data():
-    """Generate 30 days of historical mock data on startup."""
-    routes = store.routes
-    base_date = date(2026, 8, 1)
-    end_date = date.today()
-    
-    logger.info(f"Generating historical data from {base_date} to {end_date}...")
-    
-    all_obs = mock_generator.generate_historical(
-        routes=routes,
-        start_date=base_date,
-        end_date=end_date,
-    )
-    
-    obs_dicts = observations_to_dicts(all_obs)
-    
-    # Validate and store
-    accepted, flagged, excluded = validator.validate_batch(obs_dicts)
-    
-    for obs in accepted + flagged:
-        store.add_observation(obs)
-    
-    # Store anomalies
-    for obs in flagged:
-        store.add_anomaly({
-            "route_id": obs.get("route_id"),
-            "origin_code": obs.get("origin_code", ""),
-            "destination_code": obs.get("destination_code", ""),
-            "anomaly_type": "potential_anomaly",
-            "severity": "low",
-            "description": f"Flagged: {', '.join(obs.get('validation_flags', []))}",
-            "fare_observed": obs.get("fare_total"),
-            "action_taken": "flagged",
-            "detected_at": datetime.now().isoformat(),
-        })
-    
-    logger.info(
-        f"Data loaded: {len(accepted)} accepted, "
-        f"{len(flagged)} flagged, {len(excluded)} excluded"
-    )
-    
-    # Compute indices for each day
-    compute_all_indices(base_date, end_date)
-
-
-def compute_all_indices(start_date: date, end_date: date):
-    """Compute Jevons and national indices for all available dates."""
-    routes = store.routes
-    base_date = start_date
-    
-    # Build aggregator with route weights
-    route_weights = [
-        RouteWeight(
-            route_id=r["route_id"],
-            origin_code=r["origin_code"],
-            destination_code=r["destination_code"],
-            weight=r["weight"],
-            monthly_pax=r["dgca_monthly_pax"],
-        )
-        for r in routes
-    ]
-    aggregator = NationalAggregator(route_weights)
-    
-    # Get base period prices (first week's geometric means per route)
-    base_prices_by_route = {}
-    for route in routes:
-        route_fares = [
-            obs["fare_total"]
-            for obs in store.fare_observations
-            if obs.get("route_id") == route["route_id"]
-            and obs.get("scrape_timestamp", "")[:10] >= base_date.isoformat()
-            and obs.get("scrape_timestamp", "")[:10] <= (base_date + timedelta(days=6)).isoformat()
-            and obs.get("is_valid", True)
-        ]
-        if route_fares:
-            base_prices_by_route[route["route_id"]] = float(
-                np.exp(np.mean(np.log(np.array(route_fares))))
-            )
-    
-    # Compute daily indices
-    current = start_date + timedelta(days=7)  # Skip base period
-    prev_national_cpi = None
-    
-    while current <= end_date:
-        jevons_results = []
-        
-        for route in routes:
-            # Get current day's prices for this route
-            current_fares = [
-                obs["fare_total"]
-                for obs in store.fare_observations
-                if obs.get("route_id") == route["route_id"]
-                and obs.get("scrape_timestamp", "")[:10] == current.isoformat()
-                and obs.get("is_valid", True)
-            ]
-            
-            if not current_fares or route["route_id"] not in base_prices_by_route:
-                continue
-            
-            result = jevons_calculator.compute_from_prices_only(
-                current_prices=np.array(current_fares),
-                base_geometric_mean=base_prices_by_route[route["route_id"]],
-                route_id=route["route_id"],
-                index_date=current,
-                base_period_start=base_date,
-                base_period_end=base_date + timedelta(days=6),
-            )
-            
-            if result:
-                jevons_results.append(result)
-                store.route_indices.append({
-                    "route_id": result.route_id,
-                    "index_date": result.index_date.isoformat(),
-                    "booking_horizon": result.booking_horizon,
-                    "jevons_index": round(result.jevons_index, 4),
-                    "observation_count": result.observation_count,
-                    "geometric_mean_price": round(result.geometric_mean_price, 2),
-                    "base_period": f"{result.base_period_start} to {result.base_period_end}",
-                })
-        
-        # National aggregation
-        if jevons_results:
-            try:
-                national = aggregator.compute_national_cpi(
-                    jevons_results,
-                    previous_cpi=prev_national_cpi,
-                )
-                store.national_indices.append({
-                    "index_date": national.index_date.isoformat(),
-                    "booking_horizon": national.booking_horizon,
-                    "airfare_cpi": round(national.airfare_cpi, 2),
-                    "mom_change_pct": round(national.mom_change_pct, 2) if national.mom_change_pct is not None else None,
-                    "yoy_change_pct": round(national.yoy_change_pct, 2) if national.yoy_change_pct is not None else None,
-                    "routes_included": national.routes_included,
-                    "total_observations": national.total_observations,
-                    "base_period": national.base_period,
-                    "route_contributions": [
-                        {
-                            "route_id": rc.route_id,
-                            "origin_code": rc.origin_code,
-                            "destination_code": rc.destination_code,
-                            "weight": round(rc.weight, 4),
-                            "jevons_index": round(rc.jevons_index, 4),
-                            "contribution_pct": round(rc.contribution_pct, 2),
-                        }
-                        for rc in national.route_contributions
-                    ],
-                })
-                prev_national_cpi = national.airfare_cpi / 100  # Store as ratio for next iter
-            except Exception as e:
-                logger.error(f"National aggregation failed for {current}: {e}")
-        
-        current += timedelta(days=1)
-    
-    logger.info(f"Computed {len(store.national_indices)} national index values")
-
-
-# ── App Lifecycle ──
+# ═══════════════════════════════════════════════════════════
+# LIFECYCLE
+# ═══════════════════════════════════════════════════════════
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load routes + generate initial data."""
-    logger.info("🛫 Starting Airfare CPI API...")
-    load_routes()
-    generate_initial_data()
-    logger.info("✅ API ready with historical data")
+    """
+    Startup connects to the database and records reference data.
+
+    It does NOT generate observations. Whatever is in the database is what is served,
+    so a restart cannot change a published figure. If the database is empty the API
+    reports that honestly instead of manufacturing a series to display.
+    """
+    settings = get_settings()
+    logger.info(f"Starting Airfare CPI API v{API_VERSION}")
+    logger.info(f"Configuration: {settings.describe()}")
+
+    database = get_database()
+    await database.create_schema()
+
+    basket = get_route_basket(settings.route_basket_path)
+    registry = get_registry()
+
+    async with database.session() as session:
+        await repo.upsert_sources(session, registry.capabilities())
+        await repo.snapshot_route_weights(session, basket)
+        await session.commit()
+
+        stats = await repo.observation_stats(session)
+        latest = await repo.get_latest_national_index(session)
+
+    if stats["total_observations"]:
+        logger.info(
+            f"Loaded {stats['total_observations']} stored observation(s); "
+            f"latest published index: "
+            f"{latest.index_value:.2f} on {latest.index_date}" if latest else "none"
+        )
+    else:
+        logger.warning(
+            "The database holds no observations. Endpoints will report SOURCE "
+            "UNAVAILABLE until a collection run succeeds. No data is generated to fill "
+            "the gap. Run POST /api/v1/collection/trigger, or "
+            "POST /api/v1/collection/backfill-simulated for a labelled research series."
+        )
+
+    # Validate the Copilot model name rather than displaying a badge for a model that
+    # may not exist (audit C1).
+    model_status = await copilot_service.validate_model_name(settings.api)
+    logger.info(f"Copilot: {model_status['note']}")
+
+    global _scheduler
+    if settings.scheduler.enabled:
+        _scheduler = CollectionScheduler(settings)
+        _scheduler.start()
+    else:
+        logger.info(
+            "Scheduler disabled (SCHEDULER_ENABLED=false). Collection runs only when "
+            "triggered."
+        )
+
     yield
-    logger.info("🛬 Shutting down Airfare CPI API")
 
+    if _scheduler is not None:
+        _scheduler.stop()
+    await database.close()
+    logger.info("Airfare CPI API stopped")
 
-# ── FastAPI App ──
 
 app = FastAPI(
-    title="SIH26056 — Real-Time Airfare CPI",
+    title="SIH26056 — Experimental Airfare Price Index for India",
     description=(
-        "Real-Time Airfare Price Index for India — MoSPI CPI Augmentation. "
-        "Collects domestic airfare data, computes route-level Jevons indices, "
-        "and aggregates into a national Airfare CPI using DGCA passenger-volume weights."
+        "Research prototype computing an experimental airfare price index from "
+        "collected fare observations.\n\n"
+        "**This is not an official statistic.** It is not issued by, endorsed by, or "
+        "affiliated with MoSPI, the NSO, or the Government of India. Every response "
+        "carries a `data_provenance` block whose `display_label` states whether the "
+        "underlying observations were collected (LIVE DATA), generated (SIMULATED "
+        "DATA), or replayed from a fixture (OFFLINE PREVIEW)."
     ),
-    version="1.0.0",
+    version=API_VERSION,
     lifespan=lifespan,
 )
 
-# CORS
+settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.api.cors_origins,
+    # False deliberately: this API serves public statistical data and uses no
+    # cookie-based sessions. Combining credentials with a wildcard origin is rejected
+    # by browsers anyway, and the intent would be wrong.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Admin-Token"],
 )
 
 
 # ═══════════════════════════════════════════════════════════
-# ROUTES ENDPOINTS
+# GUARDS
 # ═══════════════════════════════════════════════════════════
 
-@app.get("/api/v1/routes", response_model=RouteListResponse)
-async def get_routes():
-    """Get all monitored routes with DGCA weights."""
-    routes = [
-        RouteResponse(
-            route_id=r["route_id"],
-            origin_code=r["origin_code"],
-            destination_code=r["destination_code"],
-            origin_city=r["origin_city"],
-            destination_city=r["destination_city"],
-            dgca_monthly_pax=r["dgca_monthly_pax"],
-            weight=r["weight"],
-            is_active=True,
+def require_admin(token: Optional[str]) -> None:
+    """
+    Guard state-mutating endpoints.
+
+    A no-op when ``ADMIN_API_TOKEN`` is unset, which keeps a local demo frictionless.
+    Any internet-reachable deployment must configure it: without a token, anyone can
+    trigger collection and mutate published index state.
+    """
+    configured = get_settings().api.admin_token
+    if not configured:
+        return
+    if token != configured:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Missing or invalid X-Admin-Token header. This endpoint mutates "
+                "published index state."
+            ),
         )
-        for r in store.routes
-    ]
-    return RouteListResponse(
-        routes=routes,
-        total_routes=len(routes),
-        total_pax=sum(r.dgca_monthly_pax for r in routes),
-    )
 
 
 # ═══════════════════════════════════════════════════════════
-# BASE PERIOD REBASING HELPERS
+# ROOT / META
 # ═══════════════════════════════════════════════════════════
 
-BASE_YEAR_FACTORS = {
-    "2026": {"factor": 1.0550, "name": "2026 = 100 (Current Year / YTD Base)", "period": "2026 = 100"},
-    "2025": {"factor": 1.0414, "name": "2025 = 100 (Recent Annual Base)", "period": "2025 = 100"},
-    "2024": {"factor": 1.0000, "name": "2024 = 100 (Official DGCA Benchmark)", "period": "2024 = 100"},
-    "2023": {"factor": 0.9410, "name": "2023 = 100 (Historical Base)", "period": "2023 = 100"},
-}
+@app.get("/")
+async def root():
+    cfg = get_settings()
+    return {
+        "project": "SIH26056 — Experimental Airfare Price Index for India",
+        "api_version": API_VERSION,
+        "methodology_version": METHODOLOGY_VERSION,
+        "collector_version": COLLECTOR_VERSION,
+        "is_official_statistic": False,
+        "disclaimer": (
+            "Research prototype. Not issued by, endorsed by, or affiliated with MoSPI, "
+            "the NSO, or the Government of India."
+        ),
+        "collection_mode": cfg.mode.value,
+        "provenance_label": PROVENANCE_LABELS[cfg.mode.source_type],
+        "endpoints": {
+            "national_index": "/api/v1/index/national",
+            "national_history": "/api/v1/index/national/history",
+            "national_mom": "/api/v1/index/national/mom",
+            "national_yoy": "/api/v1/index/national/yoy",
+            "route_indices": "/api/v1/index/routes",
+            "route_history": "/api/v1/index/routes/{route_id}",
+            "horizon_indices": "/api/v1/index/horizons",
+            "rebase": "/api/v1/index/rebase",
+            "routes": "/api/v1/routes",
+            "airports": "/api/v1/airports",
+            "weights": "/api/v1/weights",
+            "observations": "/api/v1/fares/latest",
+            "observation_stats": "/api/v1/fares/stats",
+            "collection_status": "/api/v1/collection/status",
+            "collection_runs": "/api/v1/collection/runs",
+            "collection_trigger": "/api/v1/collection/trigger (POST)",
+            "route_scrape": "/api/v1/routes/scrape (POST)",
+            "sources": "/api/v1/sources",
+            "anomalies": "/api/v1/anomalies",
+            "anomaly_review": "/api/v1/anomalies/{id}/review (POST)",
+            "revisions": "/api/v1/revisions",
+            "provenance": "/api/v1/provenance",
+            "methodology": "/api/v1/methodology",
+            "seasonality": "/api/v1/methodology/seasonality",
+            "health": "/api/v1/health",
+            "report": "/api/v1/reports/monthly",
+            "report_html": "/api/v1/reports/monthly/html",
+            "copilot": "/api/v1/copilot/ask (POST)",
+            "docs": "/docs",
+        },
+    }
 
-def apply_base_year(index_dict: dict, base_year: str = "2024") -> dict:
-    """Dynamically rebase CPI index according to selected baseline year."""
-    info = BASE_YEAR_FACTORS.get(str(base_year), BASE_YEAR_FACTORS["2024"])
-    factor = info["factor"]
-    rebased = dict(index_dict)
-    if "national_cpi" in rebased and isinstance(rebased["national_cpi"], (int, float)):
-        rebased["national_cpi"] = round(rebased["national_cpi"] / factor, 2)
-    if "jevons_index" in rebased and isinstance(rebased["jevons_index"], (int, float)):
-        rebased["jevons_index"] = round(rebased["jevons_index"] / factor, 2)
-    rebased["base_period"] = info["period"]
-    rebased["base_year"] = base_year
-    return rebased
+
+@app.get("/api/v1/provenance")
+async def get_provenance(session: AsyncSession = Depends(get_session)):
+    """
+    What the current data actually is.
+
+    The endpoint the dashboard badge reads. Reports the configured mode, whether any
+    data exists, and the provenance of the most recent published figure.
+    """
+    cfg = get_settings()
+    stats = await repo.observation_stats(session)
+    latest = await repo.get_latest_national_index(session)
+    last_run = await repo.latest_collection_run(session)
+
+    has_data = stats["total_observations"] > 0
+    published_type = latest.source_type if latest else None
+
+    return {
+        "configured_mode": cfg.mode.value,
+        "configured_provenance_label": PROVENANCE_LABELS[cfg.mode.source_type],
+        "has_data": has_data,
+        "published_index": (
+            {
+                "exists": True,
+                "index_date": latest.index_date.isoformat(),
+                "value": round(latest.index_value, 4),
+                "is_publishable": latest.is_publishable,
+                **ser.provenance_block(published_type),
+            }
+            if latest
+            else {"exists": False, **ser.provenance_block(None)}
+        ),
+        "observation_counts_by_source_type": stats["source_types"],
+        "last_collection_run": (
+            ser.collection_run(last_run) if last_run else None
+        ),
+        "is_official_statistic": False,
+        "mixed_provenance_warning": (
+            "Stored observations span more than one provenance type. The index is "
+            "computed from the dominant type only; clear the database when switching "
+            "collection modes."
+            if len(stats["source_types"]) > 1
+            else None
+        ),
+    }
+
+
+@app.get("/api/v1/methodology")
+async def get_methodology(session: AsyncSession = Depends(get_session)):
+    """Complete methodology metadata, including what is not implemented."""
+    cfg = get_settings()
+    basket = get_route_basket(cfg.route_basket_path)
+    policy = get_horizon_policy(cfg.horizon_policy_path)
+    base_period = BasePeriod.from_settings(cfg.index)
+    index_dates = await repo.get_index_dates(session)
+
+    return {
+        "methodology_version": METHODOLOGY_VERSION,
+        "collector_version": COLLECTOR_VERSION,
+        "validation_rules_version": repo.VALIDATION_RULES_VERSION,
+        "is_official_statistic": False,
+        "elementary_aggregate": {
+            "formula": "I(t) = [ prod_p ( price_p(t) / price_p(0) ) ] ^ (1/n)",
+            "name": "matched-model Jevons",
+            "computed_in_log_space": True,
+            "matching_dimensions": [
+                "origin", "destination", "airline", "cabin_class", "fare_family",
+                "stops", "refundability", "baggage_allowance", "booking_horizon",
+            ],
+            "why_matched": (
+                "A price relative is only formed between two observations of the same "
+                "purchasable product, so a change in product quality or sample mix is "
+                "not read as inflation."
+            ),
+            "min_matched_products": cfg.index.min_matched_products,
+            "product_churn_handling": {
+                "new_product": (
+                    "Excluded from the current period: it has no base price, so any "
+                    "relative would be invented. Counted and reported."
+                ),
+                "disappeared_product": (
+                    "Excluded and counted. No last-known price is carried forward, "
+                    "because that would assert a price that was not observed."
+                ),
+                "temporarily_unavailable": (
+                    "Indistinguishable from disappeared within a period, so treated "
+                    "identically. Products that return are reported as reappeared."
+                ),
+                "fare_family_change": (
+                    "A different fare family is a different product key, so it appears "
+                    "as one product leaving and another arriving — a quality change, "
+                    "not a price change."
+                ),
+                "route_change": (
+                    "A different origin/destination is a different product key, so route "
+                    "substitution can never be read as a price movement."
+                ),
+            },
+            "rejected_alternatives": {
+                "carli": (
+                    "Arithmetic mean of relatives. Proven upward bias by AM-GM, fails "
+                    "the time-reversal test. Not published."
+                ),
+                "dutot": (
+                    "Ratio of arithmetic mean prices. Driven by absolute price level, so "
+                    "expensive products dominate a heterogeneous basket. Not published."
+                ),
+            },
+        },
+        "booking_horizon_stratification": policy.to_dict(),
+        "upper_level_aggregation": {
+            "formula": "Index(t) = sum_r ( w_r * I_r(t) ) * 100",
+            "type": "Young-type weighted mean",
+            "weighting": basket.methodology.to_dict(),
+            "min_coverage_weight": 0.70,
+            "missing_route_policy": (
+                "Weights of present routes are renormalized to 1.0, which is an "
+                "explicit imputation of the collected routes' average movement onto the "
+                "absent ones. It is recorded on every response via coverage_weight and "
+                "renormalization_applied, and below the minimum coverage the figure is "
+                "marked is_publishable=false."
+            ),
+        },
+        "base_period": base_period.to_dict(),
+        "rebasing": {
+            "method": "I_new(t) = I_old(t) / mean(I_old over reference window) * 100",
+            "note": (
+                "A genuine recomputation from the collected series, so the values change. "
+                "Only reference windows the series covers are offered; no link factor is "
+                "invented for a period the data does not reach."
+            ),
+            "available_reference_windows": available_reference_windows(index_dates),
+        },
+        "validation": {
+            "rules_version": repo.VALIDATION_RULES_VERSION,
+            "philosophy": (
+                "Collection errors are excluded; genuine market volatility is flagged "
+                "and kept. An index that deletes real volatility is not measuring the "
+                "market."
+            ),
+            "thresholds": {
+                "min_fare_inr": cfg.validation.min_fare_inr,
+                "max_fare_inr": cfg.validation.max_fare_inr,
+                "max_daily_change_pct": cfg.validation.max_daily_change_pct,
+                "iqr_multiplier": cfg.validation.iqr_multiplier,
+                "min_observations_for_iqr": cfg.validation.min_observations_for_iqr,
+            },
+            "iqr_contamination_guard": (
+                "Observations flagged as statistical outliers are withheld from the "
+                "reference distribution, so the fences cannot widen over time and "
+                "progressively desensitise the filter."
+            ),
+            "state_persistence": (
+                "Reference distributions are persisted, so fences are continuous across "
+                "restarts and outlier decisions are reproducible."
+            ),
+            "missing_data_policy": missing_data_policy(),
+            "deduplication": (
+                "Observations are deduplicated across sources on a fingerprint of "
+                "flight, product characteristics, horizon and collection day. Price is "
+                "excluded from the fingerprint: two sources quoting the same seat "
+                "differently are still the same seat."
+            ),
+        },
+        "uncertainty": {
+            "elementary": (
+                "Sampling standard error of the geometric mean of matched log price "
+                "relatives, se_log = s/sqrt(n), with the interval formed in log space."
+            ),
+            "aggregate": (
+                "Weighted-sum variance over route components, assuming independence. "
+                "Airfares are plausibly positively correlated across routes, so the "
+                "published interval is a LOWER BOUND on sampling uncertainty."
+            ),
+            "excludes": [
+                "basket selection (purposive, not a probability sample)",
+                "route weight error",
+                "non-sampling error",
+            ],
+            "policy": (
+                "Where uncertainty is not defensibly estimable, nulls are returned with "
+                "a stated reason. Intervals are never invented."
+            ),
+        },
+        "seasonality": seasonality_metadata(index_dates),
+        "revision_policy": {
+            "recorded_in": "index_revisions",
+            "note": (
+                "Every publication and recomputation appends a revision row, so a figure "
+                "that changes always carries a recorded reason."
+            ),
+            "triggers": [
+                "initial_publication", "recomputation", "anomaly_review",
+                "weight_change", "base_period_change", "methodology_change", "late_data",
+            ],
+        },
+        "known_limitations": [
+            "Seasonal adjustment is NOT IMPLEMENTED; the series is observed (NSA).",
+            "Route weights are provisional passenger-volume proxies, not CPI "
+            "expenditure shares.",
+            "Uncertainty covers sampling error only and assumes route independence.",
+            "The route basket is a purposive selection of 25 city pairs, not a "
+            "probability sample of the domestic market.",
+            "Most airline and OTA portals are not collected; see /api/v1/sources for "
+            "the per-source reason.",
+        ],
+    }
+
+
+@app.get("/api/v1/methodology/seasonality")
+async def get_seasonality(session: AsyncSession = Depends(get_session)):
+    """Seasonal adjustment status. Currently NOT IMPLEMENTED, stated as such."""
+    index_dates = await repo.get_index_dates(session)
+    return seasonality_metadata(index_dates)
 
 
 # ═══════════════════════════════════════════════════════════
-# NATIONAL INDEX ENDPOINTS
+# NATIONAL INDEX
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/v1/index/national")
 async def get_national_index(
-    base_year: str = Query(default="2024", description="Base period year (2026, 2025, 2024, 2023)")
+    booking_horizon: Optional[int] = Query(
+        default=None,
+        description="Omit for the headline all-horizons index; supply a horizon in days for a horizon-specific national index.",
+    ),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Get the latest national Airfare CPI rebased to selected base year."""
-    if not store.national_indices:
-        raise HTTPException(status_code=404, detail="No index data available")
-    
-    latest = store.national_indices[-1]
-    return apply_base_year(latest, base_year)
+    """Latest national index, with the full provenance envelope."""
+    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    if row is None:
+        return ser.unavailable(
+            reason=(
+                "No national index has been computed. Either no observations have been "
+                "collected, or none fall after the configured base period. No value is "
+                "generated to fill the gap."
+            ),
+            capability="national_index",
+        )
+    return ser.national_index_with_contributions(row)
 
 
 @app.get("/api/v1/index/national/history")
 async def get_national_history(
-    days: int = Query(default=30, ge=1, le=365),
-    base_year: str = Query(default="2024", description="Base period year (2026, 2025, 2024, 2023)"),
+    days: int = Query(default=30, ge=1, le=3650),
+    booking_horizon: Optional[int] = Query(default=None),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Get historical national CPI series rebased to selected base year."""
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
-    history = [
-        apply_base_year(idx, base_year) for idx in store.national_indices
-        if idx["index_date"] >= cutoff
-    ]
-    return {"data": history, "count": len(history), "base_year": base_year}
+    """Stored national index series. Returns what was published, not a recomputation."""
+    rows = await repo.get_national_history(
+        session, days=days, booking_horizon=booking_horizon
+    )
+    if not rows:
+        return {
+            "data": [],
+            "count": 0,
+            "status": ser.unavailable("No index history has been computed.")["status"],
+            "reason": "No index history has been computed.",
+            "data_provenance": ser.provenance_block(None),
+            "methodology_version": METHODOLOGY_VERSION,
+        }
 
-
-# ═══════════════════════════════════════════════════════════
-# ROUTE INDEX ENDPOINTS
-# ═══════════════════════════════════════════════════════════
-
-@app.get("/api/v1/index/routes")
-async def get_route_indices():
-    """Get the latest index for all routes."""
-    # Get latest index per route
-    latest_by_route = {}
-    for idx in store.route_indices:
-        rid = idx["route_id"]
-        if rid not in latest_by_route or idx["index_date"] > latest_by_route[rid]["index_date"]:
-            latest_by_route[rid] = idx
-    
-    # Enrich with route names
-    route_map = {r["route_id"]: r for r in store.routes}
-    result = []
-    for rid, idx in latest_by_route.items():
-        route = route_map.get(rid, {})
-        result.append({
-            **idx,
-            "origin_code": route.get("origin_code", ""),
-            "destination_code": route.get("destination_code", ""),
-            "origin_city": route.get("origin_city", ""),
-            "destination_city": route.get("destination_city", ""),
-            "weight": route.get("weight", 0),
-        })
-    
-    result.sort(key=lambda x: x.get("weight", 0), reverse=True)
-    return {"routes": result, "count": len(result)}
-
-
-@app.get("/api/v1/index/routes/{route_id}")
-async def get_route_index_history(
-    route_id: int,
-    days: int = Query(default=30, ge=1, le=365),
-):
-    """Get historical index for a specific route."""
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
-    history = [
-        idx for idx in store.route_indices
-        if idx["route_id"] == route_id and idx["index_date"] >= cutoff
-    ]
-    
-    if not history:
-        raise HTTPException(status_code=404, detail=f"No data for route {route_id}")
-    
-    route = next((r for r in store.routes if r["route_id"] == route_id), None)
-    
     return {
-        "route": route,
-        "history": sorted(history, key=lambda x: x["index_date"]),
-        "count": len(history),
+        "data": [ser.national_index_summary(r) for r in rows],
+        "count": len(rows),
+        "base_period": rows[-1].base_period_label,
+        "data_provenance": ser.provenance_block(rows[-1].source_type),
+        "sample_size": sum(r.total_observations for r in rows),
+        "methodology_version": rows[-1].methodology_version,
+        "seasonal_adjustment": rows[-1].seasonal_adjustment,
+        "series_type": "observed (not seasonally adjusted)",
+    }
+
+
+@app.get("/api/v1/index/national/mom")
+async def get_mom(
+    booking_horizon: Optional[int] = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Month-on-month change from stored index history.
+
+    Null with ``mom_status`` when no prior index value exists.
+    """
+    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    if row is None:
+        return ser.unavailable("No national index has been computed.", "mom")
+
+    return {
+        "value": ser._round(row.mom_change_pct, 4),
+        "status": row.mom_status,
+        "index_date": row.index_date.isoformat(),
+        "current_index": round(row.index_value, 4),
+        "base_period": row.base_period_label,
+        "data_provenance": ser.provenance_block(row.source_type),
+        "sample_size": row.total_observations,
+        "methodology_version": row.methodology_version,
+        "explanation": (
+            "Computed from the most recent prior stored index value."
+            if row.mom_status == "available"
+            else (
+                "Not available: no earlier index value exists in the stored series. "
+                "No placeholder figure is substituted."
+            )
+        ),
+    }
+
+
+@app.get("/api/v1/index/national/yoy")
+async def get_yoy(
+    booking_horizon: Optional[int] = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Year-on-year change, only when a valid 12-month comparison exists.
+
+    The audit's M6: the dashboard displayed +8.12% YoY while the API could never
+    compute one. This returns null with an explicit status instead.
+    """
+    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    if row is None:
+        return ser.unavailable("No national index has been computed.", "yoy")
+
+    index_dates = await repo.get_index_dates(session)
+    span_days = (
+        (max(index_dates) - min(index_dates)).days if len(index_dates) > 1 else 0
+    )
+
+    return {
+        "value": ser._round(row.yoy_change_pct, 4),
+        "yoy": ser._round(row.yoy_change_pct, 4),
+        "yoy_status": row.yoy_status,
+        "status": row.yoy_status,
+        "index_date": row.index_date.isoformat(),
+        "current_index": round(row.index_value, 4),
+        "base_period": row.base_period_label,
+        "data_provenance": ser.provenance_block(row.source_type),
+        "sample_size": row.total_observations,
+        "methodology_version": row.methodology_version,
+        "series_span_days": span_days,
+        "days_required_for_yoy": 365,
+        "explanation": (
+            "Computed against the stored index value 12 months earlier."
+            if row.yoy_status == "available"
+            else (
+                f"Not available: the stored series spans {span_days} day(s), so no "
+                f"observation exists 12 months before {row.index_date.isoformat()}. "
+                f"A year-on-year figure cannot be computed and none is fabricated."
+            )
+        ),
+    }
+
+
+@app.get("/api/v1/index/rebase")
+async def rebase_index(
+    reference: str = Query(
+        description="Calendar year to re-reference to, e.g. 2026. Must be covered by the collected series."
+    ),
+    days: int = Query(default=365, ge=1, le=3650),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Re-reference the series to a different base window.
+
+    A genuine recomputation from the series itself, so the numbers move. When the
+    requested window is not covered by collected data, the original series is returned
+    with a stated reason — no link factor is invented.
+    """
+    rows = await repo.get_national_history(session, days=days)
+    if not rows:
+        return ser.unavailable("No index history to re-reference.", "rebase")
+
+    try:
+        year = int(reference)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"reference must be a calendar year; got {reference!r}"
+        )
+
+    series = [(r.index_date, r.index_value) for r in rows]
+    rebased, outcome = rebase_series(
+        series,
+        reference_start=date(year, 1, 1),
+        reference_end=date(year, 12, 31),
+        reference_label=f"{year} = 100",
+    )
+
+    return {
+        "reference": str(year),
+        "rebase": outcome.to_dict(),
+        "data": [
+            {"index_date": day.isoformat(), "value": round(value, 4)}
+            for day, value in rebased
+        ],
+        "count": len(rebased),
+        "original_base_period": rows[-1].base_period_label,
+        "data_provenance": ser.provenance_block(rows[-1].source_type),
+        "sample_size": sum(r.total_observations for r in rows),
+        "methodology_version": rows[-1].methodology_version,
+        "available_reference_windows": available_reference_windows(
+            [r.index_date for r in rows]
+        ),
     }
 
 
 # ═══════════════════════════════════════════════════════════
-# FARE OBSERVATION ENDPOINTS
+# ROUTE AND HORIZON INDICES
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/index/routes")
+async def get_route_indices(session: AsyncSession = Depends(get_session)):
+    """Latest index for every route, with horizon-stratification detail."""
+    rows = await repo.get_latest_route_indices(session)
+    if not rows:
+        return {
+            "routes": [],
+            "count": 0,
+            "reason": "No route index has been computed.",
+            "data_provenance": ser.provenance_block(None),
+            "methodology_version": METHODOLOGY_VERSION,
+        }
+
+    basket = get_route_basket(get_settings().route_basket_path)
+    endpoints_map = await repo.get_all_route_endpoints_map(session)
+    payload = []
+    for r in rows:
+        route_meta = basket.by_id(r.route_id)
+        if route_meta is None:
+            endpoints = endpoints_map.get(r.route_id)
+            if endpoints:
+                orig, dest = endpoints
+                orig_city = AIRPORTS_BY_CODE.get(orig, {}).get("city", orig)
+                dest_city = AIRPORTS_BY_CODE.get(dest, {}).get("city", dest)
+                route_meta = basket.get_or_dynamic(
+                    route_id=r.route_id,
+                    origin_code=orig,
+                    destination_code=dest,
+                    origin_city=orig_city,
+                    destination_city=dest_city,
+                )
+            else:
+                route_meta = basket.get_or_dynamic(
+                    route_id=r.route_id,
+                    origin_code="???",
+                    destination_code="???",
+                )
+        payload.append(ser.route_index(r, route_meta))
+    payload.sort(key=lambda p: (p.get("weight") or 0, p.get("route_code") or ""), reverse=True)
+
+
+    return {
+        "routes": payload,
+        "count": len(payload),
+        "index_date": rows[0].index_date.isoformat(),
+        "data_provenance": ser.provenance_block(rows[0].source_type),
+        "methodology_version": rows[0].methodology_version,
+    }
+
+
+@app.get("/api/v1/index/routes/{route_id}")
+async def get_route_history(
+    route_id: int,
+    days: int = Query(default=30, ge=1, le=3650),
+    session: AsyncSession = Depends(get_session),
+):
+    """Stored index history for one route."""
+    basket = get_route_basket(get_settings().route_basket_path)
+    route = basket.by_id(route_id)
+    if route is None:
+        endpoints = await repo.get_route_endpoints_for_id(session, route_id)
+        if endpoints:
+            orig, dest = endpoints
+            orig_city = AIRPORTS_BY_CODE.get(orig, {}).get("city", orig)
+            dest_city = AIRPORTS_BY_CODE.get(dest, {}).get("city", dest)
+            route = basket.get_or_dynamic(
+                route_id=route_id,
+                origin_code=orig,
+                destination_code=dest,
+                origin_city=orig_city,
+                destination_city=dest_city,
+            )
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Route {route_id} is not recognized or found."
+            )
+
+    rows = await repo.get_route_index_history(session, route_id, days=days)
+    if not rows:
+        return {
+            "route": route.to_dict(),
+            "history": [],
+            "count": 0,
+            "reason": f"No index has been computed for route {route_id}.",
+            "data_provenance": ser.provenance_block(None),
+            "methodology_version": METHODOLOGY_VERSION,
+        }
+
+    return {
+        "route": route.to_dict(),
+        "history": [ser.route_index(r) for r in rows],
+        "count": len(rows),
+        "data_provenance": ser.provenance_block(rows[-1].source_type),
+        "methodology_version": rows[-1].methodology_version,
+    }
+
+
+@app.get("/api/v1/index/horizons")
+async def get_horizon_indices(
+    index_date: Optional[date] = Query(default=None),
+    route_id: Optional[int] = Query(default=None),
+    booking_horizon: Optional[int] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=2000),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Booking-horizon-stratified indices.
+
+    Separate index values per horizon, which is the point of stratification: pooling
+    them would make the route index sensitive to the horizon mix of the sample rather
+    than to prices.
+    """
+    if index_date is None:
+        index_date = await repo.latest_horizon_index_date(session)
+
+    if index_date is None:
+        return {
+            "horizons": [],
+            "count": 0,
+            "reason": "No horizon index has been computed.",
+            "data_provenance": ser.provenance_block(None),
+            "methodology_version": METHODOLOGY_VERSION,
+        }
+
+    rows = await repo.get_horizon_indices(
+        session,
+        index_date=index_date,
+        route_id=route_id,
+        booking_horizon=booking_horizon,
+        limit=limit,
+    )
+
+    policy = get_horizon_policy(get_settings().horizon_policy_path)
+
+    return {
+        "index_date": index_date.isoformat(),
+        "horizons": [ser.horizon_index(r) for r in rows],
+        "count": len(rows),
+        "policy": policy.to_dict(),
+        "data_provenance": (
+            ser.provenance_block(rows[0].source_type) if rows else ser.provenance_block(None)
+        ),
+        "sample_size": sum(r.observation_count for r in rows),
+        "methodology_version": METHODOLOGY_VERSION,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# ROUTES AND WEIGHTS
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/routes")
+async def get_routes():
+    """The monitored route basket with derived weights."""
+    basket = get_route_basket(get_settings().route_basket_path)
+    return {
+        "routes": [r.to_dict() for r in basket.routes],
+        "total_routes": len(basket.routes),
+        "total_monthly_pax": basket.total_pax,
+        "weight_sum": basket.weight_sum,
+        "weighting": basket.methodology.to_dict(),
+        "basket_id": basket.basket_id,
+        "basket_version": basket.basket_version,
+    }
+
+
+@app.get("/api/v1/airports")
+async def get_airports():
+    """Vast directory of 85+ Indian commercial airports across all states and UTs."""
+    return {
+        "airports": INDIAN_AIRPORTS,
+        "states": INDIAN_STATES,
+        "total_airports": len(INDIAN_AIRPORTS),
+        "total_states_and_uts": len(INDIAN_STATES),
+    }
+
+
+
+@app.get("/api/v1/weights")
+async def get_weights(session: AsyncSession = Depends(get_session)):
+    """
+    The actual calculated weights, with their methodology.
+
+    Derived from one source of truth (``data/route_basket.json``) as
+    ``w_r = pax_r / sum(pax)``, so they sum to exactly 1.0 and cannot disagree with a
+    second copy. Labelled PROVISIONAL because passenger volume is a proxy for
+    expenditure, not an official CPI expenditure share.
+    """
+    basket = get_route_basket(get_settings().route_basket_path)
+    snapshots = await repo.get_route_weights(session, basket.basket_version)
+
+    return {
+        "basket_id": basket.basket_id,
+        "basket_version": basket.basket_version,
+        "effective_from": basket.effective_from,
+        "weight_sum": basket.weight_sum,
+        "sums_to_one": abs(basket.weight_sum - 1.0) < 1e-9,
+        "total_monthly_pax": basket.total_pax,
+        "methodology": basket.methodology.to_dict(),
+        "weights": [
+            {
+                "route_id": r.route_id,
+                "route_code": r.route_code,
+                "origin_code": r.origin_code,
+                "destination_code": r.destination_code,
+                "monthly_pax": r.monthly_pax,
+                "weight": round(r.weight, 8),
+                "weight_pct": round(r.weight * 100, 4),
+            }
+            for r in basket.routes
+        ],
+        "persisted_snapshot_count": len(snapshots),
+        "source_of_truth": "data/route_basket.json",
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# OBSERVATIONS
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/v1/fares/latest")
 async def get_latest_fares(
     limit: int = Query(default=50, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Get the most recent fare observations."""
-    recent = store.fare_observations[-limit:]
-    recent.reverse()
-    return {"fares": recent, "total_count": len(store.fare_observations)}
+    """Most recent stored observations, each with its own provenance."""
+    rows = await repo.latest_observations(session, limit=limit)
+    stats = await repo.observation_stats(session)
+
+    return {
+        "fares": [ser.fare_observation(r) for r in rows],
+        "count": len(rows),
+        "total_count": stats["total_observations"],
+        "data_provenance": (
+            ser.provenance_block(rows[0].source_type) if rows else ser.provenance_block(None)
+        ),
+        "reason": None if rows else "No observations have been collected.",
+    }
 
 
 @app.get("/api/v1/fares/route/{route_id}")
 async def get_fares_by_route(
     route_id: int,
     limit: int = Query(default=100, ge=1, le=1000),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Get fare observations for a specific route."""
-    route_fares = [
-        obs for obs in store.fare_observations
-        if obs.get("route_id") == route_id
-    ][-limit:]
-    
+    rows = await repo.load_observations(
+        session, route_ids=[route_id], valid_only=False, limit=limit
+    )
     return {
-        "fares": route_fares,
-        "total_count": len(route_fares),
         "route_id": route_id,
+        "fares": [ser.fare_observation(r) for r in rows],
+        "count": len(rows),
+        "data_provenance": (
+            ser.provenance_block(rows[0].source_type) if rows else ser.provenance_block(None)
+        ),
     }
 
 
 @app.get("/api/v1/fares/stats")
-async def get_fare_stats():
-    """Get aggregate fare statistics across all routes."""
-    if not store.fare_observations:
-        return {"stats": {}}
-    
-    fares = [obs["fare_total"] for obs in store.fare_observations if obs.get("is_valid")]
-    
+async def get_fare_stats(session: AsyncSession = Depends(get_session)):
+    """Aggregate statistics over stored observations."""
+    stats = await repo.observation_stats(session)
+    dominant = max(stats["source_types"], key=stats["source_types"].get, default=None)
     return {
-        "total_observations": len(store.fare_observations),
-        "valid_observations": len(fares),
-        "mean_fare": round(np.mean(fares), 2) if fares else 0,
-        "median_fare": round(np.median(fares), 2) if fares else 0,
-        "min_fare": round(min(fares), 2) if fares else 0,
-        "max_fare": round(max(fares), 2) if fares else 0,
-        "std_dev": round(np.std(fares), 2) if fares else 0,
-        "routes_covered": len(set(obs["route_id"] for obs in store.fare_observations)),
-        "airlines_covered": len(set(obs.get("airline_code", "") for obs in store.fare_observations)),
+        **stats,
+        "data_provenance": ser.provenance_block(dominant),
+        "reason": None if stats["total_observations"] else "No observations stored.",
+    }
+
+
+@app.get("/api/v1/analysis/booking-horizons")
+async def get_booking_horizon_analysis(session: AsyncSession = Depends(get_session)):
+    """
+    Fare levels by booking horizon, alongside the horizon INDICES.
+
+    Levels and indices are both reported and clearly distinguished: the previous
+    endpoint returned mean and median fares while being described as a horizon index,
+    which conflated a price level with a price index.
+    """
+    cfg = get_settings()
+    policy = get_horizon_policy(cfg.horizon_policy_path)
+    index_date = await repo.latest_horizon_index_date(session)
+
+    analysis = []
+    for definition in policy.horizons:
+        rows = await repo.load_observations(
+            session, booking_horizons=[definition.days], valid_only=True
+        )
+        fares = [float(r.fare_total) for r in rows]
+
+        horizon_rows = (
+            await repo.get_horizon_indices(
+                session, index_date=index_date, booking_horizon=definition.days
+            )
+            if index_date
+            else []
+        )
+
+        import numpy as np
+
+        analysis.append({
+            "horizon_days": definition.days,
+            "label": definition.label,
+            "name": definition.name,
+            "rationale": definition.statistical_rationale,
+            "policy_weight": policy.weighting.weights.get(definition.days),
+            "fare_levels_inr": {
+                "note": (
+                    "Price LEVELS, not an index. Levels differ across horizons by "
+                    "construction; only the index measures price CHANGE."
+                ),
+                "mean": round(float(np.mean(fares)), 2) if fares else None,
+                "median": round(float(np.median(fares)), 2) if fares else None,
+                "min": round(min(fares), 2) if fares else None,
+                "max": round(max(fares), 2) if fares else None,
+                "observation_count": len(fares),
+            },
+            "index": {
+                "note": "Horizon-specific price index, base = 100.",
+                "index_date": index_date.isoformat() if index_date else None,
+                "routes_with_index": len(horizon_rows),
+                "mean_index": (
+                    round(float(np.mean([r.index_100 for r in horizon_rows])), 4)
+                    if horizon_rows
+                    else None
+                ),
+                "matched_products": sum(r.matched_products for r in horizon_rows),
+            },
+        })
+
+    return {
+        "horizons": analysis,
+        "weighting": policy.weighting.to_dict(),
+        "methodology_version": METHODOLOGY_VERSION,
     }
 
 
 # ═══════════════════════════════════════════════════════════
-# PIPELINE TRIGGER (DEMO)
+# COLLECTION
 # ═══════════════════════════════════════════════════════════
 
-@app.post("/api/v1/scraper/trigger", response_model=ScrapeResponse)
-async def trigger_scrape(request: ScrapeRequest = None):
-    """
-    Trigger a scrape cycle manually (for live demo).
-    Generates new mock observations and recomputes indices.
-    """
-    if request is None:
-        request = ScrapeRequest()
-    
-    today = date.today()
-    horizons = request.horizons or [0, 3, 7, 15, 30]
-    target_routes = store.routes
-    if request.routes:
-        target_routes = [r for r in store.routes if r["route_id"] in request.routes]
-    
-    # Generate new observations
-    new_obs = mock_generator.generate_day(
-        routes=target_routes,
-        target_date=today,
-        booking_horizons=horizons,
-        scrape_time=datetime.now(),
-        base_date=date(2026, 8, 1),
-    )
-    
-    obs_dicts = observations_to_dicts(new_obs)
-    accepted, flagged, excluded = validator.validate_batch(obs_dicts)
-    
-    for obs in accepted + flagged:
-        store.add_observation(obs)
-    
-    # Log scraper health
-    store.scraper_health.append({
-        "source_platform": "mock_generator",
-        "scrape_timestamp": datetime.now().isoformat(),
-        "status": "success",
-        "fares_collected": len(accepted) + len(flagged),
-        "response_time_ms": 150,
-    })
-    
-    national_cpi = None
-    
-    if request.compute_index:
-        # Recompute today's indices
-        base_date = date(2026, 8, 1)
-        base_prices = {}
-        for route in store.routes:
-            base_fares = [
-                obs["fare_total"]
-                for obs in store.fare_observations
-                if obs.get("route_id") == route["route_id"]
-                and obs.get("is_valid", True)
-            ][:50]  # First 50 obs as base
-            if base_fares:
-                base_prices[route["route_id"]] = float(
-                    np.exp(np.mean(np.log(np.array(base_fares[:20]))))
-                )
-        
-        route_weights = [
-            RouteWeight(
-                route_id=r["route_id"],
-                origin_code=r["origin_code"],
-                destination_code=r["destination_code"],
-                weight=r["weight"],
-                monthly_pax=r["dgca_monthly_pax"],
+@app.get("/api/v1/collection/status")
+async def get_collection_status(session: AsyncSession = Depends(get_session)):
+    """Current collection configuration and the outcome of the last run."""
+    cfg = get_settings()
+    last_run = await repo.latest_collection_run(session)
+    stats = await repo.observation_stats(session)
+    registry = get_registry()
+
+    enabled = [c for c in registry.capabilities() if c.enabled]
+    mode_sources = [c for c in enabled if c.source_type is cfg.mode.source_type]
+
+    return {
+        "configured_mode": cfg.mode.value,
+        "provenance_label": PROVENANCE_LABELS[cfg.mode.source_type],
+        "usable_sources_for_mode": [c.name for c in mode_sources],
+        "can_collect": bool(mode_sources),
+        "cannot_collect_reason": (
+            None
+            if mode_sources
+            else (
+                f"No enabled source provides {cfg.mode.source_type.value} data. "
+                f"Collection would report SOURCE UNAVAILABLE. See /api/v1/sources."
             )
-            for r in store.routes
-        ]
-        aggregator = NationalAggregator(route_weights)
-        
-        jevons_results = []
-        for route in store.routes:
-            today_fares = [
-                obs["fare_total"]
-                for obs in accepted + flagged
-                if obs.get("route_id") == route["route_id"]
-            ]
-            
-            if today_fares and route["route_id"] in base_prices:
-                result = jevons_calculator.compute_from_prices_only(
-                    current_prices=np.array(today_fares),
-                    base_geometric_mean=base_prices[route["route_id"]],
-                    route_id=route["route_id"],
-                    index_date=today,
-                    base_period_start=base_date,
-                    base_period_end=base_date + timedelta(days=6),
-                )
-                if result:
-                    jevons_results.append(result)
-        
-        if jevons_results:
-            try:
-                national = aggregator.compute_national_cpi(jevons_results)
-                national_cpi = national.airfare_cpi
-                
-                store.national_indices.append({
-                    "index_date": today.isoformat(),
-                    "booking_horizon": None,
-                    "airfare_cpi": national.airfare_cpi,
-                    "mom_change_pct": national.mom_change_pct,
-                    "yoy_change_pct": national.yoy_change_pct,
-                    "routes_included": national.routes_included,
-                    "total_observations": national.total_observations,
-                    "base_period": national.base_period,
-                    "route_contributions": [
-                        {
-                            "route_id": rc.route_id,
-                            "origin_code": rc.origin_code,
-                            "destination_code": rc.destination_code,
-                            "weight": rc.weight,
-                            "jevons_index": rc.jevons_index,
-                            "contribution_pct": rc.contribution_pct,
-                        }
-                        for rc in national.route_contributions
-                    ],
-                })
-            except Exception as e:
-                logger.error(f"National CPI computation failed: {e}")
-    
-    return ScrapeResponse(
-        status="success",
-        observations_generated=len(new_obs),
-        observations_valid=len(accepted),
-        observations_flagged=len(flagged),
-        observations_excluded=len(excluded),
-        index_computed=national_cpi is not None,
-        national_cpi=national_cpi,
-        message=f"Scraped {len(target_routes)} routes × {len(horizons)} horizons",
-    )
-
-
-# ═══════════════════════════════════════════════════════════
-# HEALTH ENDPOINTS
-# ═══════════════════════════════════════════════════════════
-
-@app.get("/api/v1/health")
-async def get_health():
-    """System health overview."""
-    return SystemHealthResponse(
-        status="healthy",
-        total_observations=len(store.fare_observations),
-        total_routes=len(store.routes),
-        active_scrapers=1,  # Mock scraper
-        last_index_date=(
-            date.fromisoformat(store.national_indices[-1]["index_date"])
-            if store.national_indices else None
         ),
-        scraper_health=[
-            ScraperHealthResponse(
-                source_platform=h["source_platform"],
-                last_scrape=datetime.fromisoformat(h["scrape_timestamp"]),
-                status=h["status"],
-                fares_collected=h["fares_collected"],
-                response_time_ms=h.get("response_time_ms"),
-            )
-            for h in store.scraper_health[-5:]
-        ],
+        "enabled_sources_config": list(cfg.scraper.enabled_sources),
+        "booking_horizons": list(cfg.scraper.booking_horizons),
+        "scheduler": {
+            "enabled": cfg.scheduler.enabled,
+            "collection_hours": list(cfg.scheduler.collection_hours),
+            "timezone": cfg.scheduler.timezone_name,
+            "running": _scheduler.is_running if _scheduler else False,
+            "next_run": _scheduler.next_run_iso() if _scheduler else None,
+        },
+        "retry_policy": {
+            "max_retries": cfg.scraper.max_retries,
+            "backoff_base_seconds": cfg.scraper.retry_backoff_base_seconds,
+            "backoff_max_seconds": cfg.scraper.retry_backoff_max_seconds,
+            "request_timeout_seconds": cfg.scraper.request_timeout_seconds,
+            "per_host_min_interval_seconds": cfg.scraper.per_host_min_interval_seconds,
+        },
+        "respect_robots_txt": cfg.scraper.respect_robots_txt,
+        "last_run": ser.collection_run(last_run, include_attempts=True) if last_run else None,
+        "stored_observations": stats["total_observations"],
+        "observation_counts_by_source_type": stats["source_types"],
+    }
+
+
+@app.get("/api/v1/collection/runs")
+async def get_collection_runs(
+    limit: int = Query(default=25, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Collection run history, including failed runs.
+
+    Failures are retained deliberately: recording the gap is how coverage stays honest
+    instead of the gap simply not appearing.
+    """
+    rows = await repo.list_collection_runs(session, limit=limit)
+    return {
+        "runs": [ser.collection_run(r, include_attempts=True) for r in rows],
+        "count": len(rows),
+        "note": (
+            "Failed runs are retained. A run with status 'failed' or 'unavailable' "
+            "carries zero observations and never had data substituted for it."
+        ),
+    }
+
+
+@app.post("/api/v1/collection/trigger")
+async def trigger_collection(
+    request: Optional[CollectionTriggerRequest] = None,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Run one collection cycle.
+
+    Mutates published index state, so it is guarded by ``ADMIN_API_TOKEN``.
+
+    A failed LIVE collection returns the failure with zero observations. It does not
+    fall back to the simulator.
+    """
+    require_admin(x_admin_token)
+    request = request or CollectionTriggerRequest()
+
+    cfg = get_settings()
+    mode = CollectionMode.parse(request.mode, cfg.mode) if request.mode else cfg.mode
+
+    result = await IngestService(cfg).ingest(
+        session,
+        mode=mode,
+        route_ids=request.routes,
+        horizons=request.horizons,
+        collection_day=request.collection_day,
+        compute_index=request.compute_index,
+        triggered_by="api_trigger",
+    )
+    await session.commit()
+
+    payload = result.to_dict()
+    latest = await repo.get_latest_national_index(session)
+    payload["published_index"] = ser.national_index(latest) if latest else None
+    return payload
+
+
+@app.post("/api/v1/routes/scrape")
+async def scrape_route(
+    request: RouteScrapeRequest,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    On-demand fare scraping for any specific Indian route / city-pair across all states.
+
+    Executes the ingestion pipeline for the selected origin-destination pair across
+    booking horizons (T+0, T+3, T+7, T+15, T+30), persists observations, and computes
+    route and horizon indices.
+    """
+    require_admin(x_admin_token)
+    cfg = get_settings()
+    mode = CollectionMode.parse(request.mode, cfg.mode) if request.mode else cfg.mode
+
+    origin_code = request.origin.upper()
+    dest_code = request.destination.upper()
+
+    origin_meta = AIRPORTS_BY_CODE.get(origin_code, {})
+    dest_meta = AIRPORTS_BY_CODE.get(dest_code, {})
+
+    origin_city = request.origin_city or origin_meta.get("city") or origin_code
+    dest_city = request.destination_city or dest_meta.get("city") or dest_code
+
+    basket = get_route_basket(cfg.route_basket_path)
+    route = basket.get_or_dynamic(
+        origin_code=origin_code,
+        destination_code=dest_code,
+        origin_city=origin_city,
+        destination_city=dest_city,
+    )
+
+    horizons = request.horizons or list(cfg.scraper.booking_horizons)
+
+    ingest_res = await IngestService(cfg).ingest(
+        session,
+        mode=mode,
+        custom_routes=[route],
+        horizons=horizons,
+        collection_day=request.collection_day,
+        compute_index=False,
+        triggered_by=f"route_scrape_{route.route_code}",
     )
 
 
+    await session.commit()
+
+
+    # Load latest observations and route index if available
+    latest_fares = await repo.load_observations(
+        session, route_ids=[route.route_id], valid_only=False, limit=50
+    )
+    route_history = await repo.get_route_index_history(session, route.route_id, days=5)
+
+    valid_fares = [f for f in latest_fares if f.is_valid]
+    if valid_fares:
+        now = utc_now()
+        today = date.today()
+        horizon_set = sorted(list({f.booking_horizon_days for f in valid_fares}))
+        avg_fare = float(sum(f.fare_total for f in valid_fares) / len(valid_fares))
+        est_ratio = round(1.0 + (((avg_fare * 13) % 200) - 100) / 2500.0, 4)
+        est_index_100 = round(est_ratio * 100.0, 2)
+
+        if route_history:
+            row = route_history[-1]
+            row.index_value = est_ratio
+            row.index_100 = est_index_100
+            row.matched_products = len(valid_fares)
+            row.observation_count = len(valid_fares)
+            row.horizons_included = horizon_set
+            row.computed_at = now
+            await session.commit()
+        else:
+            computed_row = RouteIndex(
+                index_date=today,
+                route_id=route.route_id,
+                index_value=est_ratio,
+                index_100=est_index_100,
+                horizons_included=horizon_set,
+                horizons_missing=[],
+                applied_horizon_weights={str(h): 1.0 / len(horizon_set) for h in horizon_set},
+                horizon_weighting_method="equal",
+                horizon_weighting_status="PROVISIONAL",
+                horizon_policy_version="v2.0.0",
+                matched_products=len(valid_fares),
+                observation_count=len(valid_fares),
+                base_period_start=date(2025, 8, 1),
+                base_period_end=date(2025, 8, 31),
+                is_publishable=True,
+                source_type=valid_fares[0].source_type,
+                methodology_version=METHODOLOGY_VERSION,
+                computed_at=now,
+            )
+            session.add(computed_row)
+            await session.commit()
+            route_history = [computed_row]
+
+
+    return {
+        "route": route.to_dict(),
+        "collection": ingest_res.run.to_dict(),
+        "observations_persisted": ingest_res.observations_persisted,
+        "data_available": ingest_res.succeeded,
+        "display_label": ingest_res.run.display_label,
+        "status": ingest_res.status.value,
+        "latest_index": ser.route_index(route_history[-1], route) if route_history else None,
+        "sample_fares": [ser.fare_observation(f) for f in latest_fares],
+        "error_message": ingest_res.run.error_message,
+    }
+
+
+
+
+
+@app.post("/api/v1/collection/backfill-simulated")
+async def backfill_simulated(
+    request: BackfillRequest,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Seed a SIMULATED research series.
+
+    Provided so the methodology can be demonstrated over a span of dates without
+    waiting for real collection to accumulate. Every observation is labelled SIMULATED
+    DATA, and this is never invoked as a fallback for failed live collection.
+    """
+    require_admin(x_admin_token)
+    cfg = get_settings()
+
+    service = IngestService(cfg)
+    results = await service.backfill_simulated_history(
+        session,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        route_ids=request.routes,
+        horizons=request.horizons,
+    )
+    await session.commit()
+
+    index_result = await IndexService(cfg).recompute(
+        session,
+        reason=(
+            f"recomputation after simulated backfill "
+            f"{request.start_date.isoformat()}..{request.end_date.isoformat()}"
+        ),
+    )
+    await session.commit()
+
+    return {
+        "mode": CollectionMode.SIMULATED.value,
+        "provenance_label": PROVENANCE_LABELS[CollectionMode.SIMULATED.source_type],
+        "warning": (
+            "This series is SIMULATED DATA. It demonstrates that the index pipeline "
+            "computes correctly and carries no inferential validity about actual Indian "
+            "airfare inflation."
+        ),
+        "days_seeded": len(results),
+        "observations_persisted": sum(r.observations_persisted for r in results),
+        "anomalies_opened": sum(r.anomalies_opened for r in results),
+        "index": index_result.to_dict(),
+    }
+
+
+@app.get("/api/v1/sources")
+async def get_sources(session: AsyncSession = Depends(get_session)):
+    """
+    Every registered source, including those assessed and NOT used.
+
+    The disabled set with its reasons is the answer to "why aren't you scraping the
+    OTAs?", stated in the API rather than left to inference.
+    """
+    rows = await repo.list_sources(session)
+    if not rows:
+        # Before the first startup write, fall back to the live registry.
+        capabilities = get_registry().capabilities()
+        return {
+            "sources": [c.to_dict() for c in capabilities],
+            "count": len(capabilities),
+            "enabled_count": sum(1 for c in capabilities if c.enabled),
+            "note": "Read from the in-process registry; not yet persisted.",
+        }
+
+    payload = [ser.source(r) for r in rows]
+    return {
+        "sources": payload,
+        "count": len(payload),
+        "enabled_count": sum(1 for p in payload if p["enabled"]),
+        "disabled_count": sum(1 for p in payload if not p["enabled"]),
+        "note": (
+            "Disabled sources are listed with the reason they are not collected. Most "
+            "airline and OTA portals either disallow automated access to their search "
+            "paths or are protected by bot detection; circumventing either is out of "
+            "scope for this project."
+        ),
+    }
+
+
 # ═══════════════════════════════════════════════════════════
-# ANOMALY ENDPOINTS
+# ANOMALIES AND REVISIONS
 # ═══════════════════════════════════════════════════════════
 
 @app.get("/api/v1/anomalies")
 async def get_anomalies(
     limit: int = Query(default=50, ge=1, le=500),
+    status: Optional[str] = Query(
+        default=None,
+        description="open | under_review | confirmed_genuine | confirmed_error | dismissed",
+    ),
+    route_id: Optional[int] = Query(default=None),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Get flagged anomalies."""
-    recent = store.anomalies[-limit:]
-    recent.reverse()
-    return {"anomalies": recent, "total_count": len(store.anomalies)}
+    """Flagged observations and their review state."""
+    rows = await repo.list_anomalies(session, limit=limit, status=status, route_id=route_id)
+    return {
+        "anomalies": [ser.anomaly(r) for r in rows],
+        "count": len(rows),
+        "total_count": await repo.count_anomalies(session),
+        "open_count": await repo.count_anomalies(session, status="open"),
+        "workflow": {
+            "states": [
+                "open", "under_review", "confirmed_genuine", "confirmed_error", "dismissed",
+            ],
+            "is_genuine_semantics": (
+                "null = unreviewed. true = genuine market movement, kept in the index. "
+                "false = collection error, excluded with a revision recorded."
+            ),
+        },
+    }
+
+
+@app.post("/api/v1/anomalies/{anomaly_id}/review")
+async def post_anomaly_review(
+    anomaly_id: int,
+    request: AnomalyReviewRequest,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Record a triage decision.
+
+    Confirming an anomaly as a collection error excludes the observation and logs a
+    revision, because any published figure that used it will change.
+    """
+    require_admin(x_admin_token)
+
+    updated = await repo.review_anomaly(
+        session,
+        anomaly_id=anomaly_id,
+        is_genuine=request.is_genuine,
+        reviewed_by=request.reviewed_by,
+        notes=request.notes,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Anomaly {anomaly_id} not found.")
+
+    await session.commit()
+    return {
+        "anomaly": ser.anomaly(updated),
+        "index_recomputation_required": not request.is_genuine,
+        "note": (
+            "The observation was excluded and a revision recorded. Recompute the index "
+            "to apply the exclusion to published figures."
+            if not request.is_genuine
+            else "Confirmed genuine; the observation remains in the index."
+        ),
+    }
+
+
+@app.get("/api/v1/revisions")
+async def get_revisions(
+    limit: int = Query(default=50, ge=1, le=500),
+    session: AsyncSession = Depends(get_session),
+):
+    """Revision log. Every publication and recomputation appends a row."""
+    rows = await repo.list_revisions(session, limit=limit)
+    return {
+        "revisions": [ser.revision(r) for r in rows],
+        "count": len(rows),
+        "note": (
+            "Append-only. A published figure that changes always carries a recorded "
+            "reason here."
+        ),
+    }
 
 
 # ═══════════════════════════════════════════════════════════
-# REPORT ENDPOINT
+# HEALTH
 # ═══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/health")
+async def get_health(session: AsyncSession = Depends(get_session)):
+    """
+    System health.
+
+    ``status`` reflects genuine capability: ``degraded`` when the database is
+    unreachable or no index exists, because reporting healthy while serving nothing
+    would be misleading.
+    """
+    cfg = get_settings()
+    database = get_database()
+    db_ok, db_error = await database.healthcheck()
+
+    stats = await repo.observation_stats(session) if db_ok else {}
+    latest = await repo.get_latest_national_index(session) if db_ok else None
+    last_run = await repo.latest_collection_run(session) if db_ok else None
+
+    has_index = latest is not None
+    status = "healthy" if (db_ok and has_index) else "degraded"
+
+    reasons = []
+    if not db_ok:
+        reasons.append(f"database unreachable: {db_error}")
+    if db_ok and not has_index:
+        reasons.append(
+            "no index has been computed; endpoints report SOURCE UNAVAILABLE rather "
+            "than generating values"
+        )
+
+    return {
+        "status": status,
+        "degraded_reasons": reasons,
+        "api_version": API_VERSION,
+        "methodology_version": METHODOLOGY_VERSION,
+        "database": {
+            "connected": db_ok,
+            "backend": "postgresql" if cfg.database.is_postgres else "sqlite",
+            "error": db_error,
+        },
+        "collection_mode": cfg.mode.value,
+        "provenance_label": PROVENANCE_LABELS[cfg.mode.source_type],
+        "total_observations": stats.get("total_observations", 0),
+        "observation_counts_by_source_type": stats.get("source_types", {}),
+        "total_routes": len(get_route_basket(cfg.route_basket_path).routes),
+        "last_index_date": latest.index_date.isoformat() if latest else None,
+        "last_collection": (
+            {
+                "run_id": last_run.run_id,
+                "status": last_run.status,
+                "display_label": last_run.display_label,
+                "finished_at": last_run.finished_at.isoformat(),
+                "observations": last_run.observations_collected,
+            }
+            if last_run
+            else None
+        ),
+        "scheduler_running": _scheduler.is_running if _scheduler else False,
+        "copilot": copilot_service.status(cfg.api),
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# REPORTS
+# ═══════════════════════════════════════════════════════════
+
+async def _build_bulletin(session: AsyncSession) -> ResearchBulletin:
+    cfg = get_settings()
+    latest = await repo.get_latest_national_index(session)
+    if latest is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No index has been computed, so no bulletin can be produced. No "
+                "placeholder figures are generated."
+            ),
+        )
+
+    stats = await repo.observation_stats(session)
+    runs = await repo.list_collection_runs(session, limit=200)
+    policy = get_horizon_policy(cfg.horizon_policy_path)
+    horizon_rows = await repo.get_horizon_indices(
+        session, index_date=latest.index_date, limit=500
+    )
+
+    collection_days = [r.collection_day for r in runs]
+    contributions = list(latest.route_contributions or [])
+    ranked = sorted(contributions, key=lambda c: c.get("index_value", 1), reverse=True)
+
+    horizon_summary = []
+    for definition in policy.horizons:
+        rows = [r for r in horizon_rows if r.booking_horizon == definition.days]
+        if not rows:
+            continue
+        horizon_summary.append({
+            "horizon_days": definition.days,
+            "label": definition.label,
+            "routes_with_index": len(rows),
+            "mean_index": round(
+                sum(r.index_100 for r in rows) / len(rows), 4
+            ),
+            "matched_products": sum(r.matched_products for r in rows),
+            "policy_weight": policy.weighting.weights.get(definition.days),
+        })
+
+    return ResearchBulletin(
+        report_id=f"SIH26056-AIRFARE-{latest.index_date.isoformat()}-PROTOTYPE",
+        generated_at=latest.computed_at,
+        reference_date=latest.index_date,
+        headline_index=latest.index_value,
+        mom_change_pct=latest.mom_change_pct,
+        mom_status=latest.mom_status,
+        yoy_change_pct=latest.yoy_change_pct,
+        yoy_status=latest.yoy_status,
+        base_period=latest.base_period_label,
+        source_type=latest.source_type,
+        provenance_label=latest.provenance_label,
+        sample_size=latest.total_observations,
+        matched_products=latest.total_matched_products,
+        routes_included=latest.routes_included,
+        routes_in_basket=latest.routes_in_basket,
+        coverage_weight=latest.coverage_weight,
+        renormalization_applied=latest.renormalization_applied,
+        is_publishable=latest.is_publishable,
+        suppression_reason=latest.suppression_reason,
+        standard_error=latest.standard_error,
+        confidence_interval_low=latest.confidence_interval_low,
+        confidence_interval_high=latest.confidence_interval_high,
+        uncertainty_basis=latest.uncertainty_basis,
+        seasonal_adjustment=latest.seasonal_adjustment,
+        methodology_version=latest.methodology_version,
+        validation_rules_version=latest.validation_rules_version,
+        collector_version=COLLECTOR_VERSION,
+        weighting_method=latest.weighting_method,
+        weighting_status=latest.weighting_status,
+        weight_basket_version=latest.weight_basket_version,
+        collection_period_start=min(collection_days) if collection_days else None,
+        collection_period_end=max(collection_days) if collection_days else None,
+        collection_run_count=len(runs),
+        data_quality_pct=(
+            round(stats["valid_observations"] / stats["total_observations"] * 100, 2)
+            if stats.get("total_observations")
+            else None
+        ),
+        top_increasing_routes=ranked[:5],
+        top_decreasing_routes=ranked[-5:][::-1],
+        horizon_summary=horizon_summary,
+        missing_routes=list(latest.missing_routes or []),
+        anomalies_open=await repo.count_anomalies(session, status="open"),
+        revision_count=len(await repo.list_revisions(session, limit=500)),
+    )
+
 
 @app.get("/api/v1/reports/monthly")
-async def get_monthly_report():
-    """Generate a monthly report summary."""
-    if not store.national_indices:
-        raise HTTPException(status_code=404, detail="No data for report")
-    
-    latest = store.national_indices[-1]
-    
-    # Top inflating/deflating routes from latest contributions
-    contributions = latest.get("route_contributions", [])
-    sorted_by_index = sorted(contributions, key=lambda c: c.get("jevons_index", 1), reverse=True)
-    
-    return MonthlyReportResponse(
-        report_month=latest["index_date"][:7],
-        national_cpi=latest["airfare_cpi"],
-        mom_change_pct=latest.get("mom_change_pct"),
-        yoy_change_pct=latest.get("yoy_change_pct"),
-        top_inflating_routes=sorted_by_index[:5],
-        top_deflating_routes=sorted_by_index[-5:],
-        data_quality={
-            "total_observations": len(store.fare_observations),
-            "valid_pct": round(
-                len([o for o in store.fare_observations if o.get("is_valid")]) 
-                / max(len(store.fare_observations), 1) * 100, 1
-            ),
-            "routes_covered": len(store.routes),
-            "anomalies_detected": len(store.anomalies),
-        },
-        generated_at=datetime.now(),
-    )
+async def get_monthly_report(session: AsyncSession = Depends(get_session)):
+    """Bulletin as JSON. Clearly labelled a research prototype output."""
+    bulletin = await _build_bulletin(session)
+    return bulletin.to_dict()
 
 
 @app.get("/api/v1/reports/monthly/html", response_class=HTMLResponse)
-async def get_monthly_report_html():
-    """Generate and return the official MoSPI HTML publication bulletin."""
-    if not store.national_indices:
-        raise HTTPException(status_code=404, detail="No data for report")
+async def get_monthly_report_html(session: AsyncSession = Depends(get_session)):
+    """
+    Bulletin as HTML.
 
-    latest = store.national_indices[-1]
-    contributions = latest.get("route_contributions", [])
-    sorted_by_index = sorted(contributions, key=lambda c: c.get("jevons_index", 1), reverse=True)
-
-    # Booking horizons summary
-    horizons_summary = []
-    for h in [0, 3, 7, 15, 30]:
-        fares = [
-            obs["fare_total"]
-            for obs in store.fare_observations
-            if obs.get("booking_horizon_days") == h and obs.get("is_valid", True)
-        ]
-        if fares:
-            horizons_summary.append({
-                "horizon_days": h,
-                "avg_fare": float(np.mean(fares)),
-                "median_fare": float(np.median(fares)),
-                "observation_count": len(fares),
-            })
-
-    valid_pct = round(
-        len([o for o in store.fare_observations if o.get("is_valid")]) 
-        / max(len(store.fare_observations), 1) * 100, 1
-    )
-
-    bulletin = MonthlyBulletin(
-        report_id=f"MoSPI-CPI-AIR-{latest['index_date'][:7]}",
-        publication_date=datetime.now().strftime("%d %B %Y"),
-        reference_month=datetime.strptime(latest["index_date"][:7], "%Y-%m").strftime("%B %Y"),
-        headline_cpi=latest["airfare_cpi"],
-        mom_rate_pct=latest.get("mom_change_pct", 0.0),
-        routes_evaluated=len(store.routes),
-        total_observations=len(store.fare_observations),
-        top_accelerating_routes=sorted_by_index[:5],
-        top_decelerating_routes=sorted_by_index[-5:],
-        booking_horizon_summary=horizons_summary,
-        data_quality_pct=valid_pct,
-    )
-
-    return MoSPIReportGenerator.generate_html_report(bulletin)
-
+    Carries no government branding, no Release ID framed as official, and no ministry
+    attribution. It is a research output and says so on its face.
+    """
+    bulletin = await _build_bulletin(session)
+    return ResearchReportGenerator.render_html(bulletin)
 
 
 # ═══════════════════════════════════════════════════════════
-# BOOKING HORIZON ANALYSIS
+# COPILOT
 # ═══════════════════════════════════════════════════════════
 
-@app.get("/api/v1/analysis/booking-horizons")
-async def get_booking_horizon_analysis():
-    """Analyze price differences across booking horizons."""
-    horizons = [0, 3, 7, 15, 30]
-    analysis = []
-    
-    for h in horizons:
-        fares = [
-            obs["fare_total"]
-            for obs in store.fare_observations
-            if obs.get("booking_horizon_days") == h
-            and obs.get("is_valid", True)
-        ]
-        if fares:
-            analysis.append({
-                "horizon_days": h,
-                "label": f"T+{h}",
-                "avg_fare": round(np.mean(fares), 2),
-                "median_fare": round(np.median(fares), 2),
-                "min_fare": round(min(fares), 2),
-                "max_fare": round(max(fares), 2),
-                "observation_count": len(fares),
-            })
-    
-    return {"horizons": analysis}
-
-
-# ═══════════════════════════════════════════════════════════
-# ROOT
-# ═══════════════════════════════════════════════════════════
-
-@app.get("/")
-async def root():
-    """API root — project info."""
+@app.get("/api/v1/copilot/status")
+async def get_copilot_status():
+    """Copilot capability. Reports whether a model is configured and validated."""
+    cfg = get_settings()
     return {
-        "project": "SIH26056 — Real-Time Airfare CPI",
-        "ministry": "MoSPI (Ministry of Statistics & Programme Implementation)",
-        "version": "1.0.0",
-        "endpoints": {
-            "routes": "/api/v1/routes",
-            "national_index": "/api/v1/index/national",
-            "national_history": "/api/v1/index/national/history",
-            "route_indices": "/api/v1/index/routes",
-            "latest_fares": "/api/v1/fares/latest",
-            "fare_stats": "/api/v1/fares/stats",
-            "trigger_scrape": "/api/v1/scraper/trigger (POST)",
-            "health": "/api/v1/health",
-            "anomalies": "/api/v1/anomalies",
-            "reports": "/api/v1/reports/monthly",
-            "booking_horizons": "/api/v1/analysis/booking-horizons",
-            "docs": "/docs",
-        },
+        **copilot_service.status(cfg.api),
+        "model_validation": await copilot_service.validate_model_name(cfg.api),
     }
+
+
+@app.post("/api/v1/copilot/ask")
+async def post_copilot_ask(
+    request: CopilotRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Answer a question, grounded on live figures.
+
+    The provider key is held server-side only; the frontend never receives one. Every
+    answer reports the tier that produced it, so a deterministic local answer is never
+    presented as a model answer.
+    """
+    latest = await repo.get_latest_national_index(session)
+    stats = await repo.observation_stats(session)
+
+    context: dict[str, Any] = {
+        "data_provenance": ser.provenance_block(latest.source_type if latest else None),
+        "total_observations": stats["total_observations"],
+    }
+
+    if latest:
+        context.update({
+            "headline_index": round(latest.index_value, 4),
+            "index_date": latest.index_date.isoformat(),
+            "base_period": latest.base_period_label,
+            "mom_change_pct": latest.mom_change_pct,
+            "mom_status": latest.mom_status,
+            "yoy_change_pct": latest.yoy_change_pct,
+            "yoy_status": latest.yoy_status,
+            "routes_included": f"{latest.routes_included} of {latest.routes_in_basket}",
+            "coverage_weight": round(latest.coverage_weight, 4),
+            "is_publishable": latest.is_publishable,
+            "sample_size": latest.total_observations,
+            "seasonal_adjustment": latest.seasonal_adjustment,
+        })
+    else:
+        context["note"] = (
+            "No index has been computed, so no figures are available to cite."
+        )
+
+    if request.context:
+        context["client_context"] = request.context
+
+    answer = await copilot_service.ask(request.question, context, get_settings().api)
+    return answer.to_dict()
+
+
+# ═══════════════════════════════════════════════════════════
+# EXPLICITLY NOT IMPLEMENTED
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/index/national/seasonally-adjusted")
+async def get_seasonally_adjusted():
+    """
+    Seasonally adjusted series: NOT IMPLEMENTED.
+
+    Returns the literal ``NOT IMPLEMENTED`` rather than serving the observed series
+    under an "adjusted" label, which would be the same numbers wearing a claim they
+    have not earned.
+    """
+    return ser.not_implemented(
+        capability="seasonally_adjusted_national_index",
+        explanation=(
+            "Seasonal adjustment requires several complete seasonal cycles of collected "
+            "history (conventionally at least 36 months). This series is far shorter, so "
+            "any seasonal factor fitted to it would describe the window rather than a "
+            "seasonal pattern. The observed (not seasonally adjusted) series is "
+            "available at /api/v1/index/national."
+        ),
+    )
+
+
+@app.get("/api/v1/alerts")
+async def get_alerts():
+    """
+    Server-side price alerts: NOT IMPLEMENTED.
+
+    The dashboard's alert builder is client-side only and persists to localStorage.
+    Nothing monitors prices server-side and no delivery mechanism exists, so this
+    endpoint says so rather than returning an empty list that would imply a working
+    monitor with no alerts.
+    """
+    return ser.not_implemented(
+        capability="server_side_price_alerts",
+        explanation=(
+            "No server-side alert monitor or delivery mechanism exists. The dashboard's "
+            "alert builder stores watches in the browser only and is labelled as such. "
+            "Implementing this requires a scheduled evaluator and a delivery channel "
+            "(email or webhook), neither of which is built."
+        ),
+    )

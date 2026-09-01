@@ -26,8 +26,12 @@ share/python-wheels/
 .coverage
 htmlcov/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 
 # Node / Next.js
 node_modules/

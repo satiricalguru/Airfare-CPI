@@ -1,0 +1,62 @@
+{
+  "$comment": [
+    "AUTHORITATIVE ROUTE BASKET — SINGLE SOURCE OF TRUTH.",
+    "",
+    "This file is the only place monthly passenger volumes are defined. Route weights",
+    "are DERIVED from these volumes at runtime (w_r = pax_r / sum(pax)), so they always",
+    "sum to exactly 1.0 and cannot drift out of sync with a second copy.",
+    "",
+    "backend/database/seed_routes.sql is generated from this file. Python code, the API,",
+    "the frontend and the README all read the derived weights rather than restating them.",
+    "Do not hardcode a weight anywhere."
+  ],
+  "basket_id": "SIH26056-DOMESTIC-25",
+  "basket_version": "2.0.0",
+  "effective_from": "2026-08-01",
+  "currency": "INR",
+  "weighting": {
+    "method": "passenger_volume",
+    "status": "PROVISIONAL",
+    "formula": "w_r = pax_r / sum_k(pax_k)",
+    "is_official_cpi_expenditure_weight": false,
+    "label": "Provisional passenger-volume weights (not official CPI expenditure shares)",
+    "rationale": [
+      "A production CPI component requires EXPENDITURE shares: passengers x average fare.",
+      "Route-level expenditure data for Indian domestic aviation is not publicly available",
+      "at the city-pair granularity this basket needs, so passenger volume is used as a",
+      "documented proxy.",
+      "This is a methodological simplification, not an official MoSPI weighting scheme, and",
+      "every API response that exposes weights reports status=PROVISIONAL alongside them."
+    ],
+    "upgrade_path": "Multiply pax_r by the route's mean observed fare to obtain an expenditure proxy once a stable fare series exists for every route in the basket.",
+    "source_note": "Monthly passenger volumes are approximations of published DGCA domestic city-pair traffic, rounded to the nearest 10,000. They are illustrative magnitudes for a prototype basket, not a verbatim reproduction of a DGCA table.",
+    "review_policy": "Weights are held fixed within an index reference period and re-derived only when this file's basket_version changes. Any change creates an index_revisions record."
+  },
+  "routes": [
+    { "route_id": 1,  "origin_code": "DEL", "destination_code": "BOM", "origin_city": "New Delhi", "destination_city": "Mumbai",    "monthly_pax": 1200000, "is_active": true },
+    { "route_id": 2,  "origin_code": "DEL", "destination_code": "BLR", "origin_city": "New Delhi", "destination_city": "Bengaluru", "monthly_pax": 950000,  "is_active": true },
+    { "route_id": 3,  "origin_code": "BOM", "destination_code": "BLR", "origin_city": "Mumbai",    "destination_city": "Bengaluru", "monthly_pax": 870000,  "is_active": true },
+    { "route_id": 4,  "origin_code": "DEL", "destination_code": "HYD", "origin_city": "New Delhi", "destination_city": "Hyderabad", "monthly_pax": 780000,  "is_active": true },
+    { "route_id": 5,  "origin_code": "DEL", "destination_code": "CCU", "origin_city": "New Delhi", "destination_city": "Kolkata",   "monthly_pax": 740000,  "is_active": true },
+    { "route_id": 6,  "origin_code": "BOM", "destination_code": "HYD", "origin_city": "Mumbai",    "destination_city": "Hyderabad", "monthly_pax": 650000,  "is_active": true },
+    { "route_id": 7,  "origin_code": "DEL", "destination_code": "MAA", "origin_city": "New Delhi", "destination_city": "Chennai",   "monthly_pax": 600000,  "is_active": true },
+    { "route_id": 8,  "origin_code": "BOM", "destination_code": "CCU", "origin_city": "Mumbai",    "destination_city": "Kolkata",   "monthly_pax": 520000,  "is_active": true },
+    { "route_id": 9,  "origin_code": "BLR", "destination_code": "HYD", "origin_city": "Bengaluru", "destination_city": "Hyderabad", "monthly_pax": 480000,  "is_active": true },
+    { "route_id": 10, "origin_code": "DEL", "destination_code": "GOI", "origin_city": "New Delhi", "destination_city": "Goa",       "monthly_pax": 450000,  "is_active": true },
+    { "route_id": 11, "origin_code": "BOM", "destination_code": "MAA", "origin_city": "Mumbai",    "destination_city": "Chennai",   "monthly_pax": 430000,  "is_active": true },
+    { "route_id": 12, "origin_code": "BLR", "destination_code": "CCU", "origin_city": "Bengaluru", "destination_city": "Kolkata",   "monthly_pax": 400000,  "is_active": true },
+    { "route_id": 13, "origin_code": "DEL", "destination_code": "PNQ", "origin_city": "New Delhi", "destination_city": "Pune",      "monthly_pax": 390000,  "is_active": true },
+    { "route_id": 14, "origin_code": "BOM", "destination_code": "GOI", "origin_city": "Mumbai",    "destination_city": "Goa",       "monthly_pax": 380000,  "is_active": true },
+    { "route_id": 15, "origin_code": "DEL", "destination_code": "AMD", "origin_city": "New Delhi", "destination_city": "Ahmedabad", "monthly_pax": 370000,  "is_active": true },
+    { "route_id": 16, "origin_code": "BLR", "destination_code": "MAA", "origin_city": "Bengaluru", "destination_city": "Chennai",   "monthly_pax": 340000,  "is_active": true },
+    { "route_id": 17, "origin_code": "DEL", "destination_code": "JAI", "origin_city": "New Delhi", "destination_city": "Jaipur",    "monthly_pax": 320000,  "is_active": true },
+    { "route_id": 18, "origin_code": "BOM", "destination_code": "AMD", "origin_city": "Mumbai",    "destination_city": "Ahmedabad", "monthly_pax": 310000,  "is_active": true },
+    { "route_id": 19, "origin_code": "DEL", "destination_code": "LKO", "origin_city": "New Delhi", "destination_city": "Lucknow",   "monthly_pax": 300000,  "is_active": true },
+    { "route_id": 20, "origin_code": "BLR", "destination_code": "GOI", "origin_city": "Bengaluru", "destination_city": "Goa",       "monthly_pax": 280000,  "is_active": true },
+    { "route_id": 21, "origin_code": "HYD", "destination_code": "CCU", "origin_city": "Hyderabad", "destination_city": "Kolkata",   "monthly_pax": 270000,  "is_active": true },
+    { "route_id": 22, "origin_code": "DEL", "destination_code": "PAT", "origin_city": "New Delhi", "destination_city": "Patna",     "monthly_pax": 260000,  "is_active": true },
+    { "route_id": 23, "origin_code": "BOM", "destination_code": "JAI", "origin_city": "Mumbai",    "destination_city": "Jaipur",    "monthly_pax": 240000,  "is_active": true },
+    { "route_id": 24, "origin_code": "DEL", "destination_code": "COK", "origin_city": "New Delhi", "destination_city": "Kochi",     "monthly_pax": 230000,  "is_active": true },
+    { "route_id": 25, "origin_code": "BOM", "destination_code": "PNQ", "origin_city": "Mumbai",    "destination_city": "Pune",      "monthly_pax": 220000,  "is_active": true }
+  ]
+}

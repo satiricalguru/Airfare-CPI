@@ -1,46 +1,91 @@
 {
-    "horizons": [
-        {
-            "days": 0,
-            "label": "T+0 (Same-day)",
-            "description": "Walk-up / emergency fares — highest prices",
-            "advance_purchase_category": "last_minute",
-            "expected_price_multiplier": 2.5,
-            "statistical_rationale": "Captures distressed/urgent travel demand; essential for CPI accuracy as these fares reflect maximum willingness to pay"
-        },
-        {
-            "days": 3,
-            "label": "T+3 (3-day advance)",
-            "description": "Short-notice business travel threshold",
-            "advance_purchase_category": "short_notice",
-            "expected_price_multiplier": 2.0,
-            "statistical_rationale": "Brackets the 3-day advance purchase boundary commonly used in airline revenue management systems"
-        },
-        {
-            "days": 7,
-            "label": "T+7 (1-week advance)",
-            "description": "7-day advance purchase boundary",
-            "advance_purchase_category": "advance_7",
-            "expected_price_multiplier": 1.5,
-            "statistical_rationale": "The 7-day boundary is a key revenue management threshold; prices typically step down significantly after this point"
-        },
-        {
-            "days": 15,
-            "label": "T+15 (2-week advance)",
-            "description": "14/21-day advance purchase region",
-            "advance_purchase_category": "advance_14",
-            "expected_price_multiplier": 1.2,
-            "statistical_rationale": "Captures the 14-day and 21-day advance purchase fare classes that represent planned business and early leisure bookings"
-        },
-        {
-            "days": 30,
-            "label": "T+30 (1-month advance)",
-            "description": "Planned leisure travel — lowest regular prices",
-            "advance_purchase_category": "advance_30",
-            "expected_price_multiplier": 1.0,
-            "statistical_rationale": "Represents baseline planned-travel pricing; serves as the anchor for booking-window analysis and price discrimination measurement"
-        }
+  "$comment": [
+    "AUTHORITATIVE BOOKING-HORIZON STRATIFICATION POLICY — SINGLE SOURCE OF TRUTH.",
+    "",
+    "This file defines (a) which advance-purchase horizons are collected and (b) how the",
+    "horizon-specific indices are combined into a route index. It is read at runtime by",
+    "backend/engine/horizon.py. Nothing else defines horizon weights.",
+    "",
+    "IMPORTANT: the 'expected_price_multiplier' fields that previously lived here were",
+    "SIMULATOR CALIBRATION PARAMETERS. They described how the synthetic generator prices",
+    "each horizon. They were never a methodological weighting and must never be used as",
+    "one -- doing so would make the index reproduce the generator's own configuration.",
+    "They have been moved to backend/scraper/sources/simulator.py where they belong, and",
+    "the weighting below is stated independently of them."
+  ],
+  "policy_id": "horizon-stratification-v2",
+  "policy_version": "2.0.0",
+  "horizons": [
+    {
+      "days": 0,
+      "label": "T+0",
+      "name": "Same-day / walk-up",
+      "description": "Purchased on the day of departure.",
+      "advance_purchase_category": "last_minute",
+      "statistical_rationale": "Captures urgent and distressed travel demand. Price level here reflects willingness to pay under time constraint, which is a different consumer decision from planned travel and must not be pooled with it."
+    },
+    {
+      "days": 3,
+      "label": "T+3",
+      "name": "Short notice",
+      "description": "Three days before departure.",
+      "advance_purchase_category": "short_notice",
+      "statistical_rationale": "Brackets the short-notice business travel boundary used by airline revenue management systems."
+    },
+    {
+      "days": 7,
+      "label": "T+7",
+      "name": "One week advance",
+      "description": "Seven days before departure.",
+      "advance_purchase_category": "advance_7",
+      "statistical_rationale": "A common revenue-management threshold at which discount fare buckets close."
+    },
+    {
+      "days": 15,
+      "label": "T+15",
+      "name": "Two week advance",
+      "description": "Fifteen days before departure.",
+      "advance_purchase_category": "advance_14",
+      "statistical_rationale": "Covers the 14/21-day advance purchase fare classes typical of planned business and early leisure travel."
+    },
+    {
+      "days": 30,
+      "label": "T+30",
+      "name": "One month advance",
+      "description": "Thirty days before departure.",
+      "advance_purchase_category": "advance_30",
+      "statistical_rationale": "Planned discretionary leisure travel. Serves as the reference anchor for the advance-purchase curve."
+    }
+  ],
+  "weighting": {
+    "method": "equal",
+    "status": "PROVISIONAL",
+    "formula": "alpha_h = 1 / H for each of the H horizons that has a computable index",
+    "weights": {
+      "0": 0.2,
+      "3": 0.2,
+      "7": 0.2,
+      "15": 0.2,
+      "30": 0.2
+    },
+    "why_equal": [
+      "Ideally alpha_h would be the share of tickets actually SOLD at each advance-purchase",
+      "horizon. That distribution is held by airlines and is not published, so it cannot be",
+      "estimated from observable fare quotes.",
+      "Equal weighting is therefore chosen as an explicit, documented, and defensible",
+      "convention rather than an estimate. Its key property is that it is FIXED: because the",
+      "weights do not depend on how many observations each horizon happens to contribute,",
+      "the combined route index cannot move merely because the sample composition shifted.",
+      "Pooling observations across horizons (the previous behaviour) does not have this",
+      "property: it makes the index sensitive to the horizon mix, because T+0 fares sit at a",
+      "structurally higher level than T+30 fares."
     ],
-    "weighting_strategy": "equal",
-    "weighting_note": "All booking horizons receive equal weight in the combined index. Production version could weight by actual booking pattern distribution from airline data."
+    "is_official_cpi_weight": false,
+    "renormalization_policy": "If a horizon has no computable index for a period, the remaining horizons are renormalized to sum to 1.0 and the missing horizon is recorded on the index record. The index is only published when at least min_horizons_for_route_index horizons are present.",
+    "upgrade_path": "Replace with booking-distribution weights if and when advance-purchase sales shares become available from a citable source. Any such change is a methodology change and must create an index_revisions record."
+  },
+  "requirements": {
+    "min_horizons_for_route_index": 2,
+    "min_matched_products_per_horizon": 3
+  }
 }

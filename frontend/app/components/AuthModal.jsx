@@ -1,40 +1,54 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, KeyRound, Lock, LogOut, ShieldCheck, User, UserCheck, UserPlus, X } from "lucide-react";
+import { ArrowRight, Check, LogOut, ShieldCheck, User, UserCheck, UserPlus, X } from "lucide-react";
 
+/**
+ * DEMO PERSONAS — NOT AUTHENTICATION
+ *
+ * These are illustrative role presets used to preview how the dashboard would look
+ * for different user types. They are NOT credentials and grant nothing: this is a
+ * client-side view preference stored in localStorage, with no server-side session,
+ * no authorization, and no access control behind it.
+ *
+ * Previously this list contained invented named individuals with @mospi.gov.in,
+ * @dgca.gov.in and @rbi.org.in addresses and clearance labels such as
+ * "Level 4 · Full CPI Authority". That impersonated real institutions and implied
+ * an authorization model that does not exist, so the personas are now generic and
+ * explicitly unprivileged. See AUDIT.md C3.
+ */
 export const PRESET_OFFICERS = [
   {
-    id: "mospi-lead",
-    name: "Dr. Abhinav Sharma",
-    email: "analyst@mospi.gov.in",
-    agency: "Ministry of Statistics & PI (MoSPI)",
-    role: "Senior Statistical Officer",
-    clearance: "Level 4 · Full CPI Authority",
-    badge: "MoSPI Lead",
-    initials: "AS",
+    id: "demo-statistician",
+    name: "Demo Statistician",
+    email: "statistician@example.invalid",
+    agency: "Demo persona · statistical analysis view",
+    role: "Statistical Analysis (demo view)",
+    clearance: "Demo only · no privileges granted",
+    badge: "Demo",
+    initials: "DS",
     avatarColor: "#10b981",
   },
   {
-    id: "dgca-lead",
-    name: "Priya Nair",
-    email: "p.nair@dgca.gov.in",
-    agency: "Directorate General of Civil Aviation (DGCA)",
-    role: "Air Transport Analytics Lead",
-    clearance: "Level 3 · Corridor & Yield Access",
-    badge: "DGCA Lead",
-    initials: "PN",
+    id: "demo-aviation-analyst",
+    name: "Demo Aviation Analyst",
+    email: "aviation@example.invalid",
+    agency: "Demo persona · route and yield view",
+    role: "Route & Yield Analysis (demo view)",
+    clearance: "Demo only · no privileges granted",
+    badge: "Demo",
+    initials: "DA",
     avatarColor: "#38bdf8",
   },
   {
-    id: "rbi-research",
-    name: "Vikramaditya Sen",
-    email: "v.sen@rbi.org.in",
-    agency: "Reserve Bank of India (DEPR)",
-    role: "Macro Inflation Researcher",
-    clearance: "Level 3 · Macroeconomic Surveillance",
-    badge: "RBI DEPR",
-    initials: "VS",
+    id: "demo-economist",
+    name: "Demo Economist",
+    email: "economist@example.invalid",
+    agency: "Demo persona · macro inflation view",
+    role: "Macro Inflation Research (demo view)",
+    clearance: "Demo only · no privileges granted",
+    badge: "Demo",
+    initials: "DE",
     avatarColor: "#a78bfa",
   },
 ];
@@ -43,22 +57,22 @@ export const AUTH_STORAGE_KEY = "airfare-cpi-user-session-v1";
 
 export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLogout, onNotify }) {
   const [tab, setTab] = useState("signin"); // 'signin' | 'signup' | 'profile'
-  const [email, setEmail] = useState("analyst@mospi.gov.in");
-  const [pin, setPin] = useState("••••••••••••");
+  const [email, setEmail] = useState("");
+  // No password/PIN field: this flow performs no credential verification, so
+  // collecting a secret would falsely imply that one is checked.
 
   // Sign up state
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
-  const [signupAgency, setSignupAgency] = useState("MoSPI");
-  const [signupClearance, setSignupClearance] = useState("Level 2 · Statistical Contributor");
-  const [signupPin, setSignupPin] = useState("");
+  const [signupAgency, setSignupAgency] = useState("Demo persona");
+  const [signupClearance, setSignupClearance] = useState("Demo only · no privileges granted");
 
   if (!isOpen) return null;
 
   const handleQuickLogin = (officer) => {
     onLogin(officer);
     onClose();
-    if (onNotify) onNotify(`Authorized: Welcome back, ${officer.name} (${officer.badge}).`);
+    if (onNotify) onNotify(`Viewing as ${officer.name} (demo persona — no privileges granted).`);
   };
 
   const handleCustomSignIn = (e) => {
@@ -69,21 +83,23 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
     }
 
     const matched = PRESET_OFFICERS.find((o) => o.email.toLowerCase() === email.toLowerCase());
+    // Never infer an institution from an email domain — typing "@mospi.gov.in"
+    // must not produce a session labelled as Government of India.
     const userSession = matched || {
-      id: `user-${Date.now()}`,
+      id: `persona-${Date.now()}`,
       name: email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       email,
-      agency: email.includes("mospi") ? "MoSPI" : email.includes("gov.in") ? "Government of India" : "Aviation Research Institute",
-      role: "Verified Statistical Analyst",
-      clearance: "Level 2 · Standard Clearance",
-      badge: "Analyst",
+      agency: "Demo persona · self-selected",
+      role: "Dashboard viewer (demo)",
+      clearance: "Demo only · no privileges granted",
+      badge: "Demo",
       initials: email.slice(0, 2).toUpperCase(),
       avatarColor: "#10b981",
     };
 
     onLogin(userSession);
     onClose();
-    if (onNotify) onNotify(`Authenticated as ${userSession.name} (${userSession.agency}).`);
+    if (onNotify) onNotify(`Demo persona set to ${userSession.name}. No privileges granted.`);
   };
 
   const handleSignUp = (e) => {
@@ -105,20 +121,20 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
       .toUpperCase() || "AO";
 
     const newUser = {
-      id: `officer-${Date.now()}`,
+      id: `persona-${Date.now()}`,
       name: signupName.trim(),
       email: signupEmail.trim(),
-      agency: signupAgency,
-      role: signupAgency.includes("MoSPI") ? "Statistical Officer" : "Research Analyst",
+      agency: signupAgency || "Demo persona · self-selected",
+      role: "Dashboard viewer (demo)",
       clearance: signupClearance,
-      badge: signupAgency.slice(0, 8),
+      badge: "Demo",
       initials,
       avatarColor: "#10b981",
     };
 
     onLogin(newUser);
     onClose();
-    if (onNotify) onNotify(`Registration Approved: Clearance credentials activated for ${newUser.name}.`);
+    if (onNotify) onNotify(`Demo persona created for ${newUser.name}. No privileges granted.`);
   };
 
   const handleSignOutClick = () => {
@@ -137,10 +153,10 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
         <div className="modal-header">
           <div>
             <p className="eyebrow">
-              {currentUser ? "Active Session & Clearance" : "MoSPI Sovereign Access Control"}
+              {currentUser ? "Active demo persona" : "Demo persona selection"}
             </p>
             <h3>
-              {currentUser ? "Officer Profile" : tab === "signin" ? "Sign in to MoSPI Portal" : "Request Portal Access"}
+              {currentUser ? "Persona profile" : tab === "signin" ? "Choose a demo persona" : "Create a custom persona"}
             </h3>
           </div>
           <button
@@ -162,7 +178,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
               onClick={() => setTab("signin")}
               data-testid="auth-tab-signin"
             >
-              <KeyRound size={14} /> Sign in with SSO
+              <User size={14} /> Choose persona
             </button>
             <button
               type="button"
@@ -170,7 +186,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
               onClick={() => setTab("signup")}
               data-testid="auth-tab-signup"
             >
-              <UserPlus size={14} /> Request Clearance (Sign up)
+              <UserPlus size={14} /> Custom persona
             </button>
           </div>
         ) : null}
@@ -196,8 +212,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
 
             <div className="auth-clearance-meta">
               <div>
-                <small>Clearance Status</small>
-                <strong>{currentUser.clearance || "Level 3 · Verified Access"}</strong>
+                <small>Access level</small>
+                <strong>{currentUser.clearance || "Demo only · no privileges granted"}</strong>
               </div>
               <div>
                 <small>Session Integrity</small>
@@ -251,13 +267,15 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
         ) : tab === "signin" ? (
           /* Sign In Form */
           <div>
-            <p className="modal-copy">
-              Official single sign-on (Gov SSO) for MoSPI officers, DGCA analysts, and accredited economic researchers.
-            </p>
+            <div className="auth-demo-notice" role="note">
+              <strong>Demo personas — not a login.</strong> This prototype has no authentication and no
+              access control. Selecting a persona only changes labels shown in this browser; it grants no
+              permissions and sends nothing to a server. All dashboard data is publicly visible either way.
+            </div>
 
-            {/* 1-Click Fast Presets */}
+            {/* Persona presets */}
             <div className="auth-presets-section">
-              <p className="eyebrow" style={{ marginBottom: 8 }}>Fast 1-Click Authorized Presets:</p>
+              <p className="eyebrow" style={{ marginBottom: 8 }}>Preview the dashboard as:</p>
               <div className="auth-presets-grid">
                 {PRESET_OFFICERS.map((officer) => (
                   <button
@@ -281,38 +299,30 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
             </div>
 
             <div className="auth-divider">
-              <span>Or sign in with custom credentials</span>
+              <span>Or set a custom display name</span>
             </div>
 
             <form onSubmit={handleCustomSignIn}>
               <label className="modal-field">
-                Government Email / Institutional SSO ID
+                Display email (local only)
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@mospi.gov.in"
+                  placeholder="you@example.invalid"
                   data-testid="sign-in-email-input"
                   required
                 />
               </label>
-              <label className="modal-field">
-                Security PIN / Master Token
-                <input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  data-testid="sign-in-password-input"
-                  required
-                />
-              </label>
+              {/* No password field: nothing verifies a credential here, and asking for
+                  one would imply a security control that does not exist. */}
 
               <button
                 type="submit"
                 className="button button-dark modal-submit"
                 data-testid="sign-in-submit-button"
               >
-                <Lock size={15} /> Sign in with Gov SSO <ArrowRight size={15} />
+                <User size={15} /> Use this persona <ArrowRight size={15} />
               </button>
             </form>
           </div>
@@ -320,7 +330,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
           /* Sign Up Form */
           <div>
             <p className="modal-copy">
-              Request credentials for the MoSPI Real-Time Airfare CPI Ingestion &amp; Econometric Augmentation Platform.
+              Create a local display persona for the Airfare CPI dashboard. This is stored only in your
+              browser and grants no permissions.
             </p>
 
             <form onSubmit={handleSignUp}>
@@ -337,58 +348,28 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
               </label>
 
               <label className="modal-field">
-                Official / Institutional Email
+                Display email (local only)
                 <input
                   type="email"
                   value={signupEmail}
                   onChange={(e) => setSignupEmail(e.target.value)}
-                  placeholder="r.patel@mospi.gov.in or university.edu"
+                  placeholder="you@example.invalid"
                   data-testid="signup-email-input"
                   required
                 />
               </label>
 
-              <div className="modal-grid-2">
-                <label className="modal-field">
-                  Affiliated Ministry / Institution
-                  <select
-                    value={signupAgency}
-                    onChange={(e) => setSignupAgency(e.target.value)}
-                    data-testid="signup-agency-select"
-                  >
-                    <option value="Ministry of Statistics & PI (MoSPI)">MoSPI (Statistics Dept)</option>
-                    <option value="Directorate General of Civil Aviation (DGCA)">DGCA (Civil Aviation)</option>
-                    <option value="Reserve Bank of India (RBI)">Reserve Bank of India (RBI)</option>
-                    <option value="NITI Aayog">NITI Aayog</option>
-                    <option value="Ministry of Civil Aviation (MoCA)">Ministry of Civil Aviation</option>
-                    <option value="Academic & Policy Research Institute">Academic / Policy Research</option>
-                  </select>
-                </label>
-
-                <label className="modal-field">
-                  Requested Clearance Level
-                  <select
-                    value={signupClearance}
-                    onChange={(e) => setSignupClearance(e.target.value)}
-                    data-testid="signup-clearance-select"
-                  >
-                    <option value="Level 1 · Public Research Read">Level 1 · Research Read Access</option>
-                    <option value="Level 2 · Statistical Contributor">Level 2 · Statistical Contributor</option>
-                    <option value="Level 3 · Full Corridor Telemetry">Level 3 · Full Corridor Telemetry</option>
-                    <option value="Level 4 · National CPI Authority">Level 4 · National CPI Authority</option>
-                  </select>
-                </label>
-              </div>
-
+              {/* Institution and clearance selectors removed. A client-side form cannot
+                  grant a clearance level, and offering "Level 4 · National CPI Authority"
+                  implied an authorization model that does not exist. */}
               <label className="modal-field">
-                Create Security PIN (4–8 digits)
+                Description (optional, cosmetic)
                 <input
-                  type="password"
-                  value={signupPin}
-                  onChange={(e) => setSignupPin(e.target.value)}
-                  placeholder="••••••••"
-                  data-testid="signup-pin-input"
-                  required
+                  type="text"
+                  value={signupAgency}
+                  onChange={(e) => setSignupAgency(e.target.value)}
+                  placeholder="e.g. Demo persona · analyst view"
+                  data-testid="signup-agency-input"
                 />
               </label>
 
@@ -397,7 +378,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
                 className="button button-dark modal-submit"
                 data-testid="signup-submit-button"
               >
-                <UserCheck size={15} /> Request &amp; Activate Clearance <ArrowRight size={15} />
+                <UserCheck size={15} /> Create demo persona <ArrowRight size={15} />
               </button>
             </form>
           </div>

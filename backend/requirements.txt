@@ -1,39 +1,46 @@
-# FastAPI & Web
+# SIH26056 — Backend dependencies
+#
+# Only packages that are actually imported are listed. Anything added here must have
+# a corresponding import; the previous list carried ~500MB of unused wheels including
+# a browser automation stack no code referenced.
+
+# ── FastAPI & web ──
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
-pydantic-settings==2.7.1
-python-dotenv==1.0.1
 
-# Database
-asyncpg==0.30.0
-sqlalchemy[asyncio]==2.0.36
-psycopg2-binary==2.9.10
-alembic==1.14.1
-
-# Scraping
-playwright==1.49.1
-playwright-stealth==1.0.6
+# ── HTTP client ──
+# scraper/sources/amadeus.py (live source), scraper/politeness.py (robots.txt),
+# api/copilot.py (server-side LLM proxy), and the API test suite.
 httpx==0.28.1
 
-# Scheduling
+# ── Persistence ──
+# db/models.py, db/engine.py, db/repository.py. PostgreSQL is the target store
+# (docker-compose provisions it); SQLite is supported so the project runs without a
+# database server. There is no in-memory mode: published figures must survive restart.
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+aiosqlite==0.20.0
+
+# ── Statistical / numerical ──
+numpy==2.2.1
+
+# ── Scheduling ──
+# scraper/scheduler.py — real collection windows, wired into the app lifespan.
 apscheduler==3.10.4
 
-# Statistical / Data
-numpy==2.2.1
-pandas==2.2.3
-scipy==1.15.0
+# ── Timezones ──
+# Collection windows are configured in IST; scheduler/config resolve the zone.
+tzdata==2024.2
 
-# Report Generation
-weasyprint==63.1
-jinja2==3.1.5
+# ── Logging ──
+loguru==0.7.3
 
-# Testing
+# ── Testing ──
 pytest==8.3.4
 pytest-asyncio==0.25.0
 pytest-cov==6.0.0
 
-# Utilities
-python-dateutil==2.9.0
-pytz==2024.2
-loguru==0.7.3
+# ── Deferred: not imported yet, so not installed ──
+# alembic==1.14.1        # migrations; schema is currently created from metadata
+# weasyprint==63.1       # PDF bulletin export; only HTML is generated today

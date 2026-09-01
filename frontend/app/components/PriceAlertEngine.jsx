@@ -1,270 +1,266 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AIRPORTS_LIST, ROUTE_HEATMAP_DATA } from "../data/mockData";
+/**
+ * SIH26056 — Price watch builder (browser-local).
+ *
+ * Honesty note, stated on screen and not only here
+ * ------------------------------------------------
+ * There is NO server-side alert monitor and NO delivery mechanism. Nothing evaluates
+ * these watches when the browser is closed, and no email or webhook is ever sent. The
+ * backend reports this at `/api/v1/alerts` as NOT IMPLEMENTED.
+ *
+ * The audit found this component shipping three seeded watches with invented
+ * "triggered" states and relative timestamps ("1 day ago"), which made it look like a
+ * working monitor with a history. Those are gone: the list starts empty, and a watch is
+ * only ever created by the user.
+ *
+ * Current fares shown against a watch come from the route index data passed in as
+ * `routes`. When that is unavailable, the watch simply has no current value rather than
+ * a fabricated one.
+ */
 
-const WATCHLIST_STORAGE_KEY = "airfare-cpi-watchlist-v1";
-const DEFAULT_WATCHES = [
-  { id: "watch-1", from: "DEL", to: "BOM", type: "price_drop", target: 4800, currentFare: 5240, horizon: "T+15", status: "watching", created: "2 hours ago" },
-  { id: "watch-2", from: "BLR", to: "DEL", type: "price_drop", target: 4400, currentFare: 4350, horizon: "T+30", status: "triggered", created: "1 day ago" },
-  { id: "watch-3", from: "BOM", to: "GOI", type: "index_surge", target: 6.0, currentFare: 6890, horizon: "T+7", status: "watching", created: "3 days ago" },
-];
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Bell, Plus, Trash2 } from "lucide-react";
+import { AIRPORTS_LIST } from "../data/referenceData";
+import { NOT_AVAILABLE } from "../lib/api";
+import { fmtDateTime, fmtIndex, fmtInr } from "../lib/format";
 
-export default function PriceAlertEngine({ isDarkMode, onTriggerToast }) {
+const WATCHLIST_STORAGE_KEY = "airfare-cpi-watchlist-v2";
+const HORIZONS = ["T+0", "T+3", "T+7", "T+15", "T+30"];
+
+/** Restore saved watches. Guarded for the static-export prerender. */
+function readStoredWatches() {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export default function PriceAlertEngine({ onTriggerToast, routes = [] }) {
   const [origin, setOrigin] = useState("DEL");
   const [destination, setDestination] = useState("BOM");
+  const [alertType, setAlertType] = useState("price_drop");
   const [targetPrice, setTargetPrice] = useState("4500");
-  const [alertType, setAlertType] = useState("price_drop"); // price_drop | index_surge
   const [surgeThreshold, setSurgeThreshold] = useState("5");
   const [horizon, setHorizon] = useState("T+15");
 
-  const [activeWatches, setActiveWatches] = useState(() => {
-    if (typeof window === "undefined") return DEFAULT_WATCHES;
-    try {
-      const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_WATCHES;
-    } catch {
-      return DEFAULT_WATCHES;
-    }
-  });
+  // Starts EMPTY. No seeded watches, because a seeded "triggered" watch implies a
+  // monitor that evaluated it. Restored lazily rather than in an effect, so mount does
+  // not trigger a synchronous state update.
+  const [watches, setWatches] = useState(readStoredWatches);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(activeWatches));
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watches));
     } catch {
-      // Keep the benchmark watchlist when browser storage is unavailable.
+      /* storage unavailable; watches live for this session only */
     }
-  }, [activeWatches]);
+  }, [watches]);
 
-  const handleCreateWatch = (e) => {
-    e.preventDefault();
+  /** Route index lookup, so a watch can display a real current index. */
+  const routeByCode = useMemo(() => {
+    const map = new Map();
+    for (const r of routes) {
+      if (r.route_code) map.set(r.route_code, r);
+    }
+    return map;
+  }, [routes]);
+
+  const createWatch = (event) => {
+    event.preventDefault();
+
     if (origin === destination) {
-      if (onTriggerToast) onTriggerToast("Origin and Destination cannot be identical.", "warning");
+      onTriggerToast?.("Origin and destination cannot be the same.");
       return;
     }
 
-    const currentRoute = ROUTE_HEATMAP_DATA.find((r) => r.from === origin && r.to === destination);
-    const baseFare = currentRoute ? currentRoute.avgFare : 5500;
+    const routeCode = `${origin}-${destination}`;
+    const parsedTarget =
+      alertType === "price_drop"
+        ? Number.parseInt(targetPrice, 10)
+        : Number.parseFloat(surgeThreshold);
 
-    const newWatch = {
-      id: `watch-${Date.now()}`,
-      from: origin,
-      to: destination,
-      type: alertType,
-      target: alertType === "price_drop" ? parseInt(targetPrice, 10) || 5000 : parseFloat(surgeThreshold) || 5,
-      currentFare: baseFare,
-      horizon,
-      status: "watching",
-      created: "Just now",
-    };
-
-    setActiveWatches((prev) => [newWatch, ...prev]);
-    if (onTriggerToast) {
-      onTriggerToast(`Price Watch created for ${origin} → ${destination} (${alertType === "price_drop" ? `Target: ₹${targetPrice}` : `Surge > ${surgeThreshold}%`})`, "success");
+    if (!Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+      onTriggerToast?.("Enter a valid threshold.");
+      return;
     }
+
+    setWatches((current) => [
+      {
+        id: `watch-${Date.now()}`,
+        routeCode,
+        origin,
+        destination,
+        type: alertType,
+        target: parsedTarget,
+        horizon,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+
+    onTriggerToast?.(
+      `Watch saved in this browser for ${routeCode}. Nothing monitors it server-side.`,
+    );
   };
 
-  const handleDeleteWatch = (id) => {
-    setActiveWatches((prev) => prev.filter((w) => w.id !== id));
-    if (onTriggerToast) onTriggerToast("Price Watch removed.", "info");
-  };
+  const removeWatch = (id) => setWatches((current) => current.filter((w) => w.id !== id));
 
   return (
-    <div className="alert-engine" data-testid="price-alert-engine">
-      <div className="alert-engine-grid">
-        {/* Left Column: Create Alert Watch Form */}
-        <section className="alert-builder-panel">
-          <div className="alert-engine-heading">
-            <div className="alert-engine-icon" aria-hidden="true">
-              <span className="material-symbols-outlined">add_alert</span>
-            </div>
-            <div>
-              <h3 className="alert-engine-title">Create automated price watch</h3>
-              <p className="alert-engine-subtitle">
-                Trigger notifications on price dips or extreme surge anomalies
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleCreateWatch} className="alert-builder-form" data-testid="price-alert-builder-form">
-            {/* Origin & Destination Selectors */}
-            <div className="alert-form-grid">
-              <label className="alert-field">
-                <span>Origin city</span>
-                <select
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  className="alert-control"
-                  data-testid="price-alert-origin-select"
-                >
-                  {AIRPORTS_LIST.map((a) => (
-                    <option key={a.code} value={a.code}>
-                      {a.code} — {a.city}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="alert-field">
-                <span>Destination city</span>
-                <select
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  className="alert-control"
-                  data-testid="price-alert-destination-select"
-                >
-                  {AIRPORTS_LIST.map((a) => (
-                    <option key={a.code} value={a.code}>
-                      {a.code} — {a.city}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {/* Alert Trigger Type Toggle */}
-            <fieldset className="alert-field alert-trigger-fieldset">
-              <legend>Trigger condition</legend>
-              <div className="alert-trigger-options">
-                <button
-                  type="button"
-                  onClick={() => setAlertType("price_drop")}
-                  className={`alert-trigger-option ${alertType === "price_drop" ? "is-selected" : ""}`}
-                  aria-pressed={alertType === "price_drop"}
-                  data-testid="price-alert-drop-trigger-button"
-                >
-                  <span aria-hidden="true">↘</span> Price drops below (₹)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAlertType("index_surge")}
-                  className={`alert-trigger-option ${alertType === "index_surge" ? "is-selected" : ""}`}
-                  aria-pressed={alertType === "index_surge"}
-                  data-testid="price-alert-surge-trigger-button"
-                >
-                  <span aria-hidden="true">↗</span> Index surge exceeds (%)
-                </button>
-              </div>
-            </fieldset>
-
-            {/* Threshold Input & Horizon */}
-            <div className="alert-form-grid">
-              <label className="alert-field">
-                <span>{alertType === "price_drop" ? "Target fare (₹)" : "Surge threshold (%)"}</span>
-                <input
-                  type="number"
-                  value={alertType === "price_drop" ? targetPrice : surgeThreshold}
-                  onChange={(e) => alertType === "price_drop" ? setTargetPrice(e.target.value) : setSurgeThreshold(e.target.value)}
-                  placeholder={alertType === "price_drop" ? "e.g. 4500" : "e.g. 5.0"}
-                  className="alert-control alert-number-control"
-                  data-testid="price-alert-threshold-input"
-                />
-              </label>
-
-              <label className="alert-field">
-                <span>Advance horizon</span>
-                <select
-                  value={horizon}
-                  onChange={(e) => setHorizon(e.target.value)}
-                  className="alert-control"
-                  data-testid="price-alert-horizon-select"
-                >
-                  <option value="T+0">T+0 (Same day)</option>
-                  <option value="T+3">T+3 days</option>
-                  <option value="T+7">T+7 days</option>
-                  <option value="T+15">T+15 days</option>
-                  <option value="T+30">T+30 days</option>
-                </select>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              className="alert-submit-button"
-              data-testid="price-alert-submit-button"
+    <div className="alert-engine">
+      <form className="alert-builder" onSubmit={createWatch}>
+        <div className="filter-grid">
+          <label>
+            Origin
+            <select value={origin} onChange={(e) => setOrigin(e.target.value)} data-testid="alert-origin-select">
+              {AIRPORTS_LIST.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.code} — {a.city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Destination
+            <select
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              data-testid="alert-destination-select"
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                notification_add
-              </span>
-              <span>Activate price watch</span>
-            </button>
-          </form>
-        </section>
+              {AIRPORTS_LIST.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.code} — {a.city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Trigger
+            <select value={alertType} onChange={(e) => setAlertType(e.target.value)} data-testid="alert-type-select">
+              <option value="price_drop">Fare drops below</option>
+              <option value="index_surge">Index rises by more than</option>
+            </select>
+          </label>
+          {alertType === "price_drop" ? (
+            <label>
+              Target fare (INR)
+              <input
+                type="number"
+                min="500"
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+                data-testid="alert-target-price-input"
+              />
+            </label>
+          ) : (
+            <label>
+              Threshold (%)
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={surgeThreshold}
+                onChange={(e) => setSurgeThreshold(e.target.value)}
+                data-testid="alert-surge-input"
+              />
+            </label>
+          )}
+          <label>
+            Booking horizon
+            <select value={horizon} onChange={(e) => setHorizon(e.target.value)} data-testid="alert-horizon-select">
+              {HORIZONS.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button className="button button-dark" type="submit" data-testid="alert-create-button">
+          <Plus size={15} /> Save watch in this browser
+        </button>
+      </form>
 
-        {/* Right Column: Active Watches List */}
-        <section className="alert-watches-panel">
-          <div className="alert-watches-heading">
-            <div>
-              <h3 className="alert-engine-title">Active monitored watches <span>({activeWatches.length})</span></h3>
-              <p className="alert-engine-subtitle">
-                Continuous scraping telemetry comparing against target thresholds
-              </p>
-            </div>
-            <span className="alert-daemon-status"><i /> daemon active</span>
+      <div className="table-panel">
+        <div className="table-panel-header">
+          <div>
+            <p className="eyebrow">{watches.length} saved watch(es)</p>
+            <h3>Browser watchlist</h3>
           </div>
+          <span className="status-pill status-pill-muted">
+            <Bell size={12} /> Not monitored
+          </span>
+        </div>
 
-          <div className="alert-watch-list" data-testid="price-alert-watch-list">
-            {activeWatches.map((w) => {
-              const isTriggered = w.status === "triggered";
-              const isPriceDrop = w.type === "price_drop";
-
-              return (
-                <article
-                  key={w.id}
-                  className={`alert-watch ${isTriggered ? "is-triggered" : ""}`}
-                  data-testid={`price-alert-watch-${w.id}`}
-                >
-                  <div className="alert-watch-copy">
-                    <div className="alert-watch-route-row">
-                      <span className="alert-watch-route">
-                        {w.from} → {w.to}
-                      </span>
-                      <span className="alert-watch-chip alert-watch-horizon">
-                        {w.horizon}
-                      </span>
-                      <span className={`alert-watch-chip ${isTriggered ? "alert-watch-chip-triggered" : "alert-watch-chip-watching"}`}>
-                        {isTriggered ? "TARGET REACHED" : "WATCHING"}
-                      </span>
-                    </div>
-
-                    <div className="alert-watch-metrics">
-                      <div>
-                        <span>Current </span>
-                        <strong>
-                          ₹{w.currentFare.toLocaleString()}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Target </span>
-                        <strong className="alert-watch-target">
-                          {isPriceDrop ? `≤ ₹${w.target.toLocaleString()}` : `≥ +${w.target}%`}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Created </span>
-                        <span>{w.created}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="alert-watch-actions">
-                    <button
-                      onClick={() => handleDeleteWatch(w.id)}
-                      title="Delete watch"
-                      aria-label={`Delete watch for ${w.from} to ${w.to}`}
-                      className="alert-delete-button"
-                      data-testid={`price-alert-delete-${w.id}-button`}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        delete
-                      </span>
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+        {watches.length === 0 ? (
+          <p className="muted-note" data-testid="alert-empty-note">
+            No watches saved. Creating one stores it in this browser; it will not be
+            evaluated anywhere.
+          </p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Trigger</th>
+                  <th>Horizon</th>
+                  <th>Current route index</th>
+                  <th>Saved</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {watches.map((watch) => {
+                  const routeRow = routeByCode.get(watch.routeCode);
+                  return (
+                    <tr key={watch.id} data-testid={`alert-row-${watch.id}`}>
+                      <td>
+                        <strong>{watch.routeCode}</strong>
+                      </td>
+                      <td>
+                        {watch.type === "price_drop"
+                          ? `below ${fmtInr(watch.target)}`
+                          : `index up more than ${watch.target}%`}
+                      </td>
+                      <td>{watch.horizon}</td>
+                      <td className="mono">
+                        {/* Real index when available; otherwise N/A, never a stand-in. */}
+                        {routeRow ? fmtIndex(routeRow.value) : NOT_AVAILABLE}
+                      </td>
+                      <td>
+                        <small className="mono">{fmtDateTime(watch.createdAt)}</small>
+                      </td>
+                      <td>
+                        <span className="status-pill status-pill-muted">Not evaluated</span>
+                      </td>
+                      <td>
+                        <button
+                          className="row-action"
+                          onClick={() => removeWatch(watch.id)}
+                          aria-label={`Delete watch for ${watch.routeCode}`}
+                          data-testid={`alert-delete-${watch.id}`}
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </section>
+        )}
+        <p className="muted-note">
+          Every watch shows <strong>Not evaluated</strong> because that is the truth:
+          there is no monitor. A status of &ldquo;triggered&rdquo; would imply an
+          evaluation that never happened.
+        </p>
       </div>
     </div>
   );

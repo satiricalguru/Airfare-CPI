@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -12,11 +13,33 @@ import { getAssetPath } from "../utils/assetPath";
 
 export default function TermsOfServicePage() {
   const [dark, setDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    try {
+      const saved = window.localStorage.getItem("airfare_cpi_theme");
+      const isDark = saved === "dark" || (!saved && document.documentElement.classList.contains("dark"));
+      if (isDark) {
+        setDark(true);
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.classList.toggle("light", !dark);
-  }, [dark]);
+    try {
+      window.localStorage.setItem("airfare_cpi_theme", dark ? "dark" : "light");
+    } catch {
+      /* ignore */
+    }
+  }, [dark, mounted]);
 
   return (
     <div className="app-shell">
@@ -25,9 +48,10 @@ export default function TermsOfServicePage() {
         <div className="header-inner">
           <Link href="/" className="brand-lockup" style={{ textDecoration: "none" }}>
             <img
-              src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")}
+              src={getAssetPath(mounted && dark ? "/logo_dark.png" : "/logo.png")}
               alt="Airfare CPI Logo"
               className="brand-logo-img"
+              suppressHydrationWarning
             />
             <span>
               <strong>Airfare CPI</strong>

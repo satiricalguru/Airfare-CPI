@@ -1,113 +1,220 @@
 """
-SIH26056 — Airfare Scraping Scheduler
+SIH26056 — Collection scheduler.
 
-Orchestrates periodic price collection cycles using APScheduler:
-- Default runs at 10:00 AM and 6:00 PM IST (aligning with MoSPI price collection standards)
-- Cycles through all 25 DGCA basket routes
-- Evaluates the 5 booking horizons (T+0, T+3, T+7, T+15, T+30)
-- Triggers automatic validation and index recomputation
+Replaces dead code. The previous module was imported by nothing, used a fixed
+``asyncio.sleep(43200)`` interval rather than APScheduler despite claiming otherwise,
+and the "10:00 and 18:00 IST" collection windows it documented did not exist.
+
+This scheduler:
+
+* uses APScheduler with a real cron trigger, in a configured timezone;
+* runs at the configured collection hours (``SCHEDULER_COLLECTION_HOURS``);
+* invokes the SAME :class:`IngestService` the manual trigger uses, so a scheduled run
+  cannot behave differently from a manual one;
+* is actually started from the API lifespan when ``SCHEDULER_ENABLED=true``, and
+  reports honestly when it is not.
+
+Everything configurable is configurable: frequency, windows, enabled sources, booking
+horizons, retry policy and timeouts all come from :mod:`config`, which reads them from
+the environment.
 """
 
-import os
+from __future__ import annotations
+
 import asyncio
-from datetime import date, timedelta
-from typing import Callable, Optional
+from datetime import datetime
+from typing import Any, Optional
+from zoneinfo import ZoneInfo
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
-from .scrapers.live_scraper import ResilientAirlineScraper
-from .validator import FareValidator
+from config import Settings, get_settings
+from db.engine import get_database
+from engine.ingest_service import IngestResult, IngestService
 
 
-class ScrapingScheduler:
-    """
-    Manages automated periodic background scraping runs with controlled concurrency.
-    """
+class CollectionScheduler:
+    """Runs collection cycles on the configured schedule."""
 
-    def __init__(
-        self,
-        routes: list[dict],
-        on_data_collected: Optional[Callable[[list[dict]], None]] = None,
-        booking_horizons: Optional[list[int]] = None,
-        interval_seconds: Optional[int] = None,
-        max_concurrency: int = 6,
-    ):
-        self.routes = routes
-        self.on_data_collected = on_data_collected
-        self.booking_horizons = booking_horizons or [0, 3, 7, 15, 30]
-        self.interval_seconds = interval_seconds or int(os.getenv("SCRAPER_INTERVAL_SECONDS", "43200"))
-        self.max_concurrency = max_concurrency
-        self.scraper = ResilientAirlineScraper()
-        self.validator = FareValidator()
-        self.is_running = False
-        self._task: Optional[asyncio.Task] = None
+    def __init__(self, settings: Optional[Settings] = None):
+        self.settings = settings or get_settings()
+        self._scheduler: Optional[AsyncIOScheduler] = None
+        # Prevents a slow cycle from overlapping the next window: a second concurrent
+        # run would double-collect and could double-count observations.
+        self._lock = asyncio.Lock()
+        self._last_result: Optional[IngestResult] = None
+        self._last_error: Optional[str] = None
+        self._run_count = 0
 
-    async def _fetch_with_semaphore(self, sem: asyncio.Semaphore, route: dict, horizon: int, today: date):
-        dep_date = today + timedelta(days=horizon)
-        async with sem:
-            return await self.scraper.fetch_route_fares(
-                route_id=route["route_id"],
-                origin_code=route["origin_code"],
-                destination_code=route["destination_code"],
-                departure_date=dep_date,
-                booking_horizon=horizon,
+    # ── lifecycle ──
+
+    @property
+    def is_running(self) -> bool:
+        return self._scheduler is not None and self._scheduler.running
+
+    def start(self) -> None:
+        """Start the scheduler with a cron trigger per configured collection hour."""
+        cfg = self.settings.scheduler
+
+        if not cfg.enabled:
+            logger.info("Scheduler is disabled; not starting")
+            return
+
+        if self.is_running:
+            logger.warning("Scheduler is already running")
+            return
+
+        try:
+            timezone = ZoneInfo(cfg.timezone_name)
+        except Exception as exc:
+            logger.error(
+                f"Unknown scheduler timezone {cfg.timezone_name!r} "
+                f"({type(exc).__name__}); scheduler NOT started. Collection will only "
+                f"run when triggered manually."
+            )
+            return
+
+        if not cfg.collection_hours:
+            logger.error(
+                "SCHEDULER_ENABLED=true but SCHEDULER_COLLECTION_HOURS is empty; "
+                "scheduler NOT started. An enabled scheduler with no windows would "
+                "never collect while appearing active."
+            )
+            return
+
+        self._scheduler = AsyncIOScheduler(timezone=timezone)
+
+        hours = ",".join(str(h) for h in sorted(set(cfg.collection_hours)))
+        self._scheduler.add_job(
+            self.run_cycle,
+            trigger=CronTrigger(hour=hours, minute=0, timezone=timezone),
+            id="airfare_collection",
+            name="Airfare collection cycle",
+            # Skip a window rather than piling up missed runs after downtime: a burst
+            # of catch-up collections would hammer the source.
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=1800,
+        )
+
+        self._scheduler.start()
+        logger.info(
+            f"Scheduler started: collection at {hours}:00 {cfg.timezone_name} "
+            f"(mode={self.settings.mode.value}, "
+            f"horizons={self.settings.scraper.booking_horizons})"
+        )
+
+    def stop(self) -> None:
+        if self._scheduler is not None and self._scheduler.running:
+            self._scheduler.shutdown(wait=False)
+            logger.info("Scheduler stopped")
+        self._scheduler = None
+
+    def next_run_iso(self) -> Optional[str]:
+        """Next scheduled fire time, or None when not scheduled."""
+        if not self.is_running or self._scheduler is None:
+            return None
+        job = self._scheduler.get_job("airfare_collection")
+        if job is None or job.next_run_time is None:
+            return None
+        return job.next_run_time.isoformat()
+
+    # ── the scheduled work ──
+
+    async def run_cycle(self) -> Optional[IngestResult]:
+        """
+        Run one collection cycle.
+
+        Uses the same ingestion service as the manual trigger, so there is exactly one
+        ingestion implementation and a scheduled run's provenance handling is identical.
+        """
+        if self._lock.locked():
+            logger.warning(
+                "A collection cycle is still running; skipping this window rather than "
+                "starting a concurrent run"
+            )
+            return None
+
+        async with self._lock:
+            self._run_count += 1
+            started = datetime.now()
+            logger.info(
+                f"Scheduled collection cycle #{self._run_count} starting "
+                f"(mode={self.settings.mode.value})"
             )
 
-    async def run_single_cycle(self) -> dict:
-        """
-        Executes one complete collection pass over all routes and horizons using concurrent worker tasks.
-        """
-        logger.info(f"Starting concurrent scraping cycle across {len(self.routes)} routes & {len(self.booking_horizons)} horizons...")
-        today = date.today()
-        sem = asyncio.Semaphore(self.max_concurrency)
+            database = get_database()
+            service = IngestService(self.settings)
 
-        tasks = [
-            self._fetch_with_semaphore(sem, route, horizon, today)
-            for route in self.routes
-            for horizon in self.booking_horizons
-        ]
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        all_collected = []
-
-        for r in results:
-            if not isinstance(r, Exception) and getattr(r, "status", None) == "success":
-                all_collected.extend(r.observations)
-
-        # Validate the batch
-        accepted, flagged, excluded = self.validator.validate_batch(all_collected)
-        valid_obs = accepted + flagged
-
-        if self.on_data_collected and valid_obs:
-            self.on_data_collected(valid_obs)
-
-        summary = {
-            "total_collected": len(all_collected),
-            "accepted": len(accepted),
-            "flagged": len(flagged),
-            "excluded": len(excluded),
-            "timestamp": today.isoformat(),
-        }
-        logger.info(f"Scheduled scraping cycle complete: {summary}")
-        return summary
-
-    async def _loop(self):
-        while self.is_running:
             try:
-                await self.run_single_cycle()
-            except Exception as e:
-                logger.error(f"Error during scheduled scraping run: {e}")
-            await asyncio.sleep(self.interval_seconds)
+                async with database.session() as session:
+                    result = await asyncio.wait_for(
+                        service.ingest(
+                            session,
+                            mode=self.settings.mode,
+                            horizons=list(self.settings.scraper.booking_horizons),
+                            compute_index=True,
+                            triggered_by="scheduler",
+                        ),
+                        timeout=self.settings.scheduler.max_cycle_seconds,
+                    )
+                    await session.commit()
 
-    def start(self):
-        """Starts the recurring background scraping loop."""
-        if not self.is_running:
-            self.is_running = True
-            self._task = asyncio.create_task(self._loop())
-            logger.info(f"Scraping scheduler background loop started (interval: {self.interval_seconds}s)")
+                self._last_result = result
+                self._last_error = None
 
-    def stop(self):
-        """Stops the background scheduler."""
-        self.is_running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-        logger.info("Scraping scheduler stopped")
+                elapsed = (datetime.now() - started).total_seconds()
+                if result.succeeded:
+                    logger.info(
+                        f"Scheduled cycle #{self._run_count} complete in {elapsed:.1f}s: "
+                        f"{result.observations_persisted} observation(s) persisted, "
+                        f"label={result.run.display_label}"
+                    )
+                else:
+                    # Not an exception: a failed collection is a legitimate outcome that
+                    # must be recorded rather than retried into the ground.
+                    logger.warning(
+                        f"Scheduled cycle #{self._run_count} produced no data in "
+                        f"{elapsed:.1f}s: {result.run.error_message}. No data was "
+                        f"substituted."
+                    )
+                return result
+
+            except asyncio.TimeoutError:
+                self._last_error = (
+                    f"cycle exceeded the {self.settings.scheduler.max_cycle_seconds}s "
+                    f"limit and was abandoned"
+                )
+                logger.error(f"Scheduled cycle #{self._run_count}: {self._last_error}")
+                return None
+
+            except Exception as exc:
+                self._last_error = f"{type(exc).__name__}: {exc}"
+                logger.exception(
+                    f"Scheduled cycle #{self._run_count} failed: {self._last_error}"
+                )
+                return None
+
+    # ── introspection ──
+
+    def status(self) -> dict[str, Any]:
+        """Scheduler state, surfaced on the collection status endpoint."""
+        cfg = self.settings.scheduler
+        return {
+            "enabled": cfg.enabled,
+            "running": self.is_running,
+            "collection_hours": list(cfg.collection_hours),
+            "timezone": cfg.timezone_name,
+            "next_run": self.next_run_iso(),
+            "max_cycle_seconds": cfg.max_cycle_seconds,
+            "runs_completed": self._run_count,
+            "last_error": self._last_error,
+            "last_run": (
+                self._last_result.run.to_dict() if self._last_result else None
+            ),
+            "mode": self.settings.mode.value,
+            "booking_horizons": list(self.settings.scraper.booking_horizons),
+            "enabled_sources": list(self.settings.scraper.enabled_sources),
+        }

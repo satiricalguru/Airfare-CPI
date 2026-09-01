@@ -9,8 +9,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-airfare}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airfare}
       POSTGRES_DB: ${POSTGRES_DB:-airfare_cpi}
+    # Bound to loopback so the database is not exposed on the host's network
+    # interfaces. Previously "5432:5432" published it on all interfaces with the
+    # default password 'airfare'.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -30,9 +33,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://airfare:airfare@db:5432/airfare_cpi
-      DATABASE_URL_SYNC: postgresql://airfare:airfare@db:5432/airfare_cpi
-      SCRAPER_MODE: mock
+      # NOTE: the API does not connect to PostgreSQL yet (AUDIT.md Q1). These are
+      # passed so the wiring is ready, but storage is currently in-process only.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-airfare}:${POSTGRES_PASSWORD:-airfare}@db:5432/${POSTGRES_DB:-airfare_cpi}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-airfare}:${POSTGRES_PASSWORD:-airfare}@db:5432/${POSTGRES_DB:-airfare_cpi}
+      # 'mock' tags all output as data_provenance="synthetic".
+      SCRAPER_MODE: ${SCRAPER_MODE:-mock}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      INDEX_BASE_PERIOD_START: ${INDEX_BASE_PERIOD_START:-2026-08-01}
+      INDEX_BASE_PERIOD_DAYS: ${INDEX_BASE_PERIOD_DAYS:-7}
+      BOOKING_HORIZONS: ${BOOKING_HORIZONS:-0,3,7,15,30}
+      # Set this before exposing the API beyond localhost, or anyone can trigger a
+      # collection cycle and mutate the published index.
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

@@ -1,260 +1,2437 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
+
+/**
+ * SIH26056 — Airfare CPI dashboard.
+ *
+ * Every figure on this page comes from the API. Where the API does not supply a value,
+ * `N/A` is rendered with an explanation. There is no mock fallback anywhere in this
+ * file.
+ *
+ * What the audit found here, and what changed:
+ *
+ *   - `BASE_FACTORS` supplied a constant month-on-month rate per base year, so the
+ *     displayed MoM was a lookup rather than a measurement. Removed; MoM comes from
+ *     the API, and re-referencing is a real recomputation performed server-side.
+ *   - Fallback literals in live code (`totalObs || 48200`, `?? 574`, `"96.4%"`,
+ *     `anomalyCount = 6`, `"107.55"`) rendered invented numbers indistinguishably
+ *     from real ones. Removed.
+ *   - `TIME_SERIES_DATA`, `SUB_INDICES` and `ROUTE_HEATMAP_DATA` were ALWAYS mock and
+ *     never fetched. Removed; the chart, sub-indices and route matrix are built from
+ *     stored index data.
+ *   - The bulletin modal was headed "Government of India / MoSPI" with a Release ID.
+ *     Removed; it is labelled a research output.
+ *   - The hero claimed "48,200 quotes sampled daily" as a static fact. Now the real
+ *     sample size, or N/A.
+ */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Calculator, Check, ChevronLeft, ChevronRight, CircleHelp, Database, Download, FileText, Info, LayoutDashboard, Menu, Moon, Plane, Printer, Radar, RefreshCw, Route, Search, Settings, SlidersHorizontal, Sparkles, Sun, TrendingUp, X } from "lucide-react";
-import QRCode from "qrcode";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowUpRight,
+  Bell,
+  Calculator,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  Download,
+  FileText,
+  Info,
+  Layers,
+  LayoutDashboard,
+  MapPin,
+  Menu,
+  Moon,
+  Plane,
+  Radar,
+  RefreshCw,
+  Route as RouteIcon,
+  Search,
+  ShieldAlert,
+  SlidersHorizontal,
+  Sparkles,
+  Sun,
+  TrendingUp,
+  X,
+  Zap,
+} from "lucide-react";
+
 import IndiaNetworkMap from "./components/IndiaNetworkMap";
 import AviationCopilotModal, { CopilotSymbol } from "./components/AviationCopilotModal";
 import PriceAlertEngine from "./components/PriceAlertEngine";
 import RouteDetailModal from "./components/RouteDetailModal";
 import AuthModal, { AUTH_STORAGE_KEY } from "./components/AuthModal";
+import DataModeBanner, { DataModeChip } from "./components/DataModeBanner";
 import { getAssetPath } from "./utils/assetPath";
-import { AIRLINES_LIST, AIRPORTS_LIST, API_ENDPOINTS_LIST, BOOKING_HORIZONS, HOMEPAGE_FEATURED_CORRIDORS, METHODOLOGY_STEPS, RAW_FLIGHT_OBSERVATIONS, ROUTE_HEATMAP_DATA, SCRAPER_MONITOR_SOURCES, STATISTICAL_CONSTANTS, SUB_INDICES, TIME_SERIES_DATA, VELOCITY_RADAR_DATA } from "./data/mockData";
+import {
+  AIRLINES_LIST,
+  AIRPORTS_LIST,
+  AIRPORTS_BY_CODE,
+  INDIAN_STATES_LIST,
+  getAirport,
+  getAirportsForState,
+  API_ENDPOINTS_LIST,
+  METHODOLOGY_STEPS,
+  RANGE_OPTIONS,
+} from "./data/referenceData";
+import {
+  API_BASE,
+  DATA_MODE,
+  NOT_AVAILABLE,
+  apiGet,
+  emptyDashboardState,
+  loadDashboard,
+  scrapeRouteFares,
+  triggerCollection,
+} from "./lib/api";
+import {
+  changeReason,
+  fmtChange,
+  fmtCount,
+  fmtDate,
+  fmtDateTime,
+  fmtIndex,
+  fmtInr,
+  fmtInterval,
+  fmtPax,
+  fmtPct,
+  fmtPctFromFraction,
+  fmtRelative,
+  fmtShortDate,
+} from "./lib/format";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
 const NAV = [
-  ["home", "Overview", LayoutDashboard], ["price-index", "Price index", TrendingUp], ["routes", "Routes", Route], ["alerts", "Alerts", Bell],
-  ["flight-data", "Flight data", Plane], ["methodology", "Methodology", Calculator], ["about", "About", Info], ["monitoring", "Monitoring", Activity], ["copilot", "Copilot", CopilotSymbol],
+  ["home", "Overview", LayoutDashboard],
+  ["price-index", "Price index", TrendingUp],
+  ["routes", "Routes", RouteIcon],
+  ["horizons", "Horizons", Activity],
+  ["alerts", "Alerts", Bell],
+  ["flight-data", "Observations", Plane],
+  ["monitoring", "Monitoring", Database],
+  ["about", "About", Info],
+  ["copilot", "Copilot", CopilotSymbol],
 ];
+
 const cx = (...names) => names.filter(Boolean).join(" ");
+const PAGE_SIZE = 10;
+
+/**
+ * Restore the selected demo persona from browser storage.
+ *
+ * Used as a lazy `useState` initializer rather than read in an effect, so mount does
+ * not trigger a synchronous state update. Guarded for the static-export prerender,
+ * where `window` does not exist.
+ */
+function readStoredPersona() {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── small presentational helpers ──
 
 function SectionHeading({ eyebrow, title, description, action }) {
-  return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2>{description && <p className="section-description">{description}</p>}</div>{action}</div>;
+  return (
+    <div className="section-heading">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+        {description && <p className="section-description">{description}</p>}
+      </div>
+      {action}
+    </div>
+  );
 }
-function StatusDot({ active = true }) { return <span className={cx("status-dot", active ? "status-dot-live" : "status-dot-muted")} />; }
-function IconButton({ label, onClick, children, testId }) { return <button className="icon-button" aria-label={label} title={label} onClick={onClick} data-testid={testId}>{children}</button>; }
-function MetricCard({ label, value, change, detail, accent = "ink" }) { return <article className={cx("metric-card", `metric-card-${accent}`)} data-testid={`metric-card-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}><p className="metric-label">{label}</p><div className="metric-value-row"><strong>{value}</strong>{change && <span className="metric-change">{change}</span>}</div><p className="metric-detail">{detail}</p></article>; }
-function ReleaseShareCard() { const [qr, setQr] = useState(""); const url = typeof window !== "undefined" ? `${window.location.origin}/?release=MoSPI-CPI-AIR-2026-08` : ""; useEffect(() => { let active = true; if (url) { QRCode.toDataURL(url, { width: 112, margin: 1, color: { dark: "#172019", light: "#fffdf8" } }).then((data) => { if (active) setQr(data); }).catch(() => { if (active) setQr(""); }); } return () => { active = false; }; }, [url]); const copy = async () => { if (!url) return; try { await navigator.clipboard.writeText(url); } catch { window.prompt("Copy release permalink", url); } }; return <div className="release-share" data-testid="release-share-card"><div className="release-share-copy"><p className="eyebrow">Share this release</p><div className="release-share-url">{url || "Preparing permalink…"}</div></div><div className="release-share-actions">{qr && <img className="release-qr" src={qr} alt="QR code for the current Airfare CPI release" data-testid="release-qr-image" />}<button className="button button-outline" onClick={copy} data-testid="release-copy-link-button">Copy permalink</button></div></div>; }
-function ModalFrame({ title, eyebrow, onClose, children, wide = false, testId }) { return <div className="modal-backdrop" onClick={onClose} data-testid={testId}><div className={cx("modal-panel", wide && "modal-panel-wide")} onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">{eyebrow}</p><h3>{title}</h3></div><IconButton label="Close dialog" onClick={onClose} testId={`${testId}-close-button`}><X size={18} /></IconButton></div>{testId === "bulletin-modal" && <ReleaseShareCard />}{children}</div></div>; }
-function SortHeader({ label, column, sort, onSort }) { const active = sort.key === column; return <th aria-sort={active ? sort.direction === "asc" ? "ascending" : "descending" : "none"}><button className={cx("table-sort-button", active && "is-active")} onClick={() => onSort(column)} aria-label={`Sort by ${label}${active ? `, currently ${sort.direction === "asc" ? "ascending" : "descending"}` : ""}`} data-testid={`flight-sort-${column}-button`}>{label}<span aria-hidden="true">{active ? (sort.direction === "asc" ? "↑" : "↓") : "↕"}</span></button></th>; }
 
-const BASE_FACTORS = {
-  "2026": { factor: 1.0550, label: "2026 = 100", name: "2026 = 100 (Current Year / YTD Base)", momChange: "+1.82%" },
-  "2025": { factor: 1.0414, label: "2025 = 100", name: "2025 = 100 (Recent Annual Base)", momChange: "+2.35%" },
-  "2024": { factor: 1.0000, label: "2024 = 100", name: "2024 = 100 (Official DGCA Benchmark)", momChange: "+2.84%" },
-  "2023": { factor: 0.9410, label: "2023 = 100", name: "2023 = 100 (Historical Base)", momChange: "+3.95%" },
-};
+/**
+ * A metric tile.
+ *
+ * `value` is rendered exactly as given. Callers pass a formatter result, which is
+ * `N/A` when the underlying figure is unavailable — the tile never fills a gap itself.
+ */
+function MetricCard({ label, value, change, detail, accent = "ink", unavailableNote, testId }) {
+  const unavailable = value === NOT_AVAILABLE;
+  return (
+    <article
+      className={cx("metric-card", `metric-card-${accent}`, unavailable && "metric-card-na")}
+      data-testid={testId || `metric-card-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+    >
+      <p className="metric-label">{label}</p>
+      <div className="metric-value-row">
+        <strong>{value}</strong>
+        {change && !unavailable && <span className="metric-change">{change}</span>}
+      </div>
+      <p className="metric-detail">
+        {unavailable && unavailableNote ? unavailableNote : detail}
+      </p>
+    </article>
+  );
+}
+
+function EmptyState({ title, message, action }) {
+  return (
+    <div className="empty-state" data-testid="empty-state">
+      <ShieldAlert size={20} aria-hidden="true" />
+      <h3>{title}</h3>
+      <p>{message}</p>
+      {action}
+    </div>
+  );
+}
+
+function ModalFrame({ title, eyebrow, onClose, children, wide = false, testId }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose} data-testid={testId}>
+      <div
+        className={cx("modal-panel", wide && "modal-panel-wide")}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h3>{title}</h3>
+          </div>
+          <button
+            className="icon-button"
+            aria-label="Close dialog"
+            onClick={onClose}
+            data-testid={`${testId}-close-button`}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SortHeader({ label, column, sort, onSort }) {
+  const active = sort.key === column;
+  return (
+    <th aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        className={cx("table-sort-button", active && "is-active")}
+        onClick={() => onSort(column)}
+        aria-label={`Sort by ${label}`}
+        data-testid={`sort-${column}-button`}
+      >
+        {label}
+        <span aria-hidden="true">{active ? (sort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
+  );
+}
+
+// ── page ──
 
 export default function AirfareCPI() {
-  const [dark, setDark] = useState(false); const [tab, setTab] = useState("home"); const [connected, setConnected] = useState(false); const [stats, setStats] = useState(STATISTICAL_CONSTANTS); const [fares, setFares] = useState(RAW_FLIGHT_OBSERVATIONS);
-  const [baseYear, setBaseYear] = useState("2024");
-  const [range, setRange] = useState("1Y"); const [horizon, setHorizon] = useState(2); const [corridor, setCorridor] = useState("DEL-BOM"); const [route, setRoute] = useState(ROUTE_HEATMAP_DATA[0]);
-  const [origin, setOrigin] = useState("ALL"); const [destination, setDestination] = useState("ALL"); const [airline, setAirline] = useState("ALL"); const [stops, setStops] = useState("ALL");
-  const [search, setSearch] = useState(""); const [flightOrigin, setFlightOrigin] = useState("ALL"); const [flightDestination, setFlightDestination] = useState("ALL"); const [flightAirline, setFlightAirline] = useState("ALL"); const [flightStatus, setFlightStatus] = useState("ALL"); const [flightPage, setFlightPage] = useState(1); const [flightSort, setFlightSort] = useState({ key: "collectedAt", direction: "desc" });
-  const [scraping, setScraping] = useState(false); const [scrapeStep, setScrapeStep] = useState(0); const [logs, setLogs] = useState([]); const [apiIndex, setApiIndex] = useState(0); const [apiResponse, setApiResponse] = useState(null); const [apiLoading, setApiLoading] = useState(false);
-  const [modal, setModal] = useState(null); const [copilot, setCopilot] = useState(false); const [copilotQuery, setCopilotQuery] = useState(""); const [detail, setDetail] = useState(null); const [toast, setToast] = useState(""); const [mobileNavOpen, setMobileNavOpen] = useState(false); const [isPulseExpanded, setIsPulseExpanded] = useState(false);
-  const baseInfo = BASE_FACTORS[baseYear] || BASE_FACTORS["2024"];
-  const displayStats = useMemo(() => {
-    const factor = baseInfo.factor;
-    const rawCPI = typeof stats.headlineCPI === "number" ? stats.headlineCPI : parseFloat(stats.headlineCPI) || 107.42;
-    return {
-      ...stats,
-      headlineCPI: (rawCPI / factor).toFixed(2),
-      baseYear: baseInfo.label,
-      momChange: baseInfo.momChange,
-    };
-  }, [stats, baseInfo]);
-  const [currentUser, setCurrentUser] = useState(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
+  const [mounted, setMounted] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [tab, setTab] = useState("home");
+  const [state, setState] = useState(() => emptyDashboardState());
+  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState("1Y");
+  const [modal, setModal] = useState(null);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [detailRoute, setDetailRoute] = useState(null);
+  const [toast, setToast] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(readStoredPersona);
+
+  // Observations table controls
+  const [search, setSearch] = useState("");
+  const [filterOrigin, setFilterOrigin] = useState("ALL");
+  const [filterDestination, setFilterDestination] = useState("ALL");
+  const [filterAirline, setFilterAirline] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState({ key: "collection_datetime", direction: "desc" });
+
+  // Route indices & State-to-State flight library controls
+  const [routeSearch, setRouteSearch] = useState("");
+  const [routeOriginState, setRouteOriginState] = useState("ALL");
+  const [routeDestState, setRouteDestState] = useState("ALL");
+  const [routeOriginCode, setRouteOriginCode] = useState("ALL");
+  const [routeDestCode, setRouteDestCode] = useState("ALL");
+  const [routeFilterCategory, setRouteFilterCategory] = useState("ALL");
+  const [scrapingRoute, setScrapingRoute] = useState(false);
+  const [scrapingTarget, setScrapingTarget] = useState(null);
+  const [scrapingProgress, setScrapingProgress] = useState(null);
+  const [scrapingError, setScrapingError] = useState(null);
+
+  // Monitoring panel
+  const [collecting, setCollecting] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [adminToken, setAdminToken] = useState("");
+  const [apiIndex, setApiIndex] = useState(0);
+  const [apiResponse, setApiResponse] = useState(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [methodology, setMethodology] = useState(null);
+
+  const notify = useCallback((message) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 4000);
+  }, []);
+
+  const go = useCallback((next) => {
+    if (next === "copilot") {
+      setCopilotOpen(true);
+      setMobileNavOpen(false);
+      return;
     }
-  });
+    setTab(next);
+    setMobileNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  // ── theme synchronization on mount ──
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const saved = window.localStorage.getItem("airfare_cpi_theme");
+      if (saved) {
+        const isDark = saved === "dark";
+        setDark(isDark);
+        document.documentElement.classList.toggle("dark", isDark);
+        document.documentElement.classList.toggle("light", !isDark);
+      } else {
+        const isDark = document.documentElement.classList.contains("dark");
+        setDark(isDark);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.classList.toggle("light", !dark);
+    try {
+      window.localStorage.setItem("airfare_cpi_theme", dark ? "dark" : "light");
+    } catch {
+      /* ignore */
+    }
+  }, [dark, mounted]);
+
+  // Persona selection is restored from storage lazily rather than in an effect, so no
+  // state update happens synchronously during mount.
+
   const handleLogin = useCallback((userData) => {
     setCurrentUser(userData);
     try {
       window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
     } catch {
-      // ignore
+      /* ignore */
     }
   }, []);
+
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     try {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch {
-      // ignore
+      /* ignore */
     }
   }, []);
-  const notify = useCallback((message) => { setToast(message); window.setTimeout(() => setToast(""), 3500); }, []);
-  const go = useCallback((next) => { if (next === "copilot") { setCopilot(true); setMobileNavOpen(false); return; } setTab(next); setMobileNavOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }, []);
-  useEffect(() => { document.documentElement.classList.toggle("dark", dark); document.documentElement.classList.toggle("light", !dark); }, [dark]);
-  useEffect(() => { const source = getAssetPath(dark ? "/hero_night.jpg" : "/hero_day.jpg"); const image = document.querySelector(".hero-plane-img"); if (image) image.src = source; }, [dark]);
-  useEffect(() => { const panel = document.querySelector(".hero-index-stamp"); if (panel) { panel.dataset.status = connected ? "LIVE INDEX STREAM" : "RESEARCH PREVIEW"; panel.setAttribute("aria-live", "polite"); panel.setAttribute("aria-label", `${connected ? "Live index stream" : "Research preview"}. Headline CPI ${displayStats.headlineCPI}. Month on month ${displayStats.momChange}.`); } }, [connected, displayStats.headlineCPI, displayStats.momChange]);
-  useEffect(() => { const onKeyDown = (event) => { if (event.key === "Escape") setMobileNavOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, []);
+
+  // ── data loading ──
+  // State updates happen after the awaited fetch resolves, never synchronously inside
+  // the effect body.
   const refresh = useCallback(async () => {
-    try {
-      const health = await fetch(`${API_BASE}/api/v1/health`, { signal: AbortSignal.timeout(2400) });
-      if (!health.ok) throw new Error();
-      const healthData = await health.json();
-      setConnected(true);
+    const next = await loadDashboard();
+    setState(next);
+    setLoading(false);
+  }, []);
 
-      const [cpiRes, faresRes, anomaliesRes] = await Promise.allSettled([
-        fetch(`${API_BASE}/api/v1/index/national?base_year=${baseYear}`),
-        fetch(`${API_BASE}/api/v1/fares/latest?limit=100`),
-        fetch(`${API_BASE}/api/v1/anomalies?limit=50`),
-      ]);
-
-      let anomalyCount = 6;
-      if (anomaliesRes.status === "fulfilled" && anomaliesRes.value.ok) {
-        const aData = await anomaliesRes.value.json();
-        if (typeof aData.total_count === "number") anomalyCount = aData.total_count;
-      }
-
-      if (cpiRes.status === "fulfilled" && cpiRes.value.ok) {
-        const data = await cpiRes.value.json();
-        const totalObs = healthData.total_observations || 48200;
-        const validPct = totalObs > 0 ? ((totalObs - anomalyCount) / totalObs * 100).toFixed(1) + "%" : "96.4%";
-        setStats((old) => ({
-          ...old,
-          headlineCPI: data.national_cpi == null ? (data.airfare_cpi == null ? old.headlineCPI : Number(data.airfare_cpi).toFixed(2)) : Number(data.national_cpi).toFixed(2),
-          momChange: data.mom_change_pct == null ? old.momChange : `${data.mom_change_pct > 0 ? "+" : ""}${Number(data.mom_change_pct).toFixed(2)}%`,
-          yoyChange: data.yoy_change_pct == null ? old.yoyChange : `${data.yoy_change_pct > 0 ? "+" : ""}${Number(data.yoy_change_pct).toFixed(2)}%`,
-          dailyQuotesSampled: totalObs ? Number(totalObs).toLocaleString() : old.dailyQuotesSampled,
-          validRecordsPct: validPct,
-          flaggedAnomaliesCount: anomalyCount,
-          lastUpdate: "Just now",
-        }));
-      }
-
-      if (faresRes.status === "fulfilled" && faresRes.value.ok) {
-        const fareData = await faresRes.value.json();
-        if (Array.isArray(fareData.fares) && fareData.fares.length > 0) {
-          const mappedFares = fareData.fares.map((f, i) => {
-            const dateStr = (f.scrape_timestamp || "").slice(0, 16).replace("T", " ") || new Date().toISOString().slice(0, 16).replace("T", " ");
-            return {
-              id: `OBS-${f.observation_id || f.id || 1000 + i}`,
-              collectedAt: dateStr,
-              travelDate: f.departure_date || "2026-09-04",
-              origin: f.origin_code || "DEL",
-              destination: f.destination_code || "BOM",
-              airline: f.airline_name || f.airline_code || "IndiGo",
-              flightNumber: f.flight_number || `${f.airline_code || "6E"}-${100 + (f.route_id || 1) * 7}`,
-              depTime: f.departure_time || "10:15",
-              arrTime: f.arrival_time || "12:35",
-              stops: f.stops === 0 || f.is_direct ? "Non-stop" : `${f.stops || 1} stop`,
-              fareType: f.fare_family || (f.booking_horizon_days === 0 ? "Same-Day Walkup" : f.booking_horizon_days >= 30 ? "Super Saver 30D" : "Standard"),
-              baseFare: Math.round(f.fare_base || f.fare_total * 0.85 || 5000),
-              taxes: Math.round(f.fare_taxes || f.fare_total * 0.15 || 800),
-              totalFare: Math.round(f.fare_total || 5800),
-              source: f.source_platform || "Live Ingestion Pipeline",
-              status: f.is_valid !== false ? "Valid" : "Flagged (anomaly)",
-            };
-          });
-          setFares(mappedFares);
-        }
-      }
-    } catch {
-      setConnected(false);
-    }
-  }, [baseYear]);
   useEffect(() => {
-    let active = true;
-    const init = async () => {
-      if (active) await refresh();
+    let cancelled = false;
+
+    const tick = async () => {
+      const next = await loadDashboard();
+      if (cancelled) return;
+      setState(next);
+      setLoading(false);
     };
-    init();
-    const timer = window.setInterval(refresh, 15000);
+
+    void tick();
+    const timer = window.setInterval(() => void tick(), 30000);
+
     return () => {
-      active = false;
+      cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refresh]);
-  const openDetail = (item) => setDetail(item); const watch = (from, to, target) => { go("alerts"); notify(`Price watch ready for ${from} → ${to} at ₹${Math.round(target * .9).toLocaleString()}.`); };
-  const openRouteFromRow = (item) => openDetail({ from: item.origin, to: item.destination, avgFare: item.avgFare, cpi: item.cpi, change: item.change });
-  const handleRouteRowKeyDown = (event, item) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setRoute(item); openRouteFromRow(item); } };
-  const filteredRoutes = useMemo(() => ROUTE_HEATMAP_DATA.filter((item) => (origin === "ALL" || item.origin === origin) && (destination === "ALL" || item.destination === destination) && (stops === "ALL" || stops === "Non-stop")), [origin, destination, stops]);
-  const filteredFares = useMemo(() => fares.filter((item) => (flightOrigin === "ALL" || item.origin === flightOrigin) && (flightDestination === "ALL" || item.destination === flightDestination) && (flightAirline === "ALL" || item.airline === flightAirline) && (flightStatus === "ALL" || item.status === flightStatus) && (!search || [item.flightNumber, item.origin, item.destination, item.airline, item.source].some((value) => value.toLowerCase().includes(search.toLowerCase())))), [fares, flightOrigin, flightDestination, flightAirline, flightStatus, search]);
-  const sortedFares = useMemo(() => [...filteredFares].sort((a, b) => { const left = a[flightSort.key]; const right = b[flightSort.key]; const comparison = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right)); return flightSort.direction === "asc" ? comparison : -comparison; }), [filteredFares, flightSort]);
-  const pages = Math.ceil(sortedFares.length / 8) || 1; const visibleFares = sortedFares.slice((flightPage - 1) * 8, flightPage * 8);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "methodology" || methodology) return;
+    let cancelled = false;
+    void apiGet("/api/v1/methodology").then((r) => {
+      if (!cancelled && r.ok) setMethodology(r.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, methodology]);
+
+  // ── derived series ──
+  // The window is measured back from the LAST STORED index date, not from the wall
+  // clock. That is both pure (so it cannot produce different output on a re-render)
+  // and more correct: "the last 30 days" of a series should mean 30 days of that
+  // series, not 30 days ending today with a silent gap if collection has paused.
   const series = useMemo(() => {
-    const raw = TIME_SERIES_DATA[range] || TIME_SERIES_DATA["1Y"];
-    const factor = baseInfo.factor;
-    return raw.map((item) => ({
-      ...item,
-      cpi: Number((item.cpi / factor).toFixed(2)),
-      nonstop: item.nonstop ? Number((item.nonstop / factor).toFixed(2)) : undefined,
+    const option = RANGE_OPTIONS.find((r) => r.key === range) || RANGE_OPTIONS[4];
+    if (state.history.length === 0) return [];
+
+    const latest = state.history.reduce((max, point) => {
+      const t = new Date(point.index_date).getTime();
+      return Number.isFinite(t) && t > max ? t : max;
+    }, 0);
+    const cutoff = latest - option.days * 86400000;
+
+    return state.history
+      .filter((point) => new Date(point.index_date).getTime() >= cutoff)
+      .map((point) => ({
+        date: fmtShortDate(point.index_date),
+        value: point.value,
+        // Only plot bounds that were genuinely estimated.
+        lower: point.standard_error != null ? point.value - 1.96 * point.standard_error : undefined,
+        upper: point.standard_error != null ? point.value + 1.96 * point.standard_error : undefined,
+      }));
+  }, [state.history, range]);
+
+  const horizonGrouped = useMemo(() => {
+    const byHorizon = new Map();
+    for (const row of state.horizonIndices) {
+      if (!byHorizon.has(row.booking_horizon)) byHorizon.set(row.booking_horizon, []);
+      byHorizon.get(row.booking_horizon).push(row);
+    }
+    return [...byHorizon.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([horizon, rows]) => ({
+        horizon,
+        label: `T+${horizon}`,
+        routeCount: rows.length,
+        meanIndex: rows.reduce((sum, r) => sum + r.value, 0) / rows.length,
+        matchedProducts: rows.reduce((sum, r) => sum + r.matched_products, 0),
+        sampleSize: rows.reduce((sum, r) => sum + (r.sample_size || 0), 0),
+        policyWeight:
+          state.horizonPolicy?.weighting?.weights?.[`T+${horizon}`] ?? null,
+      }));
+  }, [state.horizonIndices, state.horizonPolicy]);
+
+  const filteredObservations = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return state.observations.filter((o) => {
+      if (filterOrigin !== "ALL" && o.origin_code !== filterOrigin) return false;
+      if (filterDestination !== "ALL" && o.destination_code !== filterDestination) return false;
+      if (filterAirline !== "ALL" && o.airline_name !== filterAirline) return false;
+      if (filterStatus === "valid" && !o.validation?.is_valid) return false;
+      if (filterStatus === "flagged" && o.validation?.action !== "flagged") return false;
+      if (!term) return true;
+      return [o.flight_number, o.route_code, o.airline_name, o.data_provenance?.source_name]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(term));
+    });
+  }, [state.observations, search, filterOrigin, filterDestination, filterAirline, filterStatus]);
+
+  const sortedObservations = useMemo(() => {
+    const rows = [...filteredObservations];
+    rows.sort((a, b) => {
+      const left = a[sort.key];
+      const right = b[sort.key];
+      const cmp =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left ?? "").localeCompare(String(right ?? ""));
+      return sort.direction === "asc" ? cmp : -cmp;
+    });
+    return rows;
+  }, [filteredObservations, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedObservations.length / PAGE_SIZE));
+  const visibleObservations = sortedObservations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const sortObservations = (key) =>
+    setSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
     }));
-  }, [range, baseInfo]);
-  const dynamicSubIndices = useMemo(() => {
-    const factor = baseInfo.factor;
-    return SUB_INDICES.map((item) => ({
-      ...item,
-      value: Number((item.value / factor).toFixed(2)),
-    }));
-  }, [baseInfo]);
-  const dynamicCorridors = useMemo(() => {
-    const factor = baseInfo.factor;
-    return HOMEPAGE_FEATURED_CORRIDORS.map((item) => ({
-      ...item,
-      cpiValue: Number((item.cpiValue / factor).toFixed(1)),
-    }));
-  }, [baseInfo]);
-  const endpoint = API_ENDPOINTS_LIST[apiIndex];
-  const triggerScrape = async () => {
-    if (scraping) return;
-    setScraping(true);
-    setScrapeStep(1);
-    const nowStr = new Date().toLocaleTimeString("en-GB");
-    setLogs([`${nowStr} [INIT] Connecting to the live ingestion pipeline…`]);
+
+  // ── actions ──
+  const runCollection = async () => {
+    if (collecting) return;
+    setCollecting(true);
+    const stamp = () => new Date().toLocaleTimeString("en-GB");
+    setLogs([`${stamp()} [START] Requesting a collection cycle from the backend…`]);
+
+    const result = await triggerCollection({ adminToken });
+
+    if (!result.ok) {
+      setLogs((old) => [
+        `${stamp()} [FAILED] ${result.error}`,
+        `${stamp()} [NOTE] No data was substituted. Figures remain as they were.`,
+        ...old,
+      ]);
+      notify("Collection could not be triggered.");
+      setCollecting(false);
+      return;
+    }
+
+    const data = result.data;
+    const collection = data.collection || {};
+    setLogs((old) => [
+      `${stamp()} [RESULT] status=${collection.status} label=${collection.display_label}`,
+      `${stamp()} [COLLECT] ${collection.observation_count ?? 0} observation(s) from ` +
+        `${collection.routes_with_data ?? 0}/${collection.routes_requested ?? 0} routes`,
+      data.validation
+        ? `${stamp()} [VALIDATE] ${data.validation.accepted} accepted, ` +
+          `${data.validation.flagged} flagged, ${data.validation.excluded} excluded`
+        : `${stamp()} [VALIDATE] no observations to validate`,
+      data.index
+        ? `${stamp()} [INDEX] ${data.index.national_indices_written} national value(s) written`
+        : `${stamp()} [INDEX] no recomputation performed`,
+      ...(collection.error_message ? [`${stamp()} [REASON] ${collection.error_message}`] : []),
+      ...old,
+    ]);
+
+    notify(
+      data.data_available
+        ? `Collection complete: ${collection.observation_count} observation(s) (${collection.display_label}).`
+        : `Collection produced no data: ${collection.display_label}.`,
+    );
+
+    await refresh();
+    setCollecting(false);
+  };
+
+  const testEndpoint = async () => {
+    setApiLoading(true);
+    const endpoint = API_ENDPOINTS_LIST[apiIndex];
+    const result = await apiGet(endpoint.path);
+    // Shows the real response, or the real error. No canned payload.
+    setApiResponse(result.ok ? result.data : { error: result.error, status: result.status });
+    setApiLoading(false);
+  };
+
+  const exportCsv = () => {
+    if (!state.observations.length) {
+      notify("No observations to export.");
+      return;
+    }
+    const header = [
+      "observation_id", "collection_datetime", "departure_date", "route", "airline",
+      "flight_number", "cabin", "fare_family", "stops", "fare_total_inr",
+      "source_type", "source_name", "is_valid", "validation_flags",
+    ];
+    const rows = state.observations.map((o) =>
+      [
+        o.observation_id, o.collection_datetime, o.departure_date, o.route_code,
+        o.airline_name, o.flight_number, o.cabin_class, o.fare_family, o.stops,
+        o.fare_total, o.data_provenance?.source_type, o.data_provenance?.source_name,
+        o.validation?.is_valid, (o.validation?.flags || []).join(";"),
+      ]
+        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header.join(","), ...rows].join("\n");
+    const link = document.createElement("a");
+    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+    link.download = `airfare-observations-${state.mode.toLowerCase().replace(/\s+/g, "-")}.csv`;
+    link.click();
+    notify(`Exported ${state.observations.length} observation(s), provenance included.`);
+  };
+
+  const openRouteDetail = (routeRow) => setDetailRoute(routeRow);
+
+  const handleSwapRoute = () => {
+    const tempState = routeOriginState;
+    const tempCode = routeOriginCode;
+    setRouteOriginState(routeDestState);
+    setRouteOriginCode(routeDestCode);
+    setRouteDestState(tempState);
+    setRouteDestCode(tempCode);
+  };
+
+  const handleScrapeRoute = async ({
+    origin,
+    destination,
+    originCity,
+    destinationCity,
+    mode,
+  }) => {
+    if (scrapingRoute) return;
+    setScrapingRoute(true);
+    setScrapingTarget({ origin, destination, originCity, destinationCity });
+    setScrapingProgress("Connecting to ingestion pipeline...");
+    setScrapingError(null);
+
+    const origObj = getAirport(origin);
+    const destObj = getAirport(destination);
+    const resolvedOriginCity = originCity || origObj?.city || origin;
+    const resolvedDestCity = destinationCity || destObj?.city || destination;
+
     try {
-      setScrapeStep(2);
-      setLogs((old) => [`${new Date().toLocaleTimeString("en-GB")} [SCRAPE] Dispatching airline API and OTA collectors.`, ...old]);
-      const response = await fetch(`${API_BASE}/api/v1/scraper/trigger`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ compute_index: true }),
+      setScrapingProgress(`Scraping fare quotes for ${origin} (${resolvedOriginCity}) → ${destination} (${resolvedDestCity}) across advance booking horizons (T+0, T+3, T+7, T+15, T+30)...`);
+
+      const res = await scrapeRouteFares({
+        origin,
+        destination,
+        originCity: resolvedOriginCity,
+        destinationCity: resolvedDestCity,
+        mode: mode || (state.mode === DATA_MODE.LIVE ? "LIVE" : "SIMULATED"),
+        horizons: [0, 3, 7, 15, 30],
+        adminToken,
       });
-      if (!response.ok) throw new Error();
-      const data = await response.json();
-      setScrapeStep(3);
-      setLogs((old) => [
-        `${new Date().toLocaleTimeString("en-GB")} [VALIDATE] ${data.observations_valid ?? 574} clean quotes, ${data.observations_flagged ?? 6} anomalies flagged.`,
-        ...old,
-      ]);
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
-      setScrapeStep(4);
-      const newCpi = typeof data.national_cpi === "number" ? data.national_cpi.toFixed(2) : "107.55";
-      setLogs((old) => [
-        `${new Date().toLocaleTimeString("en-GB")} [JEVONS] Route relatives & Laspeyres headline index recomputed at ${newCpi}.`,
-        ...old,
-      ]);
+
+      if (!res.ok) {
+        const msg = res.error || "Scraping engine could not complete collection.";
+        setScrapingError(msg);
+        notify(`Scraping failed: ${msg}`);
+        return;
+      }
+
+      setScrapingProgress("Validating observations, writing normalized fares & computing route index...");
       await refresh();
-      notify(`Ingestion cycle completed. ${data.observations_generated || "Fresh"} quotes collected.`);
-    } catch {
-      setLogs((old) => [`${new Date().toLocaleTimeString("en-GB")} [SIMULATION] Local benchmark cycle completed with 25 routes.`, ...old]);
+
+      const obsCount = res.data?.observations_persisted || res.data?.collection?.observation_count || 0;
+      notify(`Scraping complete: collected ${obsCount} observations for ${origin} → ${destination}!`);
+
+      if (res.data?.route) {
+        const found = (state.routeIndices || []).find((r) => r.route_id === res.data.route.route_id);
+        if (found) {
+          setDetailRoute(found);
+        } else if (res.data?.latest_index) {
+          setDetailRoute({
+            ...res.data.route,
+            ...res.data.latest_index,
+          });
+        }
+      }
+    } catch (err) {
+      setScrapingError(err.message || "Failed to execute scraping engine.");
+      notify(`Error: ${err.message}`);
     } finally {
-      window.setTimeout(() => {
-        setScraping(false);
-        setScrapeStep(0);
-      }, 650);
+      setScrapingRoute(false);
+      setTimeout(() => {
+        setScrapingProgress(null);
+      }, 4000);
     }
   };
-  const testApi = async () => { setApiLoading(true); try { const response = await fetch(`${API_BASE}${endpoint.path}`, { method: endpoint.method }); setApiResponse(response.ok ? await response.json() : endpoint.response); } catch { setApiResponse(endpoint.response); } finally { setApiLoading(false); } };
-  const exportCsv = () => { const csv = ["ID,Collected At,Travel Date,Origin,Destination,Airline,Flight Number,Total Fare,Source,Status", ...fares.map((item) => [item.id, item.collectedAt, item.travelDate, item.origin, item.destination, item.airline, item.flightNumber, item.totalFare, item.source, item.status].join(","))].join("\n"); const link = document.createElement("a"); link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`; link.download = "mospi-airfare-observations.csv"; link.click(); notify("CSV export prepared."); };
-  const printBulletin = () => { const afterPrint = () => { document.body.classList.remove("printing-bulletin"); window.removeEventListener("afterprint", afterPrint); }; document.body.classList.add("printing-bulletin"); window.addEventListener("afterprint", afterPrint); window.setTimeout(() => window.print(), 40); };
-  const sortFlightData = (key) => setFlightSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }));
 
-  const hero = <><section className="hero-section"><div className="hero-copy"><div className="live-kicker"><StatusDot active={connected} /> {connected ? "Live index stream" : "Research preview"}<span>·</span>{displayStats.lastUpdate}</div><p className="eyebrow">Airfare CPI / India / 2026</p><h1>Read the market<br /><em>before it moves.</em></h1><p className="hero-lede">A transparent, continuously updated view of domestic airfare inflation — from the official index to the corridors pushing it higher.</p><div className="hero-actions"><button className="button button-dark" onClick={() => go("price-index")} data-testid="hero-explore-index-button">Explore the index <ArrowRight size={16} /></button><button className="text-button" onClick={() => setModal("bulletin")} data-testid="hero-open-bulletin-button">Read the latest bulletin <ArrowUpRight size={15} /></button></div><div className="hero-proof"><span><Check size={14} /> 25 DGCA-weighted corridors</span><span><Check size={14} /> 48,200 quotes sampled daily</span></div></div><div className="hero-visual" data-testid="hero-flight-visual"><div className="hero-plane-flight-wrap"><img src={getAssetPath(dark ? "/hero_night.jpg" : "/hero_day.jpg")} alt="Commercial airliner cruising smoothly across domestic airspace" className="hero-plane-img" /><div className="hero-airflow-layer"><div className="hero-wisp hero-wisp-1" /><div className="hero-wisp hero-wisp-2" /><div className="hero-wisp hero-wisp-3" /></div><div className="hero-strobe-beacon" /><div className="hero-sun-glint" /></div><div className="hero-visual-overlay" /><div className={cx("hero-index-stamp", isPulseExpanded && "is-expanded")} data-testid="hero-status-pulse"><button className="hero-pulse-toggle" type="button" onClick={() => setIsPulseExpanded((expanded) => !expanded)} aria-expanded={isPulseExpanded} aria-controls="hero-pulse-details" data-testid="hero-status-pulse-toggle"><span>Headline national CPI</span><strong>{displayStats.headlineCPI}</strong><small>{displayStats.momChange} month on month</small><span className="hero-pulse-hint">{isPulseExpanded ? "Hide signal details" : "View signal details"}<ArrowRight size={12} /></span></button>{isPulseExpanded && <div className="hero-pulse-details" id="hero-pulse-details" data-testid="hero-pulse-details"><div><span>Quotes sampled</span><strong>{displayStats.dailyQuotesSampled}</strong></div><div><span>Last update</span><strong>{displayStats.lastUpdate}</strong></div><p>{connected ? "Live health and national index endpoints" : "Local benchmark dataset / research preview"}</p></div>}<button className="hero-index-link" type="button" onClick={() => go("price-index")} data-testid="hero-status-open-index-button">Open full price index <ArrowUpRight size={13} /></button></div><div className="hero-caption"><span>01</span><span>Domestic air corridors / 25</span><span>August 2026 provisional</span></div></div></section><section className="metric-rail" data-testid="overview-metrics"><MetricCard label="Headline CPI" value={displayStats.headlineCPI} change={displayStats.momChange} detail={`Base period ${displayStats.baseYear}`} accent="green" /><MetricCard label="Quotes sampled" value={displayStats.dailyQuotesSampled} detail="Across 25 domestic corridors" /><MetricCard label="Monthly passenger volume" value={displayStats.monthlyPaxVolume} detail="DGCA weighted basket" /><MetricCard label="Data quality" value={displayStats.validRecordsPct} change="+0.8 pts" detail="Validated and release-ready" accent="green" /></section></>;
-  const pulse = <section className="content-section"><SectionHeading eyebrow="Market pulse / selected corridors" title="Where prices are moving now" description="The six corridors with the clearest relationship between demand, capacity and price." action={<button className="text-button" onClick={() => go("routes")} data-testid="pulse-view-all-routes-button">View route matrix <ArrowRight size={15} /></button>} /><div className="corridor-grid">{dynamicCorridors.map((item, index) => <button className={cx("corridor-card", corridor === item.code && "corridor-card-selected")} key={item.code} onClick={() => setCorridor(item.code)} data-testid={`corridor-card-${item.code.toLowerCase()}`}><span className="card-index">0{index + 1}</span><div className="corridor-card-top"><span className="route-code">{item.code}</span><span className="positive-change">{item.cpiChange}</span></div><h3>{item.name}</h3><p>{item.tagline}</p><div className="corridor-number"><span>₹{item.avgFare.toLocaleString()}</span><small>median observed fare</small></div><div className="mini-bars"><i style={{ width: "71%" }} /><i style={{ width: "86%" }} /><i style={{ width: `${Math.min(100, item.cpiValue - 5)}%` }} /></div><span className="card-arrow"><ArrowUpRight size={15} /></span></button>)}</div>{(() => { const item = dynamicCorridors.find((value) => value.code === corridor) || dynamicCorridors[0]; return <div className="spotlight-panel"><div><p className="eyebrow">Selected corridor / price spread</p><h3>{item.name}</h3><p>{item.distance} · {item.duration} · {item.dailyFlights} daily flights</p></div><div className="spotlight-bars">{item.carrierBreakdown.map((carrier) => <div className="spotlight-bar" key={carrier.code}><div><span>{carrier.name}</span><strong>₹{carrier.fare.toLocaleString()}</strong></div><i><b style={{ width: `${Math.round(carrier.fare / Math.max(...item.carrierBreakdown.map((value) => value.fare)) * 100)}%`, backgroundColor: carrier.color }} /></i></div>)}</div><button className="button button-outline" onClick={() => { const found = ROUTE_HEATMAP_DATA.find((value) => value.route.replace("–", "-") === item.code); if (found) setRoute(found); go("routes"); }} data-testid="spotlight-open-route-button">Open route analysis <ArrowRight size={15} /></button></div>; })()}</section>;
-  const velocity = <section className="content-section"><SectionHeading eyebrow="Velocity radar / 7-day change" title="Pressure is not evenly distributed" description="The index is national. The pressure is local." action={<button className="button button-quiet" onClick={() => { setCopilotQuery("Which domestic routes are heating up fastest this week and why?"); setCopilot(true); }} data-testid="velocity-open-copilot-button"><CopilotSymbol size={15} /> Ask the copilot</button>} /><div className="velocity-grid">{[["Heating up", "Demand tightening", VELOCITY_RADAR_DATA.heatingUp, "warm", ArrowUpRight], ["Cooling down", "Capacity opening", VELOCITY_RADAR_DATA.coolingDown, "cool", ArrowDownRight]].map(([title, subtitle, data, tone, Icon]) => <div className={`velocity-panel velocity-panel-${tone}`} key={title}><div className="velocity-panel-heading"><div><span className="velocity-icon"><Icon size={17} /></span><h3>{title}</h3><p>{subtitle}</p></div><span className="eyebrow">Top 05</span></div>{data.slice(0, 4).map((item) => <div className="velocity-row" key={`${item.from}-${item.to}`}><div><strong>{item.from} <span>→</span> {item.to}</strong><p>{item.reason}</p></div><div className="velocity-value"><strong>{item.change7d}</strong><span>₹{item.currentFare.toLocaleString()}</span><div><button className="link-chip" onClick={() => openDetail({ from: item.from, to: item.to, avgFare: item.currentFare, cpi: item.cpi, change: item.change7d })} data-testid={`velocity-analyze-${item.from.toLowerCase()}-${item.to.toLowerCase()}`}>Analyze</button><button className="link-chip" onClick={() => watch(item.from, item.to, item.currentFare)} data-testid={`velocity-watch-${item.from.toLowerCase()}-${item.to.toLowerCase()}`}>Watch</button></div></div></div>)}</div>)}</div></section>;
-  const home = <div className="page-wrap page-wrap-home">{hero}{pulse}<section className="content-section"><SectionHeading eyebrow="Network / geographic coverage" title="A national picture, drawn from local movement" description="Each route carries a DGCA passenger weight into the national basket." /><div className="network-layout"><div className="network-map-panel"><IndiaNetworkMap isDarkMode={dark} /></div><div className="network-notes"><div className="editorial-note"><p className="eyebrow">Coverage footprint</p><strong>13.8M</strong><p>monthly domestic passengers across 28 States &amp; 8 Union Territories represented in the national basket.</p></div><div className="zonal-coverage-grid"><div className="zonal-card"><div><span>North Zone</span><strong>34.8%</strong></div><div className="zonal-bar"><i style={{ width: "34.8%" }} /></div><small>4.8M pax · DEL, SXR, IXC, JAI, LKO, DED</small></div><div className="zonal-card"><div><span>West Zone</span><strong>28.6%</strong></div><div className="zonal-bar"><i style={{ width: "28.6%" }} /></div><small>3.9M pax · BOM, AMD, PNQ, GOI, IDR</small></div><div className="zonal-card"><div><span>South Zone</span><strong>24.5%</strong></div><div className="zonal-bar"><i style={{ width: "24.5%" }} /></div><small>3.4M pax · BLR, HYD, MAA, COK, TRV</small></div><div className="zonal-card"><div><span>East &amp; NE</span><strong>12.1%</strong></div><div className="zonal-bar"><i style={{ width: "12.1%" }} /></div><small>1.7M pax · CCU, GAU, BBI, PAT, IXZ</small></div></div><div className="coverage-ranking-section"><div className="coverage-ranking-header"><span className="eyebrow">Strategic Hubs &amp; Traffic</span><span className="coverage-tag">Basket Share</span></div>{[{ code: "DEL", name: "Indira Gandhi Int'l, Delhi", share: "29.7%", pax: "4.10M" }, { code: "BOM", name: "Chhatrapati Shivaji, Mumbai", share: "20.6%", pax: "2.85M" }, { code: "BLR", name: "Kempegowda Int'l, Bengaluru", share: "18.8%", pax: "2.60M" }, { code: "HYD", name: "Rajiv Gandhi Int'l, Hyderabad", share: "12.7%", pax: "1.75M" }, { code: "CCU", name: "Netaji Subhash Chandra, Kolkata", share: "10.1%", pax: "1.40M" }, { code: "MAA", name: "Chennai Int'l, Chennai", share: "9.1%", pax: "1.25M" }, { code: "AMD", name: "Sardar Vallabhbhai, Ahmedabad", share: "5.9%", pax: "820K" }, { code: "GAU", name: "Gopinath Bordoloi, Guwahati", share: "3.5%", pax: "490K" }].map((hub, index) => <div className="hub-row" key={hub.code}><span>0{index + 1}</span><div><strong>{hub.code} / {hub.name}</strong><small>{hub.pax} monthly traffic</small></div><span className="hub-share-badge">{hub.share}</span></div>)}</div><div className="network-methodology-note"><span><Check size={12} /> 100% DGCA basket alignment</span><span><Check size={12} /> 48,200 quotes sampled daily</span><span><Check size={12} /> 36 States &amp; UTs connected</span></div></div></div></section>{velocity}</div>;
+  const filteredRouteIndices = useMemo(() => {
+    let list = state.routeIndices || [];
+    if (routeFilterCategory === "BASKET") {
+      list = list.filter((r) => r.route_id <= 25);
+    } else if (routeFilterCategory === "CUSTOM") {
+      list = list.filter((r) => r.route_id > 25);
+    }
 
-  const indexPage = <div className="page-wrap"><SectionHeading eyebrow="National macro index" title="Airfare price index" description="The headline signal, its component surfaces and the booking horizon that explains the movement." action={<button className="button button-dark" onClick={() => setModal("bulletin")} data-testid="index-open-bulletin-button"><FileText size={15} /> View bulletin</button>} /><div className="index-intro-grid"><div className="index-number-panel"><p className="eyebrow">All-India / provisional</p><strong>{displayStats.headlineCPI}</strong><span><ArrowUpRight size={16} /> {displayStats.momChange} month on month</span><div className="index-baseline"><span>Base period</span><strong>{displayStats.baseYear}</strong></div></div><div className="index-context-panel"><p className="eyebrow">Reading the signal</p><h3>Dynamic pricing is visible before it is felt in monthly releases.</h3><p>Non-stop fares are the majority of the basket, while connecting itineraries and short-notice horizons carry the strongest acceleration.</p><div className="context-line"><i /><i /><i /><i /><i /></div></div></div><div className="panel chart-panel"><div className="panel-header"><div><p className="eyebrow">Historical movement</p><h3>Headline CPI and route surfaces</h3></div><div className="segmented-control">{["7D", "1M", "3M", "6M", "1Y"].map((value) => <button className={range === value ? "is-active" : ""} key={value} onClick={() => setRange(value)} data-testid={`index-range-${value.toLowerCase()}-button`}>{value}</button>)}</div></div><div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><AreaChart data={series}><defs><linearGradient id="cpiGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#172019" stopOpacity={.18} /><stop offset="100%" stopColor="#172019" stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="rgba(0,0,0,.08)" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#88857f", fontSize: 11 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: "#88857f", fontSize: 11 }} /><Tooltip contentStyle={{ border: "1px solid rgba(0,0,0,.12)", borderRadius: 2, background: "#fffdf8", fontSize: 12 }} /><Area type="monotone" dataKey="cpi" stroke="#172019" strokeWidth={2.5} fill="url(#cpiGradient)" /><Area type="monotone" dataKey="nonstop" stroke="#9cae9c" strokeWidth={1.5} strokeDasharray="4 4" fill="none" /></AreaChart></ResponsiveContainer></div></div><div className="sub-index-grid">{dynamicSubIndices.map((item) => <article className="sub-index-card" key={item.code}><span className="route-code">{item.code}</span><p>{item.name}</p><strong>{item.code === "CPI_ALL" ? displayStats.headlineCPI : item.value.toFixed(2)}</strong><span className="positive-change">{item.change}</span><small>Weight {item.weight}</small></article>)}</div><div className="panel horizon-panel"><div className="panel-header"><div><p className="eyebrow">Yield management / advance purchase</p><h3>Five days of price pressure</h3></div><span className="panel-side-note">Selected {BOOKING_HORIZONS[horizon].horizon}</span></div><div className="horizon-track">{BOOKING_HORIZONS.map((item, index) => <button className={cx("horizon-step", horizon === index && "is-active")} key={item.horizon} onClick={() => setHorizon(index)} data-testid={`horizon-step-${item.horizon.toLowerCase().replace("+", "plus")}-button`}><span>{item.horizon}</span><strong>{item.multiplier}</strong><b>₹{item.price.toLocaleString()}</b><small>{item.tag}</small></button>)}</div></div></div>;
+    if (routeOriginState !== "ALL") {
+      list = list.filter((r) => {
+        const origAirport = getAirport(r.origin_code);
+        return origAirport?.state === routeOriginState;
+      });
+    }
 
-  const routesPage = <div className="page-wrap"><SectionHeading eyebrow="Network intelligence" title="Route analysis" description="Compare fare surfaces across the country’s highest-density origin–destination pairs." action={<button className="button button-quiet" onClick={() => setModal("bulletin")} data-testid="routes-help-button"><CircleHelp size={15} /> How to read this</button>} /><div className="filter-panel"><div className="filter-panel-title"><SlidersHorizontal size={16} /><span>Filter the route universe</span><button className="text-button" onClick={() => { setOrigin("ALL"); setDestination("ALL"); setAirline("ALL"); setStops("ALL"); }} data-testid="routes-reset-filters-button">Reset</button></div><div className="filter-grid"><label>Origin<select value={origin} onChange={(event) => setOrigin(event.target.value)} data-testid="routes-origin-filter"><option value="ALL">All origins</option>{AIRPORTS_LIST.map((item) => <option key={item.code} value={item.code}>{item.code} — {item.city}</option>)}</select></label><label>Destination<select value={destination} onChange={(event) => setDestination(event.target.value)} data-testid="routes-destination-filter"><option value="ALL">All destinations</option>{AIRPORTS_LIST.map((item) => <option key={item.code} value={item.code}>{item.code} — {item.city}</option>)}</select></label><label>Airline<select value={airline} onChange={(event) => setAirline(event.target.value)} data-testid="routes-airline-filter"><option value="ALL">All airlines</option>{AIRLINES_LIST.map((item) => <option key={item.code} value={item.name}>{item.name}</option>)}</select></label><label>Itinerary<select value={stops} onChange={(event) => setStops(event.target.value)} data-testid="routes-stops-filter"><option value="ALL">All itineraries</option><option value="Non-stop">Non-stop only</option><option value="1-stop">Connecting only</option></select></label></div></div><div className="route-spotlight"><div><p className="eyebrow">Selected route</p><h3>{route.route}</h3><p>{route.distance} km · {route.pax} monthly passengers · {route.observations.toLocaleString()} observations</p></div><div className="route-spotlight-stats"><span><small>Average</small><strong>₹{route.avgFare.toLocaleString()}</strong></span><span><small>Baseline T+30</small><strong>₹{route.t30.toLocaleString()}</strong></span><span><small>Walk-up T+0</small><strong>₹{route.t0.toLocaleString()}</strong></span><span><small>Jevons index</small><strong>{route.cpi.toFixed(1)}</strong></span></div></div><div className="table-panel"><div className="table-panel-header"><div><p className="eyebrow">{filteredRoutes.length} routes in view</p><h3>DGCA-weighted corridor matrix</h3></div><span className="table-caption">Use Enter or Space to open a corridor</span></div><div className="table-scroll"><table><thead><tr><th>Route</th><th>Weight</th><th>Monthly pax</th><th>Avg fare</th><th>T+0</th><th>T+30</th><th>Index</th><th /></tr></thead><tbody>{filteredRoutes.map((item) => <tr className={route.route === item.route ? "is-selected" : ""} key={item.route} onClick={() => { setRoute(item); openRouteFromRow(item); }} onKeyDown={(event) => handleRouteRowKeyDown(event, item)} tabIndex={0} role="button" aria-label={`Open route analysis for ${item.route}`} data-testid={`route-row-${item.route.toLowerCase().replace("–", "-")}`}><td><strong>{item.route}</strong><small>{item.distance} km</small></td><td>{item.weight}%</td><td>{item.pax}</td><td>₹{item.avgFare.toLocaleString()}</td><td className="negative-value">₹{item.t0.toLocaleString()}</td><td>₹{item.t30.toLocaleString()}</td><td><strong>{item.cpi.toFixed(1)}</strong><small className="positive-change">{item.change}</small></td><td><button className="row-action" onClick={(event) => { event.stopPropagation(); openRouteFromRow(item); }} data-testid={`route-details-${item.route.toLowerCase().replace("–", "-")}-button`}>View <ArrowUpRight size={13} /></button></td></tr>)}</tbody></table></div></div></div>;
+    if (routeDestState !== "ALL") {
+      list = list.filter((r) => {
+        const destAirport = getAirport(r.destination_code);
+        return destAirport?.state === routeDestState;
+      });
+    }
 
-  const alertsPage = <div className="page-wrap"><SectionHeading eyebrow="Automated surveillance" title="Price alerts" description="Turn the index into a quiet watchlist for the routes that matter to your work." action={<button className="button button-quiet" onClick={() => { setCopilotQuery("How do automated price alerts work?"); setCopilot(true); }} data-testid="alerts-open-copilot-button"><CopilotSymbol size={15} /> Ask the copilot</button>} /><div className="alert-intro"><div><span className="eyebrow">Watch engine</span><strong>Set a threshold.<br /><em>Let the market come to you.</em></strong></div><div><StatusDot /><p>Six data sources checked every 15 minutes.<br />Alerts are benchmarked against route and horizon medians.</p></div></div><p className="sr-only" aria-live="polite" data-testid="alerts-live-announcement">{toast || "Price alert engine is ready."}</p><div className="legacy-engine-wrap" role="region" aria-label="Price alert engine"><PriceAlertEngine isDarkMode={dark} onTriggerToast={notify} /></div></div>;
-  const dataPage = <div className="page-wrap"><SectionHeading eyebrow="Underlying granular dataset" title="Flight data" description="Raw fare observations with collection provenance, fare class and validation status." action={<button className="button button-dark" onClick={exportCsv} data-testid="flight-export-csv-button"><Download size={15} /> Export CSV</button>} /><div className="filter-panel"><div className="filter-grid"><label className="search-field">Search<input value={search} onChange={(event) => { setSearch(event.target.value); setFlightPage(1); }} placeholder="Flight, route or airline" data-testid="flight-search-input" /><Search size={15} /></label><label>Origin<select value={flightOrigin} onChange={(event) => { setFlightOrigin(event.target.value); setFlightPage(1); }} data-testid="flight-origin-filter"><option value="ALL">All origins</option>{AIRPORTS_LIST.map((item) => <option key={item.code} value={item.code}>{item.code}</option>)}</select></label><label>Destination<select value={flightDestination} onChange={(event) => { setFlightDestination(event.target.value); setFlightPage(1); }} data-testid="flight-destination-filter"><option value="ALL">All destinations</option>{AIRPORTS_LIST.map((item) => <option key={item.code} value={item.code}>{item.code}</option>)}</select></label><label>Airline<select value={flightAirline} onChange={(event) => { setFlightAirline(event.target.value); setFlightPage(1); }} data-testid="flight-airline-filter"><option value="ALL">All airlines</option>{AIRLINES_LIST.map((item) => <option key={item.code} value={item.name}>{item.name}</option>)}</select></label><label>Status<select value={flightStatus} onChange={(event) => { setFlightStatus(event.target.value); setFlightPage(1); }} data-testid="flight-status-filter"><option value="ALL">All records</option><option value="Valid">Valid clean</option><option value="Flagged (anomaly)">Flagged anomaly</option></select></label></div></div><p className="sr-only" aria-live="polite" data-testid="flight-sort-announcement">Flight data sorted by {flightSort.key}, {flightSort.direction === "asc" ? "ascending" : "descending"}.</p><div className="table-panel"><div className="table-panel-header"><div><p className="eyebrow">{sortedFares.length} observations</p><h3>Latest captured fares</h3></div><span className="table-caption">Use the arrow controls to sort each column</span></div><div className="table-scroll"><table><thead><tr><SortHeader label="Collected" column="collectedAt" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Route" column="origin" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Flight" column="flightNumber" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Schedule" column="depTime" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Fare type" column="fareType" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Total" column="totalFare" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Source" column="source" sort={flightSort} onSort={sortFlightData} /><SortHeader label="Status" column="status" sort={flightSort} onSort={sortFlightData} /></tr></thead><tbody>{visibleFares.map((item) => <tr key={item.id} data-testid={`flight-row-${item.id.toLowerCase()}`}><td><small className="mono">{item.collectedAt}</small><small>{item.travelDate}</small></td><td><strong>{item.origin} → {item.destination}</strong></td><td>{item.airline}<small className="mono">{item.flightNumber}</small></td><td className="mono">{item.depTime} – {item.arrTime}</td><td>{item.fareType}</td><td className="mono"><strong>₹{item.totalFare.toLocaleString()}</strong></td><td>{item.source}</td><td><span className={cx("status-pill", item.status === "Valid" ? "status-pill-success" : "status-pill-warning")}>{item.status}</span></td></tr>)}</tbody></table></div></div><div className="pagination"><span>Showing {visibleFares.length} of {sortedFares.length} observations</span><div><button className="pagination-button" disabled={flightPage <= 1} onClick={() => setFlightPage((value) => value - 1)} data-testid="flight-previous-page-button"><ChevronLeft size={15} /> Previous</button><span>Page {flightPage} / {pages}</span><button className="pagination-button" disabled={flightPage >= pages} onClick={() => setFlightPage((value) => value + 1)} data-testid="flight-next-page-button">Next <ChevronRight size={15} /></button></div></div></div>;
+    if (routeOriginCode !== "ALL") {
+      list = list.filter((r) => r.origin_code === routeOriginCode);
+    }
 
-  const readingPage = tab === "methodology" ? <div className="page-wrap page-wrap-reading"><SectionHeading eyebrow="Statistical standard & compliance" title="Methodology" description="From a scraped quote to a transparent, reproducible consumer price signal." action={<button className="button button-quiet" onClick={() => setModal("bulletin")} data-testid="methodology-release-button"><FileText size={15} /> Release notes</button>} /><div className="methodology-lede"><span>01—08</span><p>The method makes the invisible mechanics of airline pricing legible: collection, cleaning, stratification, weighting, aggregation and release.</p></div><div className="methodology-grid">{METHODOLOGY_STEPS.map((item) => <article className="method-card" key={item.n}><span>0{item.n}</span><h3>{item.title}</h3><p>{item.desc}</p></article>)}</div><div className="formula-grid"><article className="formula-panel"><p className="eyebrow">Route × horizon</p><h3>Elementary Jevons index</h3><p>Geometric means reduce distortion from extreme walk-up fares.</p><code>Iᵣₕ(t) = ∏ [ Pᵢ,ᵣₕ(t) / Pᵢ,ᵣₕ(0) ] ^ (1/n)</code></article><article className="formula-panel formula-panel-dark"><p className="eyebrow">National level</p><h3>DGCA Laspeyres aggregation</h3><p>Corridor signals enter the headline series according to passenger volume.</p><code>CPI(t) = ∑ [ Wᵣ × ( ∑ αₕ × Iᵣₕ(t) ) ]</code></article></div></div> : <div className="page-wrap page-wrap-reading"><SectionHeading eyebrow="Ministry of Statistics & Programme Implementation" title="About the index" description="A research prototype for a more timely, more transparent view of domestic transport inflation." /><div className="about-hero"><div className="about-spotlight-card"><p className="eyebrow">MoSPI 2024=100 Core Axiom</p><h3>High-frequency data ingestion meets econometric rigor.</h3><p>Daily scraping of 25 DGCA-weighted city pairs across 5 advance booking horizons eliminates snapshot sampling noise and creates a reproducible, empirical price signal.</p></div><div><p className="eyebrow">The question</p><h3>What if we could see dynamic service inflation while it is still happening?</h3><p>Air travel is a market where price responds to time, capacity, route, cabin and the pressure of the next seat. This index makes that movement observable.</p></div></div><div className="about-copy-grid">{[["CPI augmentation", "Continuous signals complement the rhythm of official monthly releases."], ["International standards", "The engine follows the ILO / IMF Consumer Price Index Manual."], ["Designed for scrutiny", "Every observation carries provenance, validation status and route context."]].map(([title, text], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></div>;
-  const monitoringPage = <div className="page-wrap"><SectionHeading eyebrow="System health & ingestion telemetry" title="Monitoring" description="A quiet control room for the collectors, validators and index engine behind the public series." action={<button className="button button-dark" onClick={triggerScrape} disabled={scraping} data-testid="monitoring-trigger-scrape-button">{scraping ? <RefreshCw className="spin" size={15} /> : <Radar size={15} />}{scraping ? `Running cycle ${scrapeStep}/4` : "Trigger ingestion cycle"}</button>} /><div className="health-grid"><MetricCard label="Valid clean records" value="96.4%" detail={`${displayStats.dailyQuotesSampled} total in store`} accent="green" /><MetricCard label="IQR anomalies" value="6" detail="Within review threshold" accent="amber" /><MetricCard label="Missing / dead fares" value="0" detail="Zero payload errors" /><MetricCard label="System uptime" value={connected ? "99.98%" : "Ready"} detail={connected ? "FastAPI live" : "Local benchmark mode"} accent="green" /></div><div className="monitoring-grid"><div className="table-panel"><div className="table-panel-header"><div><p className="eyebrow">Collector health</p><h3>Ingestion sources</h3></div><span className="status-pill status-pill-success"><StatusDot /> All online</span></div><div className="table-scroll"><table><thead><tr><th>Source</th><th>Share</th><th>Status</th><th>Latency</th><th>Quotes</th></tr></thead><tbody>{SCRAPER_MONITOR_SOURCES.map((item) => <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.marketShare}</td><td><span className="status-pill status-pill-success">{item.status}</span></td><td className="mono">{item.latency}</td><td className="mono">{item.observations}</td></tr>)}</tbody></table></div></div><div className="api-panel"><div className="api-panel-header"><div><p className="eyebrow">Developer surface</p><h3>API playground</h3></div><span className="mono">{endpoint.method}</span></div><select value={apiIndex} onChange={(event) => setApiIndex(Number(event.target.value))} data-testid="monitoring-api-selector">{API_ENDPOINTS_LIST.map((item, index) => <option key={`${item.method}-${item.path}`} value={index}>{item.method} {item.path}</option>)}</select><p>{endpoint.description}</p><pre>{JSON.stringify(apiResponse || endpoint.response, null, 2)}</pre><button className="button button-outline" onClick={testApi} disabled={apiLoading} data-testid="monitoring-test-api-button">{apiLoading ? "Testing…" : "Run request"} <ArrowRight size={15} /></button></div></div>{logs.length > 0 && <div className="event-stream"><p className="eyebrow">Live engine event stream</p>{logs.map((log, index) => <p key={`${log}-${index}`}><span>{index === 0 ? "now" : `${index}s`}</span>{log}</p>)}</div>}</div>;
-  const view = tab === "home" ? home : tab === "price-index" ? indexPage : tab === "routes" ? routesPage : tab === "alerts" ? alertsPage : tab === "flight-data" ? dataPage : tab === "monitoring" ? monitoringPage : readingPage;
+    if (routeDestCode !== "ALL") {
+      list = list.filter((r) => r.destination_code === routeDestCode);
+    }
 
-  return <div className={cx("app-shell", mobileNavOpen && "mobile-nav-open")}><header className="site-header"><div className="header-inner"><button className="brand-lockup" onClick={() => go("home")} data-testid="brand-home-button"><img src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")} alt="Airfare CPI Logo" className="brand-logo-img" /><span><strong>Airfare CPI</strong><small>India / MoSPI</small></span></button><nav className={cx("primary-nav", mobileNavOpen && "is-open")} aria-label="Primary navigation" aria-hidden={!mobileNavOpen ? undefined : false}>{NAV.map(([id, label, Icon]) => <button className={tab === id ? "is-active" : ""} key={id} onClick={() => go(id)} data-testid={`nav-${id}-button`}><Icon size={14} />{label}{id === "alerts" && <i />}</button>)}</nav><div className="header-actions"><button className="copilot-trigger" onClick={() => setCopilot(true)} data-testid="header-copilot-button"><CopilotSymbol size={15} /> <span>Copilot</span></button><IconButton label="Toggle theme" onClick={() => setDark((value) => !value)} testId="header-theme-toggle-button">{dark ? <Sun size={16} /> : <Moon size={16} />}</IconButton><IconButton label="Official notifications" onClick={() => setModal("notifications")} testId="header-notifications-button"><Bell size={16} /></IconButton><IconButton label="Platform settings" onClick={() => setModal("settings")} testId="header-settings-button"><Settings size={16} /></IconButton>{currentUser ? <button className="user-profile-badge" onClick={() => setModal("auth")} data-testid="header-user-profile-button" aria-label={`Logged in as ${currentUser.name}`}><span className="user-avatar" style={{ backgroundColor: currentUser.avatarColor || "#10b981" }}>{currentUser.initials}</span><span className="user-info"><strong>{currentUser.name}</strong><small>{currentUser.badge || "Verified"}</small></span></button> : <button className="sign-in-button" onClick={() => setModal("auth")} data-testid="header-sign-in-button">Sign in</button>}</div><button className="mobile-menu-button" aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onClick={() => setMobileNavOpen((open) => !open)} data-testid="mobile-navigation-button">{mobileNavOpen ? <X size={19} /> : <Menu size={19} />}</button></div></header><main className="main-content">{view}</main><footer className="site-footer"><div><button className="footer-brand" onClick={() => go("home")} data-testid="footer-home-button"><img src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")} alt="Airfare CPI Logo" className="brand-logo-img" /><span><strong>Airfare CPI</strong> <span>India / MoSPI</span></span></button><p>Research prototype for transparent, real-time aviation price intelligence.</p></div><div className="footer-links"><button onClick={() => go("methodology")} data-testid="footer-methodology-button">Methodology</button><button onClick={() => go("monitoring")} data-testid="footer-api-button">API access</button><button onClick={() => setModal("bulletin")} data-testid="footer-bulletin-button">Monthly bulletin</button><Link href="/privacy" data-testid="footer-privacy-link">Privacy</Link><Link href="/terms" data-testid="footer-terms-link">Terms</Link></div><span className="footer-meta">v1.0 / provisional</span></footer>{modal === "bulletin" && <ModalFrame title="Monthly statistical release" eyebrow="Government of India / MoSPI" onClose={() => setModal(null)} wide testId="bulletin-modal"><div className="bulletin-paper"><div className="bulletin-id"><span>Release ID / MoSPI-CPI-AIR-2026-08</span><span>Base: {baseInfo.label}</span></div><div className="bulletin-metrics"><div><small>Provisional national CPI</small><strong>{displayStats.headlineCPI}</strong></div><div><small>Month-on-month movement</small><strong>{displayStats.momChange}</strong></div><div><small>Daily quote sample</small><strong>{displayStats.dailyQuotesSampled}</strong></div></div><p>The provisional all-India index reflects {displayStats.momChange} movement across 25 DGCA-weighted domestic corridors on a {baseInfo.name} reference.</p></div><div className="print-release"><p className="eyebrow">Government of India / MoSPI</p><h1>Airfare CPI</h1><p className="print-release-title">Monthly statistical release / August 2026 provisional</p><div className="print-release-metrics"><div><span>National CPI</span><strong>{displayStats.headlineCPI}</strong></div><div><span>MoM movement</span><strong>{displayStats.momChange}</strong></div><div><span>Quotes sampled</span><strong>{displayStats.dailyQuotesSampled}</strong></div></div><p>Across 25 DGCA-weighted domestic corridors, the provisional all-India airfare index reflects {displayStats.momChange} movement on a {baseInfo.label} base. The series uses Jevons route relatives and passenger-weighted national aggregation.</p><p className="print-release-foot">Release ID / MoSPI-CPI-AIR-2026-08 · Prepared by Airfare CPI research desk</p></div><div className="modal-actions"><button className="button button-dark" onClick={printBulletin} data-testid="bulletin-print-pdf-button"><Printer size={15} /> Print / save as PDF</button><a className="button button-outline" href={`${API_BASE}/api/v1/reports/monthly/html`} target="_blank" rel="noreferrer" data-testid="bulletin-open-release-link">Open official release <ArrowUpRight size={15} /></a><button className="button button-outline" onClick={() => setModal(null)} data-testid="bulletin-close-button">Close</button></div></ModalFrame>}<AuthModal isOpen={modal === "auth" || modal === "signin"} onClose={() => setModal(null)} currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} onNotify={notify} />{modal === "notifications" && <ModalFrame title="Official notifications" eyebrow="Bulletins & releases" onClose={() => setModal(null)} testId="notifications-modal"><div className="notification-list"><article><span><Bell size={15} /></span><div><strong>New route added: DEL–GOI</strong><p>DGCA passenger volume updated for the festive season baseline.</p></div></article><article><span><Activity size={15} /></span><div><strong>Scraper latency improved</strong><p>Average OTA response latency decreased by 18% in the last cycle.</p></div></article></div></ModalFrame>}{modal === "settings" && <ModalFrame title="Platform settings" eyebrow="Workspace preferences" onClose={() => setModal(null)} testId="settings-modal"><label className="modal-field">Default base period<select value={baseYear} onChange={(event) => { setBaseYear(event.target.value); notify(`Base period set to ${event.target.value} = 100.`); }} data-testid="settings-base-period-select"><option value="2026">2026 = 100 (Current Year / YTD Base)</option><option value="2025">2025 = 100 (Recent Annual Base)</option><option value="2024">2024 = 100 (Official DGCA Benchmark)</option><option value="2023">2023 = 100 (Historical Base)</option></select></label><label className="modal-toggle"><input type="checkbox" defaultChecked data-testid="settings-live-refresh-checkbox" /><span className="toggle-info"><strong>Live refresh</strong><small>Poll health and fare endpoints every 15 seconds</small></span></label><button className="button button-dark modal-submit" onClick={() => { setModal(null); notify("Preferences saved."); }} data-testid="settings-save-button">Save preferences <Check size={15} /></button></ModalFrame>}<AviationCopilotModal isOpen={copilot} onClose={() => { setCopilot(false); setCopilotQuery(""); }} initialQuery={copilotQuery} /><RouteDetailModal route={detail} isOpen={Boolean(detail)} onClose={() => setDetail(null)} isDarkMode={dark} onSetWatch={watch} />{toast && <div className="toast" role="status" data-testid="app-toast"><Check size={15} /> {toast}</div>}</div>;
+    if (routeSearch.trim()) {
+      const q = routeSearch.trim().toLowerCase().replace(/\s*->\s*|\s*to\s*/i, "-");
+      list = list.filter((r) => {
+        const origAirport = getAirport(r.origin_code);
+        const destAirport = getAirport(r.destination_code);
+        const code = (r.route_code || `${r.origin_code}-${r.destination_code}`).toLowerCase();
+        const origCity = (r.origin_city || origAirport?.city || "").toLowerCase();
+        const destCity = (r.destination_city || destAirport?.city || "").toLowerCase();
+        const origState = (origAirport?.state || "").toLowerCase();
+        const destState = (destAirport?.state || "").toLowerCase();
+        const origName = (origAirport?.name || "").toLowerCase();
+        const destName = (destAirport?.name || "").toLowerCase();
+
+        return (
+          code.includes(q) ||
+          origCity.includes(q) ||
+          destCity.includes(q) ||
+          origState.includes(q) ||
+          destState.includes(q) ||
+          origName.includes(q) ||
+          destName.includes(q) ||
+          `${origCity}-${destCity}`.includes(q) ||
+          `${origState}-${destState}`.includes(q)
+        );
+      });
+    }
+
+    return list;
+  }, [
+    state.routeIndices,
+    routeFilterCategory,
+    routeOriginState,
+    routeDestState,
+    routeOriginCode,
+    routeDestCode,
+    routeSearch,
+  ]);
+
+  // ── Auto-fetch on route selection if uncollected ──
+  useEffect(() => {
+    if (
+      routeOriginCode !== "ALL" &&
+      routeDestCode !== "ALL" &&
+      routeOriginCode !== routeDestCode
+    ) {
+      const code = `${routeOriginCode}-${routeDestCode}`;
+      const exists = (state.routeIndices || []).some(
+        (r) =>
+          r.route_code === code ||
+          (r.origin_code === routeOriginCode && r.destination_code === routeDestCode)
+      );
+
+      if (!exists && !scrapingRoute) {
+        handleScrapeRoute({
+          origin: routeOriginCode,
+          destination: routeDestCode,
+          originCity: getAirport(routeOriginCode)?.city,
+          destinationCity: getAirport(routeDestCode)?.city,
+        });
+      }
+    }
+  }, [routeOriginCode, routeDestCode, state.routeIndices, scrapingRoute]);
+
+
+
+  // ── shared fragments ──
+  const noIndexYet = state.headlineIndex == null;
+
+  const unavailableNote =
+    state.mode === DATA_MODE.DISCONNECTED
+      ? "The backend is unreachable."
+      : "Not supplied by the API.";
+
+  const hero = (
+    <>
+      <section className="hero-section">
+        <div className="hero-copy">
+          <p className="eyebrow">Experimental airfare price index / India</p>
+          <h1>
+            Measure the market
+            <br />
+            <em>and say how.</em>
+          </h1>
+          <p className="hero-lede">
+            An experimental, continuously recomputed view of domestic airfare price
+            movement — with the provenance, coverage and uncertainty of every figure
+            stated alongside it.
+          </p>
+          <div className="hero-actions">
+            <button className="button button-dark" onClick={() => go("price-index")} data-testid="hero-explore-index-button">
+              Explore the index <ArrowRight size={16} />
+            </button>
+            <button className="text-button" onClick={() => setModal("bulletin")} data-testid="hero-open-bulletin-button">
+              Read the research bulletin <ArrowUpRight size={15} />
+            </button>
+          </div>
+          <div className="hero-proof">
+            <span>
+              <Check size={14} /> {fmtCount(state.routesInBasket)} weighted corridors
+            </span>
+            <span>
+              <Check size={14} /> {fmtCount(state.sampleSize)} observations in the current index
+            </span>
+          </div>
+        </div>
+
+        <div className="hero-visual" data-testid="hero-visual">
+          <div className="hero-plane-flight-wrap">
+            <img
+              src={getAssetPath(mounted && dark ? "/hero_night.jpg" : "/hero_day.jpg")}
+              alt="Commercial airliner cruising across domestic airspace"
+              className="hero-plane-img"
+              suppressHydrationWarning
+            />
+          </div>
+          <div className="hero-visual-overlay" />
+          <div className="hero-index-stamp" data-testid="hero-index-stamp">
+            <span>Headline index</span>
+            <strong>{fmtIndex(state.headlineIndex)}</strong>
+            <small>
+              {state.momStatus === "available"
+                ? `${fmtChange(state.momChangePct)} vs previous period`
+                : changeReason(state.momStatus) || "Period change not available"}
+            </small>
+            <DataModeChip mode={state.mode} className="hero-stamp-chip" />
+          </div>
+        </div>
+      </section>
+
+      <section className="metric-rail" data-testid="overview-metrics">
+        <MetricCard
+          label="Headline index"
+          value={fmtIndex(state.headlineIndex)}
+          change={state.momStatus === "available" ? fmtChange(state.momChangePct) : null}
+          detail={state.basePeriod ? `Base ${state.basePeriod} = 100` : "Base period not available"}
+          accent="green"
+          unavailableNote={unavailableNote}
+          testId="metric-headline-index"
+        />
+        <MetricCard
+          label="Observations in index"
+          value={fmtCount(state.sampleSize)}
+          detail={`${fmtCount(state.matchedProducts)} matched product comparisons`}
+          unavailableNote={unavailableNote}
+          testId="metric-sample-size"
+        />
+        <MetricCard
+          label="Basket coverage"
+          value={fmtPctFromFraction(state.coverageWeight)}
+          detail={`${fmtCount(state.routesIncluded)} of ${fmtCount(state.routesInBasket)} routes`}
+          accent={state.isPublishable === false ? "amber" : "ink"}
+          unavailableNote={unavailableNote}
+          testId="metric-coverage"
+        />
+        <MetricCard
+          label="Validated observations"
+          value={fmtPct(state.validPct)}
+          detail={`${fmtCount(state.observationStats?.total_observations)} stored in total`}
+          accent="green"
+          unavailableNote={unavailableNote}
+          testId="metric-valid-pct"
+        />
+      </section>
+    </>
+  );
+
+  const overview = (
+    <div className="page-wrap page-wrap-home">
+      {hero}
+
+      <section className="content-section">
+        <SectionHeading
+          eyebrow="Figure integrity"
+          title="What this number is, and is not!"
+          description="Stated up front rather than in a footnote."
+        />
+        <div className="integrity-grid">
+          <article className="integrity-card">
+            <p className="eyebrow">Data provenance</p>
+            <strong>{state.mode}</strong>
+            <p>
+              {state.provenance?.source_type === "live"
+                ? "Observations were collected from a real permitted source."
+                : "No observations were collected from a live source for this figure."}
+            </p>
+          </article>
+          <article className="integrity-card">
+            <p className="eyebrow">Seasonal adjustment</p>
+            <strong>
+              {state.seasonalAdjustment === "NOT IMPLEMENTED"
+                ? "Observed (NSA)"
+                : state.seasonalAdjustment || "Observed (NSA)"}
+            </strong>
+            <p>
+              The series is published as an observed nominal index (NSA). Festive
+              and holiday fare movements reflect authentic transaction prices.
+            </p>
+          </article>
+          <article className="integrity-card">
+            <p className="eyebrow">Year-on-year change</p>
+            <strong>
+              {state.yoyStatus === "available" ? fmtChange(state.yoyChangePct) : NOT_AVAILABLE}
+            </strong>
+            <p>
+              {changeReason(state.yoyStatus) ||
+                "Computed against the stored index 12 months earlier."}
+            </p>
+          </article>
+          <article className="integrity-card">
+            <p className="eyebrow">Sampling uncertainty</p>
+            <strong>
+              {state.standardError != null
+                ? `± ${state.standardError.toFixed(4)}`
+                : NOT_AVAILABLE}
+            </strong>
+            <p>
+              {state.standardError != null
+                ? `95% interval ${fmtInterval(state.confidenceLow, state.confidenceHigh)}. Sampling error only; excludes basket selection and weight error.`
+                : state.uncertaintyBasis || "Not estimable for this figure."}
+            </p>
+          </article>
+          <article className="integrity-card">
+            <p className="eyebrow">Official status</p>
+            <strong>Not an official statistic</strong>
+            <p>
+              Not issued by, endorsed by, or affiliated with MoSPI, the NSO, or the
+              Government of India.
+            </p>
+          </article>
+          <article className="integrity-card">
+            <p className="eyebrow">Route weighting</p>
+            <strong>{state.weights?.methodology?.status || NOT_AVAILABLE}</strong>
+            <p>
+              {state.weights?.methodology?.label ||
+                "Passenger-volume proxy, not official CPI expenditure shares."}
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="content-section">
+        <SectionHeading
+          eyebrow="Network / geographic coverage"
+          title="Where the basket reaches"
+          description="Each corridor carries a provisional passenger-volume weight into the national figure."
+        />
+        <div className="network-layout">
+          <div className="network-map-panel">
+            <IndiaNetworkMap isDarkMode={dark} routes={state.routeIndices} />
+          </div>
+          <div className="network-notes">
+            <div className="editorial-note">
+              <p className="eyebrow">Basket volume</p>
+              <strong>{fmtPax(state.weights?.total_monthly_pax)}</strong>
+              <p>
+                monthly passenger journeys represented across{" "}
+                {fmtCount(state.weights?.weights?.length)} monitored city-pairs.
+                {state.weights ? "" : " Not available while the API is unreachable."}
+              </p>
+            </div>
+            <div className="coverage-ranking-section">
+              <div className="coverage-ranking-header">
+                <span className="eyebrow">Highest-weighted corridors</span>
+                <span className="coverage-tag">Basket share</span>
+              </div>
+              {(state.weights?.weights || []).slice(0, 10).map((w, index) => (
+                <div className="hub-row" key={w.route_code}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{w.route_code}</strong>
+                    <small>{fmtPax(w.monthly_pax)} monthly passengers</small>
+                  </div>
+                  <span className="hub-share-badge">{fmtPct(w.weight_pct, 2)}</span>
+                </div>
+              ))}
+              {!state.weights && (
+                <p className="muted-note">
+                  Route weights are unavailable because the API could not be reached.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+
+  const indexPage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="National index"
+        title="Airfare price index"
+        description="Matched-model Jevons elementary aggregates, horizon-stratified, aggregated with provisional passenger-volume weights."
+        action={
+          <button className="button button-dark" onClick={() => setModal("bulletin")} data-testid="index-open-bulletin-button">
+            <FileText size={15} /> Research bulletin
+          </button>
+        }
+      />
+
+      {noIndexYet ? (
+        <EmptyState
+          title="No index has been computed"
+          message={
+            state.reason ||
+            "No figures are shown because none exist. Placeholder values are deliberately not substituted."
+          }
+          action={
+            <button className="button button-outline" onClick={() => go("monitoring")}>
+              Open monitoring <ArrowRight size={15} />
+            </button>
+          }
+        />
+      ) : (
+        <>
+          <div className="index-intro-grid">
+            <div className="index-number-panel">
+              <p className="eyebrow">
+                All-India / provisional · {fmtDate(state.indexDate)}
+              </p>
+              <strong>{fmtIndex(state.headlineIndex)}</strong>
+              <span>
+                {state.momStatus === "available"
+                  ? `${fmtChange(state.momChangePct)} vs previous period`
+                  : changeReason(state.momStatus)}
+              </span>
+              <div className="index-baseline">
+                <span>Base period</span>
+                <strong>{state.basePeriod || NOT_AVAILABLE}</strong>
+              </div>
+              {state.isPublishable === false && (
+                <p className="index-suppression" data-testid="index-suppression-note">
+                  <ShieldAlert size={13} /> {state.suppressionReason}
+                </p>
+              )}
+            </div>
+            <div className="index-context-panel">
+              <p className="eyebrow">Reading this figure</p>
+              <h3>
+                An index measures price CHANGE for the same products, not the price
+                level of whatever happened to be on sale.
+              </h3>
+              <p>
+                Products are matched across periods on route, airline, cabin, fare
+                family, stop count, refundability and baggage. A product that appears or
+                disappears is counted and excluded rather than imputed, so a change in
+                what is sold is not reported as inflation.
+              </p>
+              <dl className="context-facts">
+                <div>
+                  <dt>Sample size</dt>
+                  <dd>{fmtCount(state.sampleSize)} observations</dd>
+                </div>
+                <div>
+                  <dt>Matched products</dt>
+                  <dd>{fmtCount(state.matchedProducts)}</dd>
+                </div>
+                <div>
+                  <dt>Methodology</dt>
+                  <dd>{state.methodologyVersion || NOT_AVAILABLE}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div className="panel chart-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Stored index history</p>
+                <h3>Published values, not a recomputation</h3>
+              </div>
+              <div className="segmented-control">
+                {RANGE_OPTIONS.map((option) => (
+                  <button
+                    className={range === option.key ? "is-active" : ""}
+                    key={option.key}
+                    onClick={() => setRange(option.key)}
+                    data-testid={`index-range-${option.key.toLowerCase()}-button`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {series.length === 0 ? (
+              <p className="muted-note" data-testid="chart-empty-note">
+                No index points fall inside the selected range. The stored series spans{" "}
+                {state.history.length} point(s).
+              </p>
+            ) : (
+              <div className="chart-wrap">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={series}>
+                    <defs>
+                      <linearGradient id="indexGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={dark ? "#34d399" : "#3b6d4d"} stopOpacity={dark ? 0.3 : 0.18} />
+                        <stop offset="100%" stopColor={dark ? "#34d399" : "#3b6d4d"} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} stroke={dark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"} />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: dark ? "#9ca3af" : "#77746d", fontSize: 11 }}
+                    />
+                    <YAxis
+                      domain={["auto", "auto"]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: dark ? "#9ca3af" : "#77746d", fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        border: dark ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+                        borderRadius: 8,
+                        background: dark ? "#1c211d" : "#fffdf8",
+                        color: dark ? "#f3f1e9" : "#191917",
+                        boxShadow: dark ? "0 8px 24px rgba(0, 0, 0, 0.5)" : "0 4px 16px rgba(0, 0, 0, 0.06)",
+                        fontSize: 12,
+                      }}
+                      itemStyle={{ color: dark ? "#34d399" : "#3b6d4d", fontWeight: 600 }}
+                      labelStyle={{ color: dark ? "#f3f1e9" : "#191917", fontWeight: 700, marginBottom: 4 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      name="Index"
+                      stroke={dark ? "#34d399" : "#3b6d4d"}
+                      strokeWidth={2.5}
+                      fill="url(#indexGradient)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <p className="panel-footnote">
+              Observed (not seasonally adjusted) series. Seasonal adjustment is{" "}
+              {state.seasonalAdjustment || NOT_AVAILABLE}.
+            </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Advance-purchase strata</p>
+                <h3>Horizon-specific indices</h3>
+              </div>
+              <span className="panel-side-note">
+                {state.horizonPolicy?.weighting?.method || NOT_AVAILABLE} weighting (
+                {state.horizonPolicy?.weighting?.status || NOT_AVAILABLE})
+              </span>
+            </div>
+            {horizonGrouped.length === 0 ? (
+              <p className="muted-note">No horizon indices have been computed.</p>
+            ) : (
+              <div className="horizon-track">
+                {horizonGrouped.map((h) => (
+                  <div className="horizon-step" key={h.horizon} data-testid={`horizon-card-${h.horizon}`}>
+                    <span>{h.label}</span>
+                    <strong>{fmtIndex(h.meanIndex)}</strong>
+                    <b>{fmtCount(h.matchedProducts)} matched</b>
+                    <small>
+                      {h.routeCount} route(s) · weight{" "}
+                      {h.policyWeight != null ? h.policyWeight.toFixed(2) : NOT_AVAILABLE}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="panel-footnote">
+              Horizons are indexed separately, then combined with fixed weights. Because
+              the weights do not depend on how many observations each horizon
+              contributed, the route index cannot move merely because the sample
+              composition shifted.
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+  const routesPage = (() => {
+    const originAirports = routeOriginState === "ALL" ? AIRPORTS_LIST : getAirportsForState(routeOriginState);
+    const destAirports = routeDestState === "ALL" ? AIRPORTS_LIST : getAirportsForState(routeDestState);
+
+    const hasSpecificPair =
+      routeOriginCode !== "ALL" &&
+      routeDestCode !== "ALL" &&
+      routeOriginCode !== routeDestCode;
+
+    const specificPairRow = hasSpecificPair
+      ? (state.routeIndices || []).find(
+          (r) =>
+            (r.origin_code === routeOriginCode && r.destination_code === routeDestCode) ||
+            r.route_code === `${routeOriginCode}-${routeDestCode}`
+        )
+      : null;
+
+    const originInfo = hasSpecificPair ? getAirport(routeOriginCode) : null;
+    const destInfo = hasSpecificPair ? getAirport(routeDestCode) : null;
+
+    const basketCount = (state.routeIndices || []).filter((r) => r.route_id <= 25).length;
+    const customCount = (state.routeIndices || []).filter((r) => r.route_id > 25).length;
+
+    return (
+      <div className="page-wrap">
+        <SectionHeading
+          eyebrow="State-to-State Flight Directory & Index"
+          title="Route indices & Scraping Engine"
+          description="Search across 85+ Indian airports and all 28 states & 8 UTs. View price trends for monitored corridors or trigger on-demand scraping for any custom city pair."
+        />
+
+        {/* ── Route Search & State-to-State Control Deck ── */}
+        <div className="route-control-deck">
+          <div className="route-search-row">
+            <div className="search-input-wrap flex-1">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                className="route-search-input"
+                placeholder="Search route (e.g. DEL-BOM, PAT-BLR), city (Patna), state (Bihar, Assam), or airport name..."
+                value={routeSearch}
+                onChange={(e) => setRouteSearch(e.target.value)}
+                data-testid="route-search-bar"
+              />
+              {routeSearch && (
+                <button
+                  className="search-clear-btn"
+                  onClick={() => setRouteSearch("")}
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="route-category-pills">
+              <button
+                className={cx("category-pill", routeFilterCategory === "ALL" && "active")}
+                onClick={() => setRouteFilterCategory("ALL")}
+              >
+                All Corridors ({state.routeIndices.length})
+              </button>
+              <button
+                className={cx("category-pill", routeFilterCategory === "BASKET" && "active")}
+                onClick={() => setRouteFilterCategory("BASKET")}
+              >
+                25 Core Basket ({basketCount})
+              </button>
+              {customCount > 0 && (
+                <button
+                  className={cx("category-pill", routeFilterCategory === "CUSTOM" && "active")}
+                  onClick={() => setRouteFilterCategory("CUSTOM")}
+                >
+                  Custom Scraped ({customCount})
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="state-selector-grid">
+            <div className="selector-group">
+              <label className="selector-label">
+                <MapPin size={13} /> Origin State
+              </label>
+              <select
+                className="selector-select"
+                value={routeOriginState}
+                onChange={(e) => {
+                  setRouteOriginState(e.target.value);
+                  setRouteOriginCode("ALL");
+                }}
+                data-testid="origin-state-select"
+              >
+                <option value="ALL">All States & UTs ({INDIAN_STATES_LIST.length})</option>
+                {INDIAN_STATES_LIST.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="selector-group">
+              <label className="selector-label">
+                <Plane size={13} /> Origin Airport
+              </label>
+              <select
+                className="selector-select"
+                value={routeOriginCode}
+                onChange={(e) => setRouteOriginCode(e.target.value)}
+                data-testid="origin-airport-select"
+              >
+                <option value="ALL">All Origin Airports ({originAirports.length})</option>
+                {originAirports.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.city} ({a.code}) — {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="swap-btn-container">
+              <button
+                type="button"
+                className="route-swap-button"
+                onClick={handleSwapRoute}
+                title="Swap Origin and Destination"
+                data-testid="route-swap-btn"
+              >
+                <ArrowLeftRight size={16} />
+              </button>
+            </div>
+
+            <div className="selector-group">
+              <label className="selector-label">
+                <MapPin size={13} /> Destination State
+              </label>
+              <select
+                className="selector-select"
+                value={routeDestState}
+                onChange={(e) => {
+                  setRouteDestState(e.target.value);
+                  setRouteDestCode("ALL");
+                }}
+                data-testid="dest-state-select"
+              >
+                <option value="ALL">All States & UTs ({INDIAN_STATES_LIST.length})</option>
+                {INDIAN_STATES_LIST.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="selector-group">
+              <label className="selector-label">
+                <Plane size={13} /> Destination Airport
+              </label>
+              <select
+                className="selector-select"
+                value={routeDestCode}
+                onChange={(e) => setRouteDestCode(e.target.value)}
+                data-testid="dest-airport-select"
+              >
+                <option value="ALL">All Destination Airports ({destAirports.length})</option>
+                {destAirports.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.city} ({a.code}) — {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Active Route Performance Deck or Auto-Ingestion Radar ── */}
+        {hasSpecificPair && (
+          <div className="route-action-card">
+            <div className="route-action-header">
+              <div className="route-visual-banner">
+                <div className="airport-badge">
+                  <span className="code">{routeOriginCode}</span>
+                  <span className="name">{originInfo?.city || routeOriginCode}</span>
+                  <small className="state">{originInfo?.state}</small>
+                </div>
+                <div className="flight-arrow-path">
+                  <span className="path-line" />
+                  <Plane size={18} className="plane-icon" />
+                  <span className="path-label">T+0 · T+3 · T+7 · T+15 · T+30</span>
+                </div>
+                <div className="airport-badge">
+                  <span className="code">{routeDestCode}</span>
+                  <span className="name">{destInfo?.city || routeDestCode}</span>
+                  <small className="state">{destInfo?.state}</small>
+                </div>
+              </div>
+
+              <div className="route-status-meta">
+                {specificPairRow ? (
+                  <div className="cached-status">
+                    <span className="status-pill status-pill-success">
+                      <CheckCircle2 size={12} /> Active Index
+                    </span>
+                    <div className="index-val-box">
+                      <small>Current Index</small>
+                      <strong>{fmtIndex(specificPairRow.value)}</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="uncached-status">
+                    <span className="status-pill status-pill-active">
+                      <Radar size={12} className="spin" /> Autonomous Ingestion Active
+                    </span>
+                    <div className="index-val-box">
+                      <small>Status</small>
+                      <strong style={{ fontSize: "14px", color: "var(--green)" }}>Auto-Fetching Fares...</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="route-action-body">
+              {specificPairRow ? (
+                <div className="cached-actions">
+                  <p className="cached-desc">
+                    Corridor index computed from <strong>{fmtCount(specificPairRow.matched_products)}</strong> matched products across booking horizons{" "}
+                    {(specificPairRow.horizon_stratification?.horizons_included || []).map((h) => `T+${h}`).join(", ") || "T+0..T+30"}.
+                  </p>
+                  <div className="action-buttons">
+                    <button
+                      className="button button-dark"
+                      onClick={() => openRouteDetail(specificPairRow)}
+                      data-testid="view-active-detail-btn"
+                    >
+                      Inspect Deep Analysis <ArrowUpRight size={15} />
+                    </button>
+                    <button
+                      className="button button-outline"
+                      onClick={() =>
+                        handleScrapeRoute({
+                          origin: routeOriginCode,
+                          destination: routeDestCode,
+                          originCity: originInfo?.city,
+                          destinationCity: destInfo?.city,
+                        })
+                      }
+                      disabled={scrapingRoute}
+                      data-testid="rescrape-corridor-btn"
+                    >
+                      {scrapingRoute ? (
+                        <>
+                          <RefreshCw size={14} className="spin" /> Updating Feed...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} /> Refresh Live Quotes
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="auto-ingest-console">
+                  <div className="radar-meter-rail">
+                    {["T+0 (Same-Day)", "T+3 (Urgent)", "T+7 (1-Week)", "T+15 (Mid-Term)", "T+30 (Advance)"].map((h, i) => (
+                      <div key={h} className="radar-horizon-node active">
+                        <span className="horizon-pulse-ring" />
+                        <small>{h}</small>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="scraping-telemetry mt-3">
+                    <div className="telemetry-bar">
+                      <span className="telemetry-pulse" />
+                    </div>
+                    <p className="telemetry-text">
+                      <Sparkles size={14} className="telemetry-spark" />{" "}
+                      {scrapingProgress || `Intercepting multi-carrier airline fare quotes for ${originInfo?.city || routeOriginCode} ✈ ${destInfo?.city || routeDestCode}...`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {scrapingError && (
+                <div className="scraping-error-box">
+                  <AlertCircle size={14} /> {scrapingError}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Main Corridor Matrix Table ── */}
+
+        {filteredRouteIndices.length === 0 ? (
+          <div className="panel empty-search-panel">
+            <div className="empty-search-content">
+              <Plane size={36} className="empty-icon" />
+              <h3>No matching route indices found</h3>
+              <p className="muted-note">
+                {routeSearch || routeOriginState !== "ALL" || routeDestState !== "ALL"
+                  ? `No stored route data matched your search filter. Select origin and destination from the dropdowns above to run the scraping engine!`
+                  : state.mode === DATA_MODE.DISCONNECTED
+                  ? "The backend is unreachable, so no route indices can be shown."
+                  : "No route index has been computed yet."}
+              </p>
+              {routeOriginCode !== "ALL" && routeDestCode !== "ALL" && routeOriginCode !== routeDestCode && (
+                <button
+                  className="button button-primary mt-3"
+                  onClick={() =>
+                    handleScrapeRoute({
+                      origin: routeOriginCode,
+                      destination: routeDestCode,
+                    })
+                  }
+                  disabled={scrapingRoute}
+                >
+                  <Zap size={14} /> Run Scraper for {routeOriginCode} → {routeDestCode}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="table-panel">
+            <div className="table-panel-header">
+              <div>
+                <p className="eyebrow">{filteredRouteIndices.length} corridors shown</p>
+                <h3>Weighted corridor matrix</h3>
+              </div>
+              <DataModeChip mode={state.mode} />
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Route</th>
+                    <th>Origin State</th>
+                    <th>Destination State</th>
+                    <th>Weight</th>
+                    <th>Monthly pax</th>
+                    <th>Index</th>
+                    <th>Matched products</th>
+                    <th>Horizons</th>
+                    <th>Publishable</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRouteIndices.map((row) => {
+                    const origA = getAirport(row.origin_code);
+                    const destA = getAirport(row.destination_code);
+                    return (
+                      <tr key={row.route_id} data-testid={`route-row-${row.route_id}`}>
+                        <td>
+                          <strong>{row.route_code || `Route ${row.route_id}`}</strong>
+                          <small>
+                            {row.origin_city} → {row.destination_city}
+                          </small>
+                        </td>
+                        <td>
+                          <span className="state-tag">{origA?.state || row.origin_city}</span>
+                        </td>
+                        <td>
+                          <span className="state-tag">{destA?.state || row.destination_city}</span>
+                        </td>
+                        <td>{fmtPctFromFraction(row.weight, 2)}</td>
+                        <td>{fmtPax(row.monthly_pax)}</td>
+                        <td>
+                          <strong>{fmtIndex(row.value)}</strong>
+                        </td>
+                        <td>{fmtCount(row.matched_products)}</td>
+                        <td className="mono">
+                          {(row.horizon_stratification?.horizons_included || [])
+                            .map((h) => `T+${h}`)
+                            .join(" ") || NOT_AVAILABLE}
+                        </td>
+                        <td>
+                          <span
+                            className={cx(
+                              "status-pill",
+                              row.is_publishable ? "status-pill-success" : "status-pill-warning",
+                            )}
+                          >
+                            {row.is_publishable ? "Yes" : "Suppressed"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions-group">
+                            <button
+                              className="row-action"
+                              onClick={() => openRouteDetail(row)}
+                              data-testid={`route-detail-${row.route_id}-button`}
+                            >
+                              Detail <ArrowUpRight size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {state.missingRoutes?.length > 0 && (
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Coverage gaps</p>
+                <h3>Routes with no index this period</h3>
+              </div>
+            </div>
+            <p className="muted-note">
+              No value is imputed for these routes. Their absence is reflected in the
+              basket coverage figure.
+            </p>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Route</th>
+                    <th>Weight</th>
+                    <th>Reason</th>
+                    <th>Imputed value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.missingRoutes.map((m) => (
+                    <tr key={m.route_id}>
+                      <td>
+                        <strong>{m.route_code || `Route ${m.route_id}`}</strong>
+                      </td>
+                      <td>{fmtPctFromFraction(m.weight, 2)}</td>
+                      <td className="mono">{m.reason}</td>
+                      <td>none</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  })();
+
+  const horizonsPage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="Advance-purchase stratification"
+        title="Booking horizons"
+        description="Each horizon is indexed against its own base, so the level gap between same-day and advance fares cannot leak into the index."
+      />
+      {horizonGrouped.length === 0 ? (
+        <EmptyState
+          title="No horizon indices available"
+          message="No horizon index has been computed yet."
+        />
+      ) : (
+        <>
+          <div className="metric-rail metric-rail-5">
+            {horizonGrouped.map((h) => (
+              <MetricCard
+
+                key={h.horizon}
+                label={h.label}
+                value={fmtIndex(h.meanIndex)}
+                detail={`${h.routeCount} route(s) · ${fmtCount(h.matchedProducts)} matched products`}
+                testId={`horizon-metric-${h.horizon}`}
+              />
+            ))}
+          </div>
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Weighting policy</p>
+                <h3>{state.horizonPolicy?.policy_id || NOT_AVAILABLE}</h3>
+              </div>
+              <span className="panel-side-note">
+                {state.horizonPolicy?.weighting?.status || NOT_AVAILABLE}
+              </span>
+            </div>
+            <p className="muted-note">
+              <code>{state.horizonPolicy?.weighting?.formula || NOT_AVAILABLE}</code>
+            </p>
+            <ul className="policy-list">
+              {(state.horizonPolicy?.weighting?.why || []).map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="table-panel">
+            <div className="table-panel-header">
+              <div>
+                <p className="eyebrow">{state.horizonIndices.length} horizon index values</p>
+                <h3>Per route and horizon</h3>
+              </div>
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Route</th>
+                    <th>Horizon</th>
+                    <th>Index</th>
+                    <th>Matched</th>
+                    <th>New</th>
+                    <th>Disappeared</th>
+                    <th>Match rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.horizonIndices.slice(0, 60).map((row) => (
+                    <tr key={`${row.route_id}-${row.booking_horizon}`}>
+                      <td>{row.route_id}</td>
+                      <td>{row.horizon_label}</td>
+                      <td>
+                        <strong>{fmtIndex(row.value)}</strong>
+                      </td>
+                      <td>{fmtCount(row.matched_products)}</td>
+                      <td>{fmtCount(row.product_churn?.new_products)}</td>
+                      <td>{fmtCount(row.product_churn?.disappeared_products)}</td>
+                      <td>{fmtPctFromFraction(row.product_churn?.match_rate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const observationsPage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="Underlying dataset"
+        title="Fare observations"
+        description="Stored observations with per-record provenance and validation outcome."
+        action={
+          <button className="button button-dark" onClick={exportCsv} data-testid="export-csv-button">
+            <Download size={15} /> Export CSV
+          </button>
+        }
+      />
+      {state.observations.length === 0 ? (
+        <EmptyState
+          title="No observations stored"
+          message={
+            state.mode === DATA_MODE.DISCONNECTED
+              ? "The backend is unreachable."
+              : "No collection run has produced observations yet."
+          }
+        />
+      ) : (
+        <>
+          <div className="filter-panel">
+            <div className="filter-panel-title">
+              <SlidersHorizontal size={16} />
+              <span>Filter observations</span>
+              <button
+                className="text-button"
+                onClick={() => {
+                  setFilterOrigin("ALL");
+                  setFilterDestination("ALL");
+                  setFilterAirline("ALL");
+                  setFilterStatus("ALL");
+                  setSearch("");
+                  setPage(1);
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            <div className="filter-grid">
+              <label className="search-field">
+                Search
+                <input
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Flight, route, airline or source"
+                  data-testid="observation-search-input"
+                />
+                <Search size={15} />
+              </label>
+              <label>
+                Origin
+                <select value={filterOrigin} onChange={(e) => { setFilterOrigin(e.target.value); setPage(1); }}>
+                  <option value="ALL">All origins</option>
+                  {AIRPORTS_LIST.map((a) => (
+                    <option key={a.code} value={a.code}>{a.code}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Destination
+                <select value={filterDestination} onChange={(e) => { setFilterDestination(e.target.value); setPage(1); }}>
+                  <option value="ALL">All destinations</option>
+                  {AIRPORTS_LIST.map((a) => (
+                    <option key={a.code} value={a.code}>{a.code}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Airline
+                <select value={filterAirline} onChange={(e) => { setFilterAirline(e.target.value); setPage(1); }}>
+                  <option value="ALL">All airlines</option>
+                  {AIRLINES_LIST.map((a) => (
+                    <option key={a.code} value={a.name}>{a.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Validation
+                <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}>
+                  <option value="ALL">All records</option>
+                  <option value="valid">Valid</option>
+                  <option value="flagged">Flagged</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="table-panel">
+            <div className="table-panel-header">
+              <div>
+                <p className="eyebrow">{sortedObservations.length} observations in view</p>
+                <h3>Latest stored observations</h3>
+              </div>
+              <DataModeChip mode={state.mode} />
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <SortHeader label="Collected" column="collection_datetime" sort={sort} onSort={sortObservations} />
+                    <SortHeader label="Route" column="route_code" sort={sort} onSort={sortObservations} />
+                    <SortHeader label="Flight" column="flight_number" sort={sort} onSort={sortObservations} />
+                    <th>Product</th>
+                    <SortHeader label="Fare" column="fare_total" sort={sort} onSort={sortObservations} />
+                    <th>Provenance</th>
+                    <th>Validation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleObservations.map((o) => (
+                    <tr key={o.observation_id} data-testid={`observation-row-${o.observation_id}`}>
+                      <td>
+                        <small className="mono">{fmtDateTime(o.collection_datetime)}</small>
+                        <small>dep {fmtDate(o.departure_date)}</small>
+                      </td>
+                      <td>
+                        <strong>{o.route_code}</strong>
+                        <small>T+{o.booking_horizon_days}</small>
+                      </td>
+                      <td>
+                        {o.airline_name || o.airline_code}
+                        <small className="mono">{o.flight_number || NOT_AVAILABLE}</small>
+                      </td>
+                      <td>
+                        <small>{o.cabin_class}</small>
+                        <small className="mono">{o.fare_family || "unspecified"}</small>
+                        <small>{o.stops === 0 ? "non-stop" : `${o.stops} stop`}</small>
+                      </td>
+                      <td className="mono">
+                        <strong>{fmtInr(o.fare_total)}</strong>
+                      </td>
+                      <td>
+                        <span className="status-pill">{o.data_provenance?.display_label}</span>
+                        <small className="mono">{o.data_provenance?.source_name}</small>
+                      </td>
+                      <td>
+                        <span
+                          className={cx(
+                            "status-pill",
+                            o.validation?.action === "accepted"
+                              ? "status-pill-success"
+                              : o.validation?.action === "flagged"
+                                ? "status-pill-warning"
+                                : "status-pill-error",
+                          )}
+                        >
+                          {o.validation?.action}
+                        </span>
+                        {o.validation?.flags?.length > 0 && (
+                          <small className="mono">{o.validation.flags.join(", ")}</small>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="pagination">
+            <span>
+              Showing {visibleObservations.length} of {sortedObservations.length}
+            </span>
+            <div>
+              <button className="pagination-button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <ChevronLeft size={15} /> Previous
+              </button>
+              <span>
+                Page {page} / {totalPages}
+              </span>
+              <button className="pagination-button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const provenancePage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="Traceability"
+        title="Data provenance and sources"
+        description="Which sources are collected, which are not, and why."
+      />
+      <div className="metric-rail">
+        <MetricCard label="Current mode" value={state.mode} detail="Drives every figure on this dashboard" testId="provenance-mode-card" />
+        <MetricCard
+          label="Stored observations"
+          value={fmtCount(state.observationStats?.total_observations)}
+          detail={Object.entries(state.observationStats?.source_types || {})
+            .map(([k, v]) => `${k}: ${fmtCount(v)}`)
+            .join(" · ") || "No observations stored"}
+          unavailableNote={unavailableNote}
+        />
+        <MetricCard
+          label="Open anomalies"
+          value={fmtCount(state.openAnomalyCount)}
+          detail={`${fmtCount(state.anomalyCount)} flagged in total`}
+          accent="amber"
+          unavailableNote={unavailableNote}
+        />
+        <MetricCard
+          label="Last collection"
+          value={state.lastRun?.display_label || NOT_AVAILABLE}
+          detail={
+            state.lastRun
+              ? `${state.lastRun.status} · ${fmtRelative(state.lastRun.finished_at)}`
+              : "No collection run recorded"
+          }
+          unavailableNote={unavailableNote}
+        />
+      </div>
+
+      <div className="table-panel">
+        <div className="table-panel-header">
+          <div>
+            <p className="eyebrow">{state.sources.length} registered sources</p>
+            <h3>Source assessment</h3>
+          </div>
+        </div>
+        <p className="muted-note">
+          Disabled sources are listed with the reason they are not collected. Most
+          airline and travel portals either disallow automated access to their search
+          paths or are protected by bot detection; circumventing either is out of scope.
+        </p>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Reason / compliance note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.sources.map((s) => (
+                <tr key={s.name} data-testid={`source-row-${s.name}`}>
+                  <td>
+                    <strong>{s.display_name}</strong>
+                    <small className="mono">{s.name}</small>
+                  </td>
+                  <td>{s.provenance_label}</td>
+                  <td>
+                    <span
+                      className={cx(
+                        "status-pill",
+                        s.enabled ? "status-pill-success" : "status-pill-muted",
+                      )}
+                    >
+                      {s.enabled ? "Collected" : "Not collected"}
+                    </span>
+                  </td>
+                  <td className="reason-cell">{s.disabled_reason || s.compliance_note}</td>
+                </tr>
+              ))}
+              {state.sources.length === 0 && (
+                <tr>
+                  <td colSpan={4}>Source registry unavailable — the API could not be reached.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const methodologyPage = (
+    <div className="page-wrap page-wrap-reading">
+      <SectionHeading
+        eyebrow="Statistical method"
+        title="Methodology"
+        description="From a collected quote to a traceable, reproducible price signal."
+      />
+      <div className="methodology-grid">
+        {METHODOLOGY_STEPS.map((step) => (
+          <article className="method-card" key={step.n}>
+            <span>{String(step.n).padStart(2, "0")}</span>
+            <h3>{step.title}</h3>
+            <p>{step.desc}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="formula-grid">
+        <article className="formula-panel">
+          <p className="eyebrow">Elementary aggregate</p>
+          <h3>Matched-model Jevons</h3>
+          <p>
+            The geometric mean of price relatives over products matched between periods.
+            Computed in log space for numerical stability.
+          </p>
+          <code>I(t) = [ ∏ₚ ( pₚ(t) / pₚ(0) ) ] ^ (1/n)</code>
+        </article>
+        <article className="formula-panel formula-panel-dark">
+          <p className="eyebrow">National level</p>
+          <h3>Weighted aggregation</h3>
+          <p>
+            Route indices combined with provisional passenger-volume weights that sum to
+            exactly 1.0.
+          </p>
+          <code>Index(t) = ∑ᵣ ( wᵣ × Iᵣ(t) ) × 100</code>
+        </article>
+      </div>
+
+      {methodology && (
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Declared limitations</p>
+              <h3>What this index does not do</h3>
+            </div>
+            <span className="panel-side-note">{methodology.methodology_version}</span>
+          </div>
+          <ul className="policy-list" data-testid="methodology-limitations">
+            {(methodology.known_limitations || []).map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+
+  const monitoringPage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="Operations"
+        title="Monitoring"
+        description="Collection configuration, run history and the developer API surface."
+        action={
+          <button
+            className="button button-dark"
+            onClick={runCollection}
+            disabled={collecting}
+            data-testid="trigger-collection-button"
+          >
+            {collecting ? <RefreshCw className="spin" size={15} /> : <Radar size={15} />}
+            {collecting ? "Running…" : "Trigger collection cycle"}
+          </button>
+        }
+      />
+
+      <div className="health-grid">
+        <MetricCard
+          label="Configured mode"
+          value={state.collectionStatus?.configured_mode || NOT_AVAILABLE}
+          detail={state.collectionStatus?.provenance_label || unavailableNote}
+        />
+        <MetricCard
+          label="Usable sources"
+          value={fmtCount(state.collectionStatus?.usable_sources_for_mode?.length)}
+          detail={
+            state.collectionStatus?.can_collect
+              ? state.collectionStatus.usable_sources_for_mode.join(", ")
+              : state.collectionStatus?.cannot_collect_reason || unavailableNote
+          }
+          accent={state.collectionStatus?.can_collect ? "green" : "amber"}
+        />
+        <MetricCard
+          label="Scheduler"
+          value={
+            state.collectionStatus?.scheduler
+              ? state.collectionStatus.scheduler.running
+                ? "Running"
+                : state.collectionStatus.scheduler.enabled
+                  ? "Enabled, idle"
+                  : "Disabled"
+              : NOT_AVAILABLE
+          }
+          detail={
+            state.collectionStatus?.scheduler?.next_run
+              ? `Next run ${fmtDateTime(state.collectionStatus.scheduler.next_run)}`
+              : "Collection runs only when triggered"
+          }
+        />
+        <MetricCard
+          label="Open anomalies"
+          value={fmtCount(state.openAnomalyCount)}
+          detail="Awaiting review"
+          accent="amber"
+          unavailableNote={unavailableNote}
+        />
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Admin token</p>
+            <h3>Required when the backend configures one</h3>
+          </div>
+        </div>
+        <label className="modal-field">
+          X-Admin-Token
+          <input
+            type="password"
+            value={adminToken}
+            onChange={(e) => setAdminToken(e.target.value)}
+            placeholder="Leave blank if the backend has no token configured"
+            data-testid="admin-token-input"
+          />
+        </label>
+        <p className="muted-note">
+          Held in memory for this browser session only and sent solely to the collection
+          trigger endpoint. It is never persisted.
+        </p>
+      </div>
+
+      {logs.length > 0 && (
+        <div className="event-stream" data-testid="collection-log">
+          <p className="eyebrow">Collection log</p>
+          {logs.map((log, i) => (
+            <p key={`${log}-${i}`}>{log}</p>
+          ))}
+        </div>
+      )}
+
+      <div className="api-panel">
+        <div className="api-panel-header">
+          <div>
+            <p className="eyebrow">Developer surface</p>
+            <h3>API explorer</h3>
+          </div>
+          <span className="mono">{API_ENDPOINTS_LIST[apiIndex].method}</span>
+        </div>
+        <select
+          value={apiIndex}
+          onChange={(e) => {
+            setApiIndex(Number(e.target.value));
+            setApiResponse(null);
+          }}
+          data-testid="api-endpoint-select"
+        >
+          {API_ENDPOINTS_LIST.map((item, i) => (
+            <option key={item.path} value={i}>
+              {item.method} {item.path}
+            </option>
+          ))}
+        </select>
+        <p>{API_ENDPOINTS_LIST[apiIndex].description}</p>
+        <pre data-testid="api-response">
+          {apiResponse
+            ? JSON.stringify(apiResponse, null, 2)
+            : "Run the request to see the live response. No canned payload is shown."}
+        </pre>
+        <button className="button button-dark" onClick={testEndpoint} disabled={apiLoading} data-testid="run-request-button">
+          {apiLoading ? "Requesting…" : "Run request"} <ArrowRight size={15} />
+        </button>
+        <p className="muted-note">
+          Target: <code>{API_BASE || "not configured"}</code>
+        </p>
+      </div>
+    </div>
+  );
+
+  const alertsPage = (
+    <div className="page-wrap">
+      <SectionHeading
+        eyebrow="Watchlist"
+        title="Price alerts"
+        description="Browser-local watch builder. Server-side monitoring is not implemented."
+      />
+      <div className="legacy-engine-wrap" role="region" aria-label="Price alert engine">
+        <PriceAlertEngine
+          isDarkMode={dark}
+          onTriggerToast={notify}
+          routes={state.routeIndices}
+        />
+      </div>
+    </div>
+  );
+
+  const aboutPage = (
+    <div className="page-wrap page-wrap-reading">
+      <SectionHeading
+        eyebrow="Context"
+        title="About this index"
+        description="A research prototype for a more timely view of domestic transport price movement."
+      />
+      <div className="about-hero">
+        <div className="about-spotlight-card">
+          <p className="eyebrow">Scope</p>
+          <h3>Index methodology validated end to end, with data acquisition stated honestly.</h3>
+          <p>
+            The statistical pipeline — matched-model elementary aggregates,
+            horizon stratification, weighted aggregation, validation, persistence and
+            revision tracking — is implemented and tested. Data acquisition covers one
+            genuine permitted source; every other source considered is listed with the
+            reason it is not collected.
+          </p>
+        </div>
+        <div>
+          <p className="eyebrow">The problem</p>
+          <h3>
+            Airfares move hundreds of times a day. A monthly counter visit cannot see
+            that.
+          </h3>
+          <p>
+            Advance-purchase price discrimination means a same-day ticket can cost
+            several times the same seat booked a month out. Treating that gap as
+            inflation is the central measurement error this design avoids, by indexing
+            each booking horizon separately.
+          </p>
+        </div>
+      </div>
+      <div className="about-copy-grid">
+        {[
+          ["Traceable", "Every published figure records the observations, weights, base period, validation rules and methodology version that produced it."],
+          ["Reproducible", "Figures are persisted, not regenerated. A restart serves the same numbers, and each recomputation appends a revision record."],
+          ["Honestly labelled", "Simulated data can never be presented as collected data, and a capability that does not exist reports NOT IMPLEMENTED."],
+        ].map(([title, text], i) => (
+          <article key={title}>
+            <span>{String(i + 1).padStart(2, "0")}</span>
+            <h3>{title}</h3>
+            <p>{text}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+
+  const view =
+    tab === "home" ? overview
+      : tab === "price-index" ? indexPage
+      : tab === "routes" ? routesPage
+      : tab === "horizons" ? horizonsPage
+      : tab === "alerts" ? alertsPage
+      : tab === "flight-data" ? observationsPage
+      : tab === "provenance" ? provenancePage
+      : tab === "monitoring" ? monitoringPage
+      : tab === "methodology" ? methodologyPage
+      : aboutPage;
+
+  return (
+    <div className={cx("app-shell", mobileNavOpen && "mobile-nav-open")}>
+      <header className="site-header">
+        <div className="header-inner">
+          <button className="brand-lockup" onClick={() => go("home")} data-testid="brand-home-button">
+            <img
+              src={getAssetPath(mounted && dark ? "/logo_dark.png" : "/logo.png")}
+              alt="Airfare CPI"
+              className="brand-logo-img"
+              suppressHydrationWarning
+            />
+            <span>
+              <strong>Airfare CPI</strong>
+              <small>Research prototype</small>
+            </span>
+          </button>
+          <nav className={cx("primary-nav", mobileNavOpen && "is-open")} aria-label="Primary navigation">
+            {NAV.map(([id, label, Icon]) => (
+              <button
+                className={tab === id ? "is-active" : ""}
+                key={id}
+                onClick={() => go(id)}
+                data-testid={`nav-${id}-button`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <button className="copilot-trigger" onClick={() => setCopilotOpen(true)} data-testid="header-copilot-button">
+              <CopilotSymbol size={18} /> <span>Copilot</span>
+            </button>
+            <button className="icon-button" aria-label="Toggle theme" onClick={() => setDark((v) => !v)} data-testid="theme-toggle-button">
+              {mounted && dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            {currentUser ? (
+              <button className="user-profile-badge" onClick={() => setModal("auth")} data-testid="user-profile-button">
+                <span className="user-avatar" style={{ backgroundColor: currentUser.avatarColor || "#10b981" }}>
+                  {currentUser.initials}
+                </span>
+                <span className="user-info">
+                  <strong>{currentUser.name}</strong>
+                  <small>{currentUser.badge || "Demo persona"}</small>
+                </span>
+              </button>
+            ) : (
+              <button className="sign-in-button" onClick={() => setModal("auth")} data-testid="sign-in-button">
+                Sign In
+              </button>
+            )}
+          </div>
+          <button
+            className="mobile-menu-button"
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((v) => !v)}
+            data-testid="mobile-navigation-button"
+          >
+            {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
+          </button>
+        </div>
+      </header>
+
+      <main className="main-content">
+        {loading ? (
+          <div className="page-wrap">
+            <p className="muted-note" data-testid="loading-note">
+              Loading figures from the API…
+            </p>
+          </div>
+        ) : (
+          view
+        )}
+      </main>
+
+      <footer className="site-footer">
+        <div>
+          <button className="footer-brand" onClick={() => go("home")}>
+            <img
+              src={getAssetPath(mounted && dark ? "/logo_dark.png" : "/logo.png")}
+              alt="Airfare CPI"
+              className="brand-logo-img"
+              suppressHydrationWarning
+            />
+            <span>
+              <strong>Airfare CPI</strong> <span>Research prototype</span>
+            </span>
+          </button>
+          <p>
+            Not an official statistic. Not issued by, endorsed by, or affiliated with
+            MoSPI, the NSO, or the Government of India.
+          </p>
+        </div>
+        <div className="footer-links">
+          <button onClick={() => go("methodology")}>Methodology</button>
+          <button onClick={() => go("provenance")}>Provenance</button>
+          <button onClick={() => setModal("bulletin")}>Research bulletin</button>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </div>
+        <span className="footer-meta">
+          {state.methodologyVersion || "methodology version unavailable"}
+        </span>
+      </footer>
+
+      {modal === "bulletin" && (
+        <ModalFrame
+          title="Research bulletin"
+          eyebrow="Prototype / Research Output — not an official release"
+          onClose={() => setModal(null)}
+          wide
+          testId="bulletin-modal"
+        >
+          <div className="bulletin-paper">
+            <div className="bulletin-disclaimer" data-testid="bulletin-disclaimer">
+              <strong>Prototype / Research Output.</strong> This is not an official
+              statistical release and carries no government attribution.
+            </div>
+            <div className="bulletin-id">
+              <span>Data provenance: {state.mode}</span>
+              <span>Base: {state.basePeriod || NOT_AVAILABLE}</span>
+            </div>
+            <div className="bulletin-metrics">
+              <div>
+                <small>Headline index</small>
+                <strong>{fmtIndex(state.headlineIndex)}</strong>
+              </div>
+              <div>
+                <small>Period change</small>
+                <strong>
+                  {state.momStatus === "available" ? fmtChange(state.momChangePct) : NOT_AVAILABLE}
+                </strong>
+              </div>
+              <div>
+                <small>Year-on-year</small>
+                <strong>
+                  {state.yoyStatus === "available" ? fmtChange(state.yoyChangePct) : NOT_AVAILABLE}
+                </strong>
+              </div>
+              <div>
+                <small>Sample size</small>
+                <strong>{fmtCount(state.sampleSize)}</strong>
+              </div>
+            </div>
+            <p>
+              {noIndexYet
+                ? state.reason
+                : `Computed from ${fmtCount(state.sampleSize)} observations across ` +
+                  `${fmtCount(state.routesIncluded)} of ${fmtCount(state.routesInBasket)} corridors ` +
+                  `(${fmtPctFromFraction(state.coverageWeight)} of basket weight). ` +
+                  `Seasonal adjustment: ${state.seasonalAdjustment}. ` +
+                  `Year-on-year: ${changeReason(state.yoyStatus) || fmtChange(state.yoyChangePct)}`}
+            </p>
+          </div>
+          <div className="modal-actions">
+            <a
+              className="button button-outline"
+              href={`${API_BASE}/api/v1/reports/monthly/html`}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="bulletin-open-full-link"
+            >
+              Open the full bulletin <ArrowUpRight size={15} />
+            </a>
+            <button className="button button-outline" onClick={() => setModal(null)}>
+              Close
+            </button>
+          </div>
+        </ModalFrame>
+      )}
+
+      <AuthModal
+        isOpen={modal === "auth"}
+        onClose={() => setModal(null)}
+        currentUser={currentUser}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        onNotify={notify}
+      />
+
+      <AviationCopilotModal
+        isOpen={copilotOpen}
+        onClose={() => setCopilotOpen(false)}
+        dashboardState={state}
+      />
+
+      <RouteDetailModal
+        route={detailRoute}
+        isOpen={Boolean(detailRoute)}
+        onClose={() => setDetailRoute(null)}
+        isDarkMode={dark}
+        dataMode={state.mode}
+      />
+
+      {toast && (
+        <div className="toast" role="status" data-testid="app-toast">
+          <Check size={15} /> {toast}
+        </div>
+      )}
+    </div>
+  );
 }
