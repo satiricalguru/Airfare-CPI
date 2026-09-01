@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { 
   ArrowLeft, 
@@ -11,24 +11,20 @@ import {
 } from "lucide-react";
 import { getAssetPath } from "../utils/assetPath";
 
-export default function PrivacyPolicyPage() {
-  const [dark, setDark] = useState(false);
-  const [mounted, setMounted] = useState(false);
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
+export default function PrivacyPolicyPage() {
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window === "undefined") return false;
     try {
       const saved = window.localStorage.getItem("airfare_cpi_theme");
-      const isDark = saved === "dark" || (!saved && document.documentElement.classList.contains("dark"));
-      if (isDark) {
-        setDark(true);
-        document.documentElement.classList.add("dark");
-        document.documentElement.classList.remove("light");
-      }
+      if (saved) return saved === "dark";
+      return document.documentElement.classList.contains("dark");
     } catch {
-      /* ignore */
+      return false;
     }
-  }, []);
+  });
 
   useEffect(() => {
     if (!mounted) return;

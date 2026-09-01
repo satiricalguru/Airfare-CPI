@@ -25,8 +25,10 @@
  *     sample size, or N/A.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+
+const emptySubscribe = () => () => {};
 import {
   Area,
   AreaChart,
@@ -245,8 +247,17 @@ function SortHeader({ label, column, sort, onSort }) {
 // ── page ──
 
 export default function AirfareCPI() {
-  const [mounted, setMounted] = useState(false);
-  const [dark, setDark] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = window.localStorage.getItem("airfare_cpi_theme");
+      if (saved) return saved === "dark";
+      return document.documentElement.classList.contains("dark");
+    } catch {
+      return false;
+    }
+  });
   const [tab, setTab] = useState("home");
   const [state, setState] = useState(() => emptyDashboardState());
   const [loading, setLoading] = useState(true);
@@ -304,25 +315,7 @@ export default function AirfareCPI() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  // ── theme synchronization on mount ──
-  useEffect(() => {
-    setMounted(true);
-    try {
-      const saved = window.localStorage.getItem("airfare_cpi_theme");
-      if (saved) {
-        const isDark = saved === "dark";
-        setDark(isDark);
-        document.documentElement.classList.toggle("dark", isDark);
-        document.documentElement.classList.toggle("light", !isDark);
-      } else {
-        const isDark = document.documentElement.classList.contains("dark");
-        setDark(isDark);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
+  // ── theme synchronization ──
   useEffect(() => {
     if (!mounted) return;
     document.documentElement.classList.toggle("dark", dark);
@@ -573,7 +566,7 @@ export default function AirfareCPI() {
     setRouteDestCode(tempCode);
   };
 
-  const handleScrapeRoute = async ({
+  const handleScrapeRoute = useCallback(async ({
     origin,
     destination,
     originCity,
@@ -637,7 +630,7 @@ export default function AirfareCPI() {
         setScrapingProgress(null);
       }, 4000);
     }
-  };
+  }, [scrapingRoute, state.mode, adminToken, notify, refresh, state.routeIndices]);
 
   const filteredRouteIndices = useMemo(() => {
     let list = state.routeIndices || [];
@@ -722,15 +715,18 @@ export default function AirfareCPI() {
       );
 
       if (!exists && !scrapingRoute) {
-        handleScrapeRoute({
-          origin: routeOriginCode,
-          destination: routeDestCode,
-          originCity: getAirport(routeOriginCode)?.city,
-          destinationCity: getAirport(routeDestCode)?.city,
-        });
+        const timer = setTimeout(() => {
+          handleScrapeRoute({
+            origin: routeOriginCode,
+            destination: routeDestCode,
+            originCity: getAirport(routeOriginCode)?.city,
+            destinationCity: getAirport(routeDestCode)?.city,
+          });
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
-  }, [routeOriginCode, routeDestCode, state.routeIndices, scrapingRoute]);
+  }, [routeOriginCode, routeDestCode, state.routeIndices, scrapingRoute, handleScrapeRoute]);
 
 
 
