@@ -4435,6 +4435,19 @@ html.dark .data-mode-unavailable .data-mode-label { color: #f87171; }
   line-height: 1.6;
   max-width: 78ch;
 }
+.table-panel-empty {
+  padding: 22px 24px;
+}
+.table-panel-footer {
+  border-top: 1px solid var(--line);
+  padding: 16px 24px;
+  background: var(--surface-subtle);
+}
+.table-panel > p.muted-note,
+.table-panel > .muted-note {
+  padding: 18px 24px;
+  margin: 0;
+}
 .panel-footnote {
   margin-top: 12px;
   padding-top: 10px;
@@ -4443,6 +4456,7 @@ html.dark .data-mode-unavailable .data-mode-label { color: #f87171; }
   font-size: 11.5px;
   line-height: 1.6;
 }
+
 .reason-cell {
   max-width: 46ch;
   font-size: 11.5px;
