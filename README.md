@@ -39,7 +39,7 @@
 - [3. System Architecture & Data Pipeline](#-system-architecture)
 - [4. Statistical & Econometric Methodology](#-statistical--econometric-methodology)
   - [4.1 Micro Elementary Index: Matched-Model Jevons](#41-micro-elementary-index-the-matched-model-jevons-formula)
-  - [4.2 Mathematical Proof: Why Jevons Over Carli/Dutot?](#42-mathematical-proof-why-jevons-over-carli-or-dutot)
+  - [4.2 Mathematical Comparison: Jevons vs Carli vs Dutot](#42-mathematical-comparison-jevons-vs-carli-vs-dutot)
   - [4.3 Advance-Purchase Booking Horizon Stratification](#43-advance-purchase-booking-horizon-stratification)
   - [4.4 Upper-Level Laspeyres Aggregation with DGCA Weights](#44-upper-level-laspeyres-aggregation-with-dgca-weights)
   - [4.5 3-Tier Data Validation & Tukey IQR Fencing](#45-3-tier-data-validation--anomaly-fencing)
@@ -81,22 +81,14 @@ An end-to-end, high-frequency, mathematically rigorous price intelligence pipeli
 
 ## ⚡ System Highlights & Key Features
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                AIRFARE CPI SYSTEM CAPABILITIES                                   │
-├────────────────────────────────┬────────────────────────────────┬────────────────────────────────┤
-│ 📐 Rigorous Econometrics       │ ⚡ High-Frequency Scraping      │ 🤖 AI Analyst Copilot          │
-│ • Matched-Model Jevons (ILO)   │ • Sub-second route radar       │ • Google Gemini 3.5 Flash Lite │
-│ • 5 Advance Booking Horizons   │ • Automated fallback ingestion │ • Dual-Mode Hybrid RAG Engine  │
-│ • DGCA Passenger-Weighting     │ • 83 Corridors / 85+ Airports  │ • 60fps Mascot Cursor Tracking │
-│ • Base Rebase (2024 = 100)     │ • 3-Tier Anomaly IQR Fences    │ • Natural Language Inquiries   │
-├────────────────────────────────┼────────────────────────────────┼────────────────────────────────┤
-│ 📊 Multi-Timeframe Analytics   │ 🔔 Autonomous Price Alerts     │ 📜 Official MoSPI Press Release│
-│ • 7D, 1M, 3M, 6M, 1Y views     │ • Browser notifications        │ • Automated Monthly Report JSON│
-│ • Minimalist underline tab UI  │ • Dynamic volatility triggers  │ • Print-Ready Statistical HTML │
-│ • Period % change & min/max    │ • Active corridor monitors     │ • Publication-ready tables     │
-└────────────────────────────────┴────────────────────────────────┴────────────────────────────────┘
-```
+| Category | Core Capability | Implementation Highlights |
+|---|---|---|
+| 📐 **Rigorous Econometrics** | **Matched-Model Jevons (ILO standard)** | Exact flight matching, $T+0 \dots T+30$ horizon combination, DGCA traffic-weighted Laspeyres aggregation, and Base 2024 = 100 rebasing. |
+| ⚡ **High-Frequency Ingestion** | **Sub-Second Autonomous Scraping** | Live aerospace radar, OTA connectors, on-demand corridor scraping, and automated unseeded route fallback. |
+| 🤖 **AI Analyst Copilot** | **Google Gemini 3.5 Flash Lite + Dual RAG** | Hybrid context assembly from live SQL database with offline client-side deterministic RAG fallback and 60fps cursor-tracking mascot. |
+| 📊 **Multi-Timeframe Analytics** | **Trading-Grade Interactive Views** | High-density `7D`, `1M`, `3M`, `6M`, and `1Y` views with period % change, min/max range ribbons, and Recharts visualization. |
+| 🔔 **Autonomous Price Alerts** | **Volatility & Threshold Triggers** | Real-time corridor telemetry, custom price watch monitors, and browser push notifications. |
+| 📜 **Official MoSPI Release** | **Automated Statistical Bulletin** | Monthly press release JSON endpoint and publication-ready print-styled HTML press bulletin. |
 
 - **Continuous 365-Day Historical Coverage:** Complete 1-year daily index series populated across all 83 corridors (25 core + 58 interstate routes) up to the current date.
 - **On-Demand & Fallback Autonomous Scraper:** Dedicated `POST /api/v1/routes/{route_id}/scrape` endpoint with automatic trigger whenever unseeded corridors are queried.
@@ -112,46 +104,46 @@ The system is decoupled into an asynchronous Python 3.12 / FastAPI backend engin
 
 ```mermaid
 flowchart TD
-    subgraph Data Sources
-        DS1[Direct Airline APIs]
-        DS2[OTA Travel Portals]
-        DS3[GDS Web Distribution]
-        DS4[Simulated Radar Engine]
+    subgraph DS["Data Sources"]
+        DS1["Direct Airline APIs"]
+        DS2["OTA Travel Portals"]
+        DS3["GDS Web Distribution"]
+        DS4["Simulated Radar Engine"]
     end
 
-    subgraph Ingestion & Validation Pipeline
-        ING[IngestService & Pipeline]
-        VAL{3-Tier Validator}
-        VAL1[Hard Bounds: ₹500 - ₹80k]
-        VAL2[Tax Ratio Check: <65%]
-        VAL3[Tukey IQR Fences: [Q1-1.5IQR, Q3+1.5IQR]]
+    subgraph INGP["Ingestion & Validation Pipeline"]
+        ING["IngestService & Pipeline"]
+        VAL{"3-Tier Validator"}
+        VAL1["Hard Bounds: ₹500 to ₹80,000"]
+        VAL2["Tax Ratio Check: Taxes ≤ 65%"]
+        VAL3["Tukey IQR Dynamic Fences"]
     end
 
-    subgraph Data Storage
-        DB[(SQLite / PostgreSQL\n858k+ Observations\n2.3k+ Index Points)]
+    subgraph ST["Data Persistence Store"]
+        DB[("SQLite / PostgreSQL<br/>858k+ Live Observations<br/>2.3k+ Computed Index Points")]
     end
 
-    subgraph Econometric Computation Engine
-        JEV[Matched-Model Jevons Engine\nCarrier + Flight + Cabin]
-        HOR[Horizon Stratification\nT+0, T+3, T+7, T+15, T+30]
-        AGG[Upper-Level Laspeyres Aggregator\nDGCA Passenger Volume Weights]
-        REB[Rebase Engine\nBase Period 2024 = 100]
+    subgraph ENG["Econometric Computation Engine"]
+        JEV["Matched-Model Jevons Engine<br/>Carrier + Flight + Cabin Tuple"]
+        HOR["Booking Horizon Stratification<br/>T+0, T+3, T+7, T+15, T+30"]
+        AGG["Upper-Level Laspeyres Aggregator<br/>DGCA Annual Passenger Weights"]
+        REB["Rebase Engine<br/>Base Period 2024 = 100"]
     end
 
-    subgraph REST API Layer (FastAPI)
-        API1[/api/v1/index/national]
-        API2[/api/v1/index/routes]
-        API3[/api/v1/routes/scrape]
-        API4[/api/v1/copilot/ask]
-        API5[/api/v1/reports/monthly]
+    subgraph API["REST API Layer (FastAPI)"]
+        API1["/api/v1/index/national"]
+        API2["/api/v1/index/routes"]
+        API3["/api/v1/routes/scrape"]
+        API4["/api/v1/copilot/ask"]
+        API5["/api/v1/reports/monthly"]
     end
 
-    subgraph Frontend Client (Next.js 16)
-        UI1[Headline Index & Time-Series Chart]
-        UI2[India Network Space-View Map]
-        UI3[Corridor Deep-Dive Modal]
-        UI4[AI Analyst Copilot]
-        UI5[Price Alert & Watchlist Engine]
+    subgraph UI["Frontend Client (Next.js 16)"]
+        UI1["Headline Index & Time-Series Chart"]
+        UI2["India Network Space-View Map"]
+        UI3["Corridor Deep-Dive Modal"]
+        UI4["AI Analyst Copilot Modal"]
+        UI5["Price Alert & Watchlist Engine"]
     end
 
     DS1 & DS2 & DS3 & DS4 --> ING
@@ -183,19 +175,15 @@ Where:
 - $p_{i,0}$ is the geometric mean base price of matched product $i$ during the baseline period ($2024=100$).
 - $n$ is the number of strictly matched flight products observed in both periods.
 
-### 4.2 Mathematical Proof: Why Jevons Over Carli or Dutot?
+### 4.2 Mathematical Comparison: Jevons vs Carli vs Dutot
 
-```
-┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
-│       Jevons Formula         │        Carli Formula         │        Dutot Formula         │
-│   (Mandated by ILO/IMF)      │    (Explicitly Prohibited)   │    (Biased for Mixed Fares)  │
-├──────────────────────────────┼──────────────────────────────┼──────────────────────────────┤
-│ ∏ (p_t / p_0)^(1/n)          │ (1/n) ∑ (p_t / p_0)          │ (∑ p_t) / (∑ p_0)            │
-│ ✅ Time-Reversal Test Passed │ ❌ Fails Time-Reversal Test  │ ✅ Time-Reversal Test Passed │
-│ ✅ No Upward Substitution Bias│ ❌ Upward Bias (Jensen Ineq)│ ❌ Heavy Weight on High Fares│
-│ ✅ Transitive & Commensurable│ ❌ Chained Index Drift       │ ❌ Dependent on Fare Levels  │
-└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
-```
+| Mathematical Criterion | Jevons Formula<br/>*(Mandated by ILO/IMF)* | Carli Formula<br/>*(Explicitly Prohibited)* | Dutot Formula<br/>*(Biased for Mixed Fares)* |
+|---|---|---|---|
+| **Mathematical Formulation** | $\prod_{i=1}^n \left(\frac{p_{i,t}}{p_{i,0}}\right)^{1/n}$ | $\frac{1}{n} \sum_{i=1}^n \frac{p_{i,t}}{p_{i,0}}$ | $\frac{\sum_{i=1}^n p_{i,t}}{\sum_{i=1}^n p_{i,0}}$ |
+| **Axiomatic Time-Reversal Test** ($I_{0\to t} \cdot I_{t\to 0} = 1$) |  **PASSED** ($=1.0000$) |  **FAILED** ($>1.0000$) |  **PASSED** ($=1.0000$) |
+| **Substitution Bias (Jensen's Inequality)** |  **Zero Upward Bias** |  **Severe Upward Bias** | ⚠️ Distorted by high-priced flights |
+| **Price Level Independence** |  **Scale Invariant** |  **Scale Invariant** |  **Heavily Biased** towards expensive tickets |
+| **Transitivity & Circularity** |  **Satisfied** |  **Violated** (Index Drift) |  **Satisfied** |
 
 1. **Elimination of Upward Substitution Bias:** By the **Arithmetic-Geometric Mean Inequality (AM-GM)**, the Carli index is strictly greater than or equal to the Jevons index:
    $$\frac{1}{n}\sum_{i=1}^n \frac{p_{i,t}}{p_{i,0}} \ge \left(\prod_{i=1}^n \frac{p_{i,t}}{p_{i,0}}\right)^{1/n}$$
@@ -245,34 +233,19 @@ $$W_r^*(t) = \frac{W_r}{\sum_{j \in S_t} W_j} \quad \text{subject to } \sum_{j \
 
 Every single ingested fare quote passes through three sequential validation gates before being stored or used in index computation:
 
-```
-[ Ingested Raw Fare Quote ]
-            │
-            ▼
- ┌────────────────────────────────────────────────────────┐
- │ GATE 1: Hard Boundary Sanity Checks                   │
- │ • ₹500 <= Fare <= ₹80,000                              │
- │ • Departure Date >= Collection Date (Horizon >= 0)     │
- └──────────────────────────┬─────────────────────────────┘
-                            │ Passed
-                            ▼
- ┌────────────────────────────────────────────────────────┐
- │ GATE 2: Tax & Surcharge Ratio Verification             │
- │ • Base Fare > 0                                        │
- │ • Taxes & Surcharges <= 65% of Total Fare              │
- └──────────────────────────┬─────────────────────────────┘
-                            │ Passed
-                            ▼
- ┌────────────────────────────────────────────────────────┐
- │ GATE 3: Dynamic Tukey Interquartile Range (IQR) Fences │
- │ • Stratified by (Route r, Horizon h)                   │
- │ • Lower Fence = Q1 - 1.5 * IQR                         │
- │ • Upper Fence = Q3 + 1.5 * IQR                         │
- │ • Extreme Outliers (> 3.0 * IQR) automatically excluded│
- └──────────────────────────┬─────────────────────────────┘
-                            │ Accepted
-                            ▼
-   [ Persisted into Stored Observations & Index Pipeline ]
+```mermaid
+flowchart TD
+    RAW["Raw Ingested Fare Quote"] --> G1{"Gate 1: Hard Bounds"}
+    G1 -->|"₹500 ≤ Fare ≤ ₹80,000 & Horizon ≥ 0"| G2{"Gate 2: Tax Ratio"}
+    G1 -->|"Out of Bounds"| REJ1["❌ Excluded (Anomaly Logged)"]
+    
+    G2 -->|"Taxes ≤ 65% of Total Fare"| G3{"Gate 3: Tukey IQR Fences"}
+    G2 -->|"Suspicious Surcharges"| REJ2["❌ Excluded (Tax Ratio Anomaly)"]
+    
+    G3 -->|"Inside [Q1 - 1.5·IQR, Q3 + 1.5·IQR]"| ACCEPT["✅ Validated Fare Quote"]
+    G3 -->|"Extreme Spike (> 3.0·IQR)"| REJ3["❌ Flagged Statistical Outlier"]
+    
+    ACCEPT --> STORE[("Persisted to SQLite / PostgreSQL Store & Jevons Pipeline")]
 ```
 
 ---
@@ -281,31 +254,29 @@ Every single ingested fare quote passes through three sequential validation gate
 
 The platform features an intelligent AI Analyst Copilot that assists economists and policy analysts with natural language queries regarding formulas, inflation decomposition, seasonal trends, and route weights:
 
-```
-                                    [ User Inquiry ]
-                                           │
-                                           ▼
-                            ┌──────────────────────────────┐
-                            │    AviationCopilotModal      │
-                            │      (Interactive UI)        │
-                            └──────────────┬───────────────┘
-                                           │
-                           Is FastAPI Backend Reachable?
-                           ├── YES ────────────────┐
-                           │                       │
-                           ▼                       ▼
-      ┌─────────────────────────────────┐    ┌─────────────────────────────────┐
-      │     MODE A: Full-Stack RAG      │    │    MODE B: Client-Side RAG      │
-      │   (FastAPI + Google Gemini)     │    │   (Zero-Latency Static RAG)     │
-      ├─────────────────────────────────┤    ├─────────────────────────────────┤
-      │ 1. Queries live SQLite state    │    │ 1. Inspects baked React state   │
-      │    for current CPI, MoM, YoY,   │    │    (Headline CPI, base period,  │
-      │    horizons & top routes.       │    │    active basket weights).      │
-      │ 2. Assembles grounded context.  │    │ 2. Semantic query parser.       │
-      │ 3. Proxies to Gemini 3.5 Flash  │    │ 3. Deterministic Knowledge Engine│
-      │    Lite server-side.            │    │    (Jevons math, formulas, etc.)│
-      │ 4. Badge: `Gemini 3.5 Flash`    │    │ 4. Badge: `Deterministic RAG`   │
-      └─────────────────────────────────┘    └─────────────────────────────────┘
+```mermaid
+flowchart TD
+    USER["User Question / Inquiry"] --> UI["AviationCopilotModal (Frontend Client)"]
+    UI --> CHECK{"Is Backend API Reachable?"}
+    
+    CHECK -->|Yes: Full-Stack Mode| S_RAG["Mode A: Server-Side SQL RAG"]
+    subgraph ServerMode["Mode A: Server-Side SQL RAG (FastAPI + Google Gemini)"]
+        S_RAG --> S_SQL["1. Live SQLite Context (Headline CPI, MoM, YoY, Routes)"]
+        S_SQL --> S_PROMPT["2. Assemble Grounded MoSPI Prompt"]
+        S_PROMPT --> S_LLM["3. Gemini 3.5 Flash Lite LLM Proxy"]
+        S_LLM --> S_OUT["4. Return Grounded Response (Badge: ✨ Gemini 3.5 Flash)"]
+    end
+    
+    CHECK -->|No: Static Offline Mode| C_RAG["Mode B: Client-Side Deterministic RAG"]
+    subgraph ClientMode["Mode B: Client-Side Deterministic RAG (Static GitHub Pages)"]
+        C_RAG --> C_STATE["1. Inspect Baked React State (Index, Base, Weights)"]
+        C_STATE --> C_PARSE["2. Semantic Query Intent Parser"]
+        C_PARSE --> C_KB["3. Deterministic Knowledge Engine (Jevons, Horizons, MoSPI)"]
+        C_KB --> C_OUT["4. Instant Response (Badge: ⚡ Deterministic RAG)"]
+    end
+    
+    S_OUT --> RESP["Render Markdown & Action Cards in Chat Thread"]
+    C_OUT --> RESP
 ```
 
 ### 🌟 Copilot Mascot & Interactive Dynamics:
@@ -366,17 +337,14 @@ In addition to the 25 core routes, the system pre-seeds and monitors **58 inters
 The dashboard features financial terminal-grade charting and corridor inspection tools:
 
 ### Timeframe Windows & Visual Analytics
-- **`7D` (7 Days):** High-frequency weekly volatility & immediate yield response.
-- **`1M` (1 Month / 30 Days):** Standard MoM inflation monitoring window.
-- **`3M` (3 Months / 90 Days):** Quarterly seasonal trend analysis.
-- **`6M` (6 Months / 180 Days):** Semi-annual structural price trends.
-- **`1Y` (1 Year / 365 Days):** Year-on-Year macroeconomic inflation benchmark.
 
-```
-  7D      1M      3M      6M      1Y
-──────────────────────────────────────
-                                ══════  <-- Clean solid active underline
-```
+| Timeframe | Observation Window | Analytical Focus |
+|:---:|:---:|:---|
+| **`7D`** | 7 Days | High-frequency weekly volatility & immediate carrier yield response |
+| **`1M`** | 30 Days (1 Month) | Standard Month-on-Month (MoM) official inflation tracking window |
+| **`3M`** | 90 Days (Quarterly) | Seasonal festival / holiday quarter trend analysis |
+| **`6M`** | 180 Days (Half-Year) | Semi-annual structural price movements and fleet adjustments |
+| **`1Y`** | 365 Days (1 Year) | Macroeconomic Year-on-Year (YoY) headline inflation benchmark |
 
 ### Corridor Modal Tabs:
 1. **Price Trend:** Dynamic Recharts area/line chart with period % change, min/max bounds, and date range summary ribbon.
