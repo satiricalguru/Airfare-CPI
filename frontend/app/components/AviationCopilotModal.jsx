@@ -190,7 +190,7 @@ function ScraperActionCard() {
 
 const PRESET_PROMPTS = [
   {
-    label: "⚡ Start Scraping",
+    label: "Start Scraping",
     query: "Start data ingestion and scraping for all 25 corridors",
   },
   {

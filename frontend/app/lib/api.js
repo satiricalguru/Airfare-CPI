@@ -397,7 +397,7 @@ export async function askCopilot(question, context) {
 }
 
 /** Fetch stored index history for one route. */
-export async function loadRouteHistory(routeId, days = 30) {
+export async function loadRouteHistory(routeId, days = 365) {
   const res = await apiGet(`/api/v1/index/routes/${routeId}?days=${days}`, {
     timeoutMs: isStaticEnvironment() ? 2000 : DEFAULT_TIMEOUT_MS,
   });
@@ -413,13 +413,34 @@ export async function loadRouteHistory(routeId, days = 30) {
       const variation = Math.sin(i * 0.4 + (Number(routeId) % 5)) * 2.5;
       return {
         date: d.toISOString().slice(0, 10),
+        index_date: d.toISOString().slice(0, 10),
         value: Number((baseVal + variation).toFixed(2)),
         sample_size: 60 + ((i + Number(routeId)) % 20),
       };
     });
-    return { ok: true, data: { route_id: routeId, data: historyData }, error: null };
+    return { ok: true, data: { route_id: routeId, history: historyData, data: historyData }, error: null };
   }
   return res;
+}
+
+/** Trigger on-demand live/simulated scraping and index generation for a specific route ID. */
+export async function scrapeRouteById(routeId, { adminToken = "dev-admin-token-2026" } = {}) {
+  return apiPost(`/api/v1/routes/${routeId}/scrape`, {}, { adminToken, timeoutMs: 45000 });
+}
+
+/** Trigger scraping for an arbitrary origin-destination pair. */
+export async function scrapeRoutePair(origin, destination, { originCity = "", destinationCity = "", adminToken = "dev-admin-token-2026" } = {}) {
+  return apiPost(
+    "/api/v1/routes/scrape",
+    {
+      origin,
+      destination,
+      origin_city: originCity || undefined,
+      destination_city: destinationCity || undefined,
+      compute_index: true,
+    },
+    { adminToken, timeoutMs: 45000 },
+  );
 }
 
 /** Fetch horizon indices for one route. */

@@ -258,13 +258,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   transition: fill 0.2s ease;
 }
 
-/* Dark mode: Inverted - White squircle body, Black eyes */
+/* Dark mode: Inverted - Ivory squircle body, Paper eyes matching theme */
 html.dark .copilot-symbol-bg {
-  fill: #ffffff;
+  fill: var(--ink);
 }
 
 html.dark .copilot-eye {
-  fill: #111827;
+  fill: var(--paper);
 }
 
 /* Eye pupil group & cursor tracking */
@@ -3349,46 +3349,44 @@ html.light .copilot-symbol-eye,
   fill: #ffffff !important;
 }
 
-/* Dark mode: high-contrast emerald body with deep eyes */
+/* Dark mode: warm ivory body with deep paper eyes matching the web app theme */
 html.dark .copilot-symbol-body,
-.dark .copilot-symbol-body {
-  fill: #10b981 !important;
-}
-
-html.dark .copilot-symbol-eye,
-.dark .copilot-symbol-eye {
-  fill: #062816 !important;
-}
-
+.dark .copilot-symbol-body,
 html.dark .copilot-header-icon .copilot-symbol-body,
 html.dark .copilot-avatar .copilot-symbol-body,
 .dark .copilot-header-icon .copilot-symbol-body,
-.dark .copilot-avatar .copilot-symbol-body {
-  fill: #10b981 !important;
+.dark .copilot-avatar .copilot-symbol-body,
+html.dark .copilot-symbol-bg,
+.dark .copilot-symbol-bg {
+  fill: var(--ink, #f3f1e9) !important;
 }
 
+html.dark .copilot-symbol-eye,
+.dark .copilot-symbol-eye,
 html.dark .copilot-header-icon .copilot-symbol-eye,
 html.dark .copilot-avatar .copilot-symbol-eye,
 .dark .copilot-header-icon .copilot-symbol-eye,
-.dark .copilot-avatar .copilot-symbol-eye {
-  fill: #062816 !important;
+.dark .copilot-avatar .copilot-symbol-eye,
+html.dark .copilot-eye,
+.dark .copilot-eye {
+  fill: var(--paper, #151815) !important;
 }
 
 /* Dark mode header copilot trigger */
 html.dark .copilot-trigger,
 .dark .copilot-trigger {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #f3f1e9;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.06);
+  background: var(--green-soft, #25352b);
+  border-color: rgba(154, 195, 160, 0.35);
+  color: var(--ink, #f3f1e9);
+  box-shadow: 0 0 12px rgba(154, 195, 160, 0.08);
 }
 
 html.dark .copilot-trigger:hover,
 .dark .copilot-trigger:hover {
-  background: rgba(16, 185, 129, 0.22);
-  border-color: rgba(16, 185, 129, 0.6);
+  background: rgba(154, 195, 160, 0.22);
+  border-color: var(--green, #9ac3a0);
   color: #ffffff;
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 16px rgba(154, 195, 160, 0.2);
 }
 
 .copilot-eyes-group {
@@ -4596,9 +4594,9 @@ html.dark .data-mode-unavailable .data-mode-label { color: #f87171; }
 }
 
 html.dark .copilot-panel {
-  background: #161b22;
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: var(--paper-bright);
+  border-color: var(--line);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--line-light);
 }
 
 .copilot-header {
@@ -4612,8 +4610,8 @@ html.dark .copilot-panel {
 }
 
 html.dark .copilot-header {
-  background: #1c2128;
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--paper-bright) 92%, var(--paper));
+  border-bottom-color: var(--line-light);
 }
 
 .copilot-title {
@@ -4688,15 +4686,15 @@ html.dark .copilot-header {
 }
 
 .copilot-badge-live {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid rgba(154, 195, 160, 0.3);
 }
 
 .copilot-badge-simulated {
-  background: rgba(245, 158, 11, 0.12);
-  color: #d97706;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(178, 122, 49, 0.12);
+  color: var(--amber);
+  border: 1px solid rgba(178, 122, 49, 0.3);
 }
 
 html.dark .copilot-badge-simulated {
@@ -4732,8 +4730,9 @@ html.dark .copilot-badge-simulated {
   flex-direction: column;
   gap: 22px;
   max-height: 48vh;
+  background: var(--paper);
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--line-light) transparent;
 }
 
 .copilot-scroll::-webkit-scrollbar {
@@ -4741,7 +4740,7 @@ html.dark .copilot-badge-simulated {
 }
 
 .copilot-scroll::-webkit-scrollbar-thumb {
-  background: var(--line);
+  background: var(--line-light);
   border-radius: 999px;
 }
 
@@ -4763,8 +4762,8 @@ html.dark .copilot-badge-simulated {
 .copilot-user-bubble {
   max-width: 82%;
   padding: 10px 18px;
-  background: #18181b;
-  color: #f8fafc;
+  background: var(--ink);
+  color: var(--paper-bright);
   border-radius: 18px 18px 4px 18px;
   font-size: 13.5px;
   line-height: 1.55;
@@ -4774,9 +4773,10 @@ html.dark .copilot-badge-simulated {
 }
 
 html.dark .copilot-user-bubble {
-  background: #27272a;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  background: var(--green-soft);
+  color: var(--ink);
+  border: 1px solid rgba(154, 195, 160, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .copilot-row-assistant {
@@ -4786,16 +4786,16 @@ html.dark .copilot-user-bubble {
 .copilot-assistant-thread {
   width: 100%;
   max-width: 100%;
-  background: color-mix(in srgb, var(--paper) 45%, var(--paper-bright));
-  border: 1px solid var(--line-light);
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
   border-radius: 18px;
   padding: 18px 22px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
 }
 
 html.dark .copilot-assistant-thread {
-  background: #1c2128;
-  border-color: rgba(255, 255, 255, 0.07);
+  background: var(--paper-bright);
+  border-color: var(--line-light);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
@@ -4837,16 +4837,16 @@ html.dark .copilot-avatar {
   font-family: var(--sans);
   font-size: 11px;
   font-weight: 500;
-  background: color-mix(in srgb, var(--paper) 60%, var(--paper-bright));
+  background: var(--surface-subtle);
   border: 1px solid var(--line);
   color: var(--muted);
   letter-spacing: -0.01em;
 }
 
 html.dark .copilot-tier {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.09);
-  color: #94a3b8;
+  background: var(--surface-subtle);
+  border-color: var(--line-light);
+  color: var(--muted);
 }
 
 .copilot-tier .tier-icon {
@@ -4855,7 +4855,7 @@ html.dark .copilot-tier {
 }
 
 html.dark .copilot-tier .tier-icon {
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 .copilot-tier-model {
@@ -4863,11 +4863,11 @@ html.dark .copilot-tier .tier-icon {
 }
 
 html.dark .copilot-tier-model {
-  color: #e2e8f0;
+  color: var(--ink);
 }
 
 .copilot-tier-local_fallback {
-  color: #b45309;
+  color: var(--amber);
 }
 
 html.dark .copilot-tier-local_fallback {
@@ -4899,7 +4899,7 @@ html.dark .copilot-tier-local_fallback {
 
 .copilot-body code {
   padding: 2px 7px;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  background: var(--green-soft);
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 12.5px;
@@ -4986,7 +4986,7 @@ html.dark .copilot-assistant-thread-thinking {
 }
 
 html.dark .copilot-typing-dot {
-  background: #f0f6fc;
+  background: var(--ink);
 }
 
 .copilot-typing-dot:nth-child(1) {
@@ -5023,8 +5023,8 @@ html.dark .copilot-typing-dot {
 }
 
 html.dark .copilot-action-card {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.09);
+  background: var(--surface-subtle);
+  border-color: var(--line-light);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -5058,8 +5058,8 @@ html.dark .copilot-action-card {
 }
 
 .copilot-action-status-idle {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .copilot-action-status-running {
@@ -5069,8 +5069,8 @@ html.dark .copilot-action-card {
 }
 
 .copilot-action-status-success {
-  background: rgba(16, 185, 129, 0.18);
-  color: #10b981;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .copilot-action-status-error {
@@ -5090,9 +5090,9 @@ html.dark .copilot-action-card {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--green);
+  background: var(--green-soft);
+  border: 1px solid rgba(154, 195, 160, 0.25);
   border-radius: 8px;
   padding: 9px 12px;
   margin-bottom: 12px;
@@ -5129,8 +5129,8 @@ html.dark .copilot-action-card {
 }
 
 html.dark .copilot-action-btn {
-  background: var(--paper-bright);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .copilot-action-btn:hover:not(:disabled) {
@@ -5165,7 +5165,8 @@ html.dark .copilot-action-btn {
 }
 
 html.dark .copilot-presets-container {
-  background: #161b22;
+  background: color-mix(in srgb, var(--paper-bright) 92%, var(--paper));
+  border-top-color: var(--line-light);
 }
 
 .copilot-presets-label {
@@ -5221,6 +5222,18 @@ html.dark .copilot-presets-container {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+html.dark .copilot-preset-chip {
+  background: var(--surface-subtle);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+html.dark .copilot-preset-chip:hover:not(:disabled) {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+
 .copilot-preset-chip:active:not(:disabled) {
   transform: scale(0.97);
 }
@@ -5237,7 +5250,8 @@ html.dark .copilot-presets-container {
 }
 
 html.dark .copilot-input-row {
-  background: #161b22;
+  background: var(--paper-bright);
+  border-top-color: var(--line-light);
 }
 
 .copilot-input-wrapper {
@@ -5254,20 +5268,20 @@ html.dark .copilot-input-row {
 }
 
 html.dark .copilot-input-wrapper {
-  background: #1c2128;
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--surface-subtle);
+  border-color: var(--line);
 }
 
 .copilot-input-wrapper:focus-within {
-  border-color: color-mix(in srgb, var(--ink) 30%, var(--line));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(154, 195, 160, 0.2);
   background: var(--paper-bright);
 }
 
 html.dark .copilot-input-wrapper:focus-within {
-  background: #1f242c;
-  border-color: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  background: var(--paper-bright);
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(154, 195, 160, 0.25);
 }
 
 .copilot-input-field {
@@ -5298,20 +5312,22 @@ html.dark .copilot-input-wrapper:focus-within {
   height: 36px;
   border: none;
   border-radius: 50%;
-  background: #18181b;
-  color: #ffffff;
+  background: var(--ink);
+  color: var(--paper);
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 html.dark .copilot-send-btn {
-  background: #ffffff;
-  color: #111827;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .copilot-send-btn:hover:not(:disabled) {
   transform: scale(1.08);
+  background: var(--green);
+  color: var(--paper);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
@@ -6217,5 +6233,79 @@ html.dark .copilot-send-btn {
     justify-content: space-between;
   }
 }
+
+/* ── Minimalist Underline Timeframe Selector (Matching Image 2) ── */
+.minimal-timeframe-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0 4px;
+}
+
+[data-theme="light"] .minimal-timeframe-bar {
+  border-bottom-color: rgba(0, 0, 0, 0.16);
+}
+
+.minimal-timeframe-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 6px 10px 6px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
+  position: relative;
+  transition: color 0.18s ease;
+  letter-spacing: 0.02em;
+}
+
+[data-theme="light"] .minimal-timeframe-btn {
+  color: rgba(0, 0, 0, 0.52);
+}
+
+.minimal-timeframe-btn:hover {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="light"] .minimal-timeframe-btn:hover {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+.minimal-timeframe-btn.is-active {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+[data-theme="light"] .minimal-timeframe-btn.is-active {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.minimal-timeframe-btn .active-underline {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: #ffffff;
+  border-radius: 2px 2px 0 0;
+}
+
+[data-theme="light"] .minimal-timeframe-btn .active-underline {
+  background: #0f172a;
+}
+
+.empty-panel-wrapper {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 
 

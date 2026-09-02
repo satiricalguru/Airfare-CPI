@@ -1036,17 +1036,21 @@ export default function AirfareCPI() {
                 <p className="eyebrow">Stored index history</p>
                 <h3>Published values, not a recomputation</h3>
               </div>
-              <div className="segmented-control">
-                {RANGE_OPTIONS.map((option) => (
-                  <button
-                    className={range === option.key ? "is-active" : ""}
-                    key={option.key}
-                    onClick={() => setRange(option.key)}
-                    data-testid={`index-range-${option.key.toLowerCase()}-button`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="minimal-timeframe-bar">
+                {RANGE_OPTIONS.map((option) => {
+                  const isActive = range === option.key;
+                  return (
+                    <button
+                      className={`minimal-timeframe-btn ${isActive ? "is-active" : ""}`}
+                      key={option.key}
+                      onClick={() => setRange(option.key)}
+                      data-testid={`index-range-${option.key.toLowerCase()}-button`}
+                    >
+                      <span>{option.label}</span>
+                      {isActive && <span className="active-underline" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {series.length === 0 ? (
