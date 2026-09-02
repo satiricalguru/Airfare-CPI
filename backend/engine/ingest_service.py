@@ -146,8 +146,11 @@ class IngestService:
         if compute_index:
             try:
                 index_service = IndexService(self.settings)
+                recompute_day = collection_day or (run.collection_day if run else None)
                 result.index = await index_service.recompute(
                     session,
+                    start_date=recompute_day,
+                    end_date=recompute_day,
                     reason=(
                         f"recomputation after collection run {run.run_id[:8]} "
                         f"({effective_mode.value}, triggered by {triggered_by})"

@@ -26,6 +26,7 @@ BACKEND_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
 FIXTURE_DIR = BACKEND_DIR / "fixtures"
+DEFAULT_DB_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'airfare_cpi.db'}"
 
 load_dotenv(BACKEND_DIR / ".env")
 load_dotenv(REPO_ROOT / ".env")
@@ -221,7 +222,7 @@ class DatabaseSettings:
     There is no in-memory mode: published figures must survive a restart.
     """
 
-    url: str = "sqlite+aiosqlite:///./airfare_cpi.db"
+    url: str = DEFAULT_DB_URL
     pool_size: int = 10
     max_overflow: int = 20
     echo: bool = False
@@ -335,7 +336,7 @@ def build_settings() -> Settings:
     )
 
     database = DatabaseSettings(
-        url=_env_str("DATABASE_URL", "sqlite+aiosqlite:///./airfare_cpi.db"),
+        url=_env_str("DATABASE_URL", DEFAULT_DB_URL),
         pool_size=_env_int("DB_POOL_SIZE", 10),
         max_overflow=_env_int("DB_MAX_OVERFLOW", 20),
         echo=_env_bool("DB_ECHO", False),

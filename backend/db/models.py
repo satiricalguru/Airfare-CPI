@@ -184,6 +184,7 @@ class FareObservationRecord(Base):
         Index("ix_fare_obs_product", "product_key_hash"),
         Index("ix_fare_obs_dedupe", "dedupe_fingerprint"),
         Index("ix_fare_obs_source_type", "source_type"),
+        Index("ix_fare_obs_collection_date", "collection_date", "is_valid"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

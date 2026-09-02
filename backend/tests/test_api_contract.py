@@ -107,7 +107,7 @@ class TestAPIContract:
                     res = await client.post(
                         "/api/v1/collection/trigger",
                         headers={"X-Admin-Token": "super-secret-token"},
-                        json={"mode": "SIMULATED", "routes": [1]},
+                        json={"mode": "SIMULATED", "routes": [1], "compute_index": False},
                     )
                     assert res.status_code == 200
 

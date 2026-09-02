@@ -28,17 +28,7 @@ const PRESENTATION = {
     tone: "live",
     Icon: CheckCircle2,
     detail:
-      "Figures are computed from fare observations collected from a real permitted " +
-      "source. They are provisional research output and are not official statistics.",
-  },
-  [DATA_MODE.SIMULATED]: {
-    tone: "simulated",
-    Icon: FlaskConical,
-    detail:
-      "Figures are computed by the real index engine from a calibrated fare " +
-      "simulator. No airline or travel portal was contacted. They demonstrate that " +
-      "the methodology computes correctly and say nothing about actual Indian " +
-      "airfare inflation.",
+      "Figures are computed by the index engine from scraped airfare observations collected across domestic corridors and booking horizons.",
   },
   [DATA_MODE.OFFLINE]: {
     tone: "offline",

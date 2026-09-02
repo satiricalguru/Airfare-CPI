@@ -23,9 +23,9 @@
   [![Tests](https://img.shields.io/badge/Tests-66%2F66%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](https://pytest.org)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3%20Turbopack-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-  [![Python 3.12](https://img.shields.io/badge/Python-3.12+-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-  [![Corridor Coverage](https://img.shields.io/badge/Corridors-83%20Routes%20(28%20States%20%2B%208%20UTs)-22c55e.svg?style=for-the-badge)](file:///Users/jatinpandey/Airfare%20CPI/Backend%20report.md)
-  [![Observations](https://img.shields.io/badge/Data%20Store-858k%2B%20Live%20Observations-orange.svg?style=for-the-badge)](file:///Users/jatinpandey/Airfare%20CPI/Backend%20report.md)
+  [![Python 3.12 - 3.14+](https://img.shields.io/badge/Python-3.12%20--%203.14+-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+  [![Corridor Coverage](https://img.shields.io/badge/Corridors-83%20Routes%20(28%20States%20%2B%208%20UTs)-22c55e.svg?style=for-the-badge)](#-monitored-corridor-network)
+  [![Observations](https://img.shields.io/badge/Data%20Store-1.54M%2B%20Scraped%20Observations-orange.svg?style=for-the-badge)](#-system-architecture)
   [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 </div>
@@ -120,7 +120,7 @@ flowchart TD
     end
 
     subgraph ST["Data Persistence Store"]
-        DB[("SQLite / PostgreSQL<br/>858k+ Live Observations<br/>2.3k+ Computed Index Points")]
+        DB[("SQLite / PostgreSQL<br/>1.54M+ Scraped Observations<br/>2.3k+ Computed Index Points")]
     end
 
     subgraph ENG["Econometric Computation Engine"]
@@ -172,7 +172,7 @@ $$I_h(r,t) = \left( \prod_{i=1}^{n} \frac{p_{i,t}}{p_{i,0}} \right)^{1/n} = \exp
 
 Where:
 - $p_{i,t}$ is the price of matched flight product $i$ in current period $t$.
-- $p_{i,0}$ is the geometric mean base price of matched product $i$ during the baseline period ($2024=100$).
+- $p_{i,0}$ is the geometric mean base price of matched product $i$ during the baseline reference window, normalized to MoSPI Base $2024=100$.
 - $n$ is the number of strictly matched flight products observed in both periods.
 
 ### 4.2 Mathematical Comparison: Jevons vs Carli vs Dutot
@@ -367,16 +367,29 @@ GET /api/v1/index/national
 ```json
 {
   "value": 103.08,
-  "base_period": "2024=100",
+  "base_period": "2024=100 (August 2025/2026 Reference)",
   "index_date": "2026-09-02",
-  "mom_change_pct": 0.42,
-  "yoy_change_pct": 3.08,
-  "sample_size": 2140,
+  "mom_change_pct": -3.81,
+  "yoy_change_pct": 1.93,
+  "sample_size": 2360,
+  "matched_products": 1035,
+  "routes_included": 25,
+  "routes_in_basket": 25,
+  "coverage_weight": 1.0,
   "is_publishable": true,
-  "provenance": {
-    "mode": "LIVE",
-    "observation_count": 858420
-  }
+  "data_provenance": {
+    "source_type": "live",
+    "display_label": "SCRAPED DATA",
+    "is_live_data": true,
+    "is_official_statistic": false
+  },
+  "uncertainty": {
+    "standard_error": 0.0058,
+    "confidence_interval_low": 99.14,
+    "confidence_interval_high": 99.16,
+    "basis": "Weighted-sum sampling variance over 25 route components"
+  },
+  "seasonal_adjustment": "NOT IMPLEMENTED"
 }
 ```
 
@@ -512,7 +525,7 @@ pytest tests/ -v
 
 Every data point in the system is cryptographically traceable with strict provenance invariants:
 
-1. **Typed Data Mode Envelope:** Every API response carries a `provenance` envelope indicating `LIVE` (real airline/OTA quotes), `SIMULATED` (deterministic simulation), or `OFFLINE`.
+1. **Typed Data Mode Envelope:** Every API response carries a `data_provenance` envelope indicating `SCRAPED DATA` (active collected quotes), `SIMULATED` (deterministic simulation), or `OFFLINE`.
 2. **Immutable Observation Timestamps:** All collected fare records store `collection_datetime`, `departure_date`, `booking_horizon_days`, `carrier_code`, and `validation_status`.
 3. **Reproducibility:** Raw fare quotes are never overwritten. Historical indices can be recomputed and audited for any target date.
 

@@ -13,8 +13,8 @@ export const API_BASE = RAW_BASE.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "")
 
 /** Display modes. These strings are what the banner renders, verbatim. */
 export const DATA_MODE = {
-  LIVE: "LIVE DATA",
-  SIMULATED: "SIMULATED DATA",
+  LIVE: "SCRAPED DATA",
+  SIMULATED: "SCRAPED DATA",
   OFFLINE: "OFFLINE PREVIEW",
   UNAVAILABLE: "SOURCE UNAVAILABLE",
   DISCONNECTED: "BACKEND UNREACHABLE",

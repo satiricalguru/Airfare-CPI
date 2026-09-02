@@ -104,7 +104,9 @@ function RouteDetailContent({ route, onClose, dataMode }) {
   const [loading, setLoading] = useState(true);
   const [isScraping, setIsScraping] = useState(false);
   const isScrapingRef = useRef(false);
-  isScrapingRef.current = isScraping;
+  useEffect(() => {
+    isScrapingRef.current = isScraping;
+  }, [isScraping]);
   const [scrapeNotice, setScrapeNotice] = useState(null);
   const [errors, setErrors] = useState({});
 

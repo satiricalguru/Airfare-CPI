@@ -121,29 +121,19 @@ class IndexService:
         """
         result = IndexComputationResult(base_period=self.base_period)
 
-        records = await repo.load_observations(session, valid_only=True)
-        if not records:
-            logger.info("No stored observations; nothing to compute")
-            return result
+        # 1. Base prices: strictly query observations within the base period
+        base_records = await repo.load_observations(
+            session,
+            start_date=self.base_period.start,
+            end_date=self.base_period.end,
+            valid_only=True,
+        )
+        if not base_records:
+            any_records = await repo.load_observations(session, valid_only=True, limit=1)
+            if not any_records:
+                logger.info("No stored observations; nothing to compute")
+                return result
 
-        observations = [repo.record_to_observation(r) for r in records]
-        source_types = {o.source_type for o in observations}
-
-        # A mixed-provenance index would be uninterpretable: part measurement, part
-        # simulation, with no way to label the result honestly.
-        if len(source_types) > 1:
-            logger.warning(
-                f"Stored observations span multiple provenance types "
-                f"{sorted(t.value for t in source_types)}. Computing per provenance "
-                f"type is not supported; the dominant type is used and the mixture is "
-                f"reported. Clear the database when switching modes."
-            )
-        dominant = max(source_types, key=lambda t: sum(1 for o in observations if o.source_type is t))
-        observations = [o for o in observations if o.source_type is dominant]
-        result.source_type = dominant
-
-        base_sets = compute_base_prices(observations, self.base_period)
-        if not base_sets:
             logger.warning(
                 f"No observations fall inside the base period "
                 f"{self.base_period.label}; no index can be computed. Base prices are "
@@ -155,6 +145,54 @@ class IndexService:
                 "detail": MissingDataReason.NO_BASE_PERIOD_DATA.description,
             })
             return result
+
+        base_observations = [repo.record_to_observation(r) for r in base_records]
+        base_sets = compute_base_prices(base_observations, self.base_period)
+        if not base_sets:
+            logger.warning(
+                f"No base prices derived for base period {self.base_period.label}."
+            )
+            result.skipped_dates.append({
+                "date": None,
+                "reason": MissingDataReason.NO_BASE_PERIOD_DATA.value,
+                "detail": MissingDataReason.NO_BASE_PERIOD_DATA.description,
+            })
+            return result
+
+        # 2. Candidate target observations: strictly query post-base observations within [start_date, end_date]
+        target_start = max(start_date, self.base_period.end + timedelta(days=1)) if start_date else (self.base_period.end + timedelta(days=1))
+        target_end = end_date if end_date else None
+
+        records = await repo.load_observations(
+            session,
+            start_date=target_start,
+            end_date=target_end,
+            valid_only=True,
+        )
+        if not records:
+            logger.info(
+                f"No collection days with observations after the base period end "
+                f"({self.base_period.end}) matching window [{target_start}, {target_end}]; "
+                f"no index dates to compute"
+            )
+            return result
+
+        observations = [repo.record_to_observation(r) for r in records]
+        all_sampled = observations + base_observations
+        source_types = {o.source_type for o in all_sampled}
+
+        # A mixed-provenance index would be uninterpretable: part measurement, part
+        # simulation, with no way to label the result honestly.
+        if len(source_types) > 1:
+            logger.warning(
+                f"Stored observations span multiple provenance types "
+                f"{sorted(t.value for t in source_types)}. Computing per provenance "
+                f"type is not supported; the dominant type is used and the mixture is "
+                f"reported. Clear the database when switching modes."
+            )
+        dominant = max(source_types, key=lambda t: sum(1 for o in all_sampled if o.source_type is t))
+        observations = [o for o in observations if o.source_type is dominant]
+        result.source_type = dominant
 
         # Candidate index dates: every collection day after the base period ends.
         by_day: dict[date, list[FareObservation]] = {}

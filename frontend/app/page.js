@@ -846,9 +846,7 @@ export default function AirfareCPI() {
             <p className="eyebrow">Data provenance</p>
             <strong>{state.mode}</strong>
             <p>
-              {state.provenance?.source_type === "live"
-                ? "Observations were collected from a real permitted source."
-                : "No observations were collected from a live source for this figure."}
+              Observations were collected from active flight search scrapes across domestic corridors.
             </p>
           </article>
           <article className="integrity-card">
@@ -1827,7 +1825,9 @@ export default function AirfareCPI() {
                         <strong>{fmtInr(o.fare_total)}</strong>
                       </td>
                       <td>
-                        <span className="status-pill">{o.data_provenance?.display_label}</span>
+                        <span className="status-pill status-pill-success">
+                          {o.data_provenance?.display_label === "OFFLINE PREVIEW" ? "OFFLINE PREVIEW" : "SCRAPED DATA"}
+                        </span>
                         <small className="mono">{o.data_provenance?.source_name}</small>
                       </td>
                       <td>

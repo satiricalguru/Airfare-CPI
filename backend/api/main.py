@@ -1441,6 +1441,8 @@ async def backfill_simulated(
 
     index_result = await IndexService(cfg).recompute(
         session,
+        start_date=request.start_date,
+        end_date=request.end_date,
         reason=(
             f"recomputation after simulated backfill "
             f"{request.start_date.isoformat()}..{request.end_date.isoformat()}"
