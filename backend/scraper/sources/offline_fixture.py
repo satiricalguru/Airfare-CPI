@@ -23,6 +23,7 @@ from loguru import logger
 
 from config import get_settings
 from provenance import (
+    AcquisitionMethod,
     CollectionStatus,
     DataProvenance,
     SourceType,
@@ -198,6 +199,7 @@ class OfflineFixtureSource(BaseFareSource):
                 collected = collected.replace(tzinfo=timezone.utc)
             record_provenance = DataProvenance(
                 source_type=SourceType.OFFLINE,
+                acquisition_method=AcquisitionMethod.OFFLINE_FIXTURE,
                 source_name=SOURCE_NAME,
                 collection_timestamp=collected,
                 request_id=new_request_id(),

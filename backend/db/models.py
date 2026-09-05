@@ -131,6 +131,7 @@ class CollectionRun(Base):
     __table_args__ = (
         Index("ix_collection_runs_day", "collection_day"),
         Index("ix_collection_runs_started", "started_at"),
+        Index("ix_collection_runs_acq_method", "acquisition_method"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -138,6 +139,10 @@ class CollectionRun(Base):
     # 'LIVE' | 'SIMULATED' | 'OFFLINE'
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    # 'WEB_SCRAPE' | 'API' | 'SIMULATED' | 'OFFLINE_FIXTURE'
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     display_label: Mapped[str] = mapped_column(String(32), nullable=False)
 
@@ -184,6 +189,7 @@ class FareObservationRecord(Base):
         Index("ix_fare_obs_product", "product_key_hash"),
         Index("ix_fare_obs_dedupe", "dedupe_fingerprint"),
         Index("ix_fare_obs_source_type", "source_type"),
+        Index("ix_fare_obs_acq_method", "acquisition_method"),
         Index("ix_fare_obs_collection_date", "collection_date", "is_valid"),
     )
 
@@ -223,6 +229,9 @@ class FareObservationRecord(Base):
 
     # ── provenance (mandatory) ──
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     source_name: Mapped[str] = mapped_column(String(64), nullable=False)
     collection_timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -274,6 +283,9 @@ class NormalizedFare(Base):
     product_key_hash: Mapped[str] = mapped_column(String(32), nullable=False)
     fare_inr: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     # Applied FX rate, or NULL when the source already quoted INR.
     fx_rate_applied: Mapped[float | None] = mapped_column(Float)
     normalizer_version: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -346,7 +358,8 @@ class HorizonIndex(Base):
     __tablename__ = "horizon_indices"
     __table_args__ = (
         UniqueConstraint(
-            "route_id", "booking_horizon", "index_date", "methodology_version",
+            "route_id", "booking_horizon", "index_date", "source_type",
+            "acquisition_method", "methodology_version",
             name="uq_horizon_index",
         ),
         Index("ix_horizon_index_date", "index_date"),
@@ -384,6 +397,9 @@ class HorizonIndex(Base):
     uncertainty_basis: Mapped[str | None] = mapped_column(Text)
 
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     methodology_version: Mapped[str] = mapped_column(String(32), nullable=False)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # The exact products compared, so the figure can be reproduced observation by
@@ -402,7 +418,8 @@ class RouteIndex(Base):
     __tablename__ = "route_indices"
     __table_args__ = (
         UniqueConstraint(
-            "route_id", "index_date", "methodology_version", name="uq_route_index"
+            "route_id", "index_date", "source_type", "acquisition_method", "methodology_version",
+            name="uq_route_index"
         ),
         Index("ix_route_index_date", "index_date"),
     )
@@ -435,6 +452,9 @@ class RouteIndex(Base):
     suppression_reason: Mapped[str | None] = mapped_column(Text)
 
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     methodology_version: Mapped[str] = mapped_column(String(32), nullable=False)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -453,7 +473,7 @@ class NationalIndex(Base):
     __tablename__ = "national_indices"
     __table_args__ = (
         UniqueConstraint(
-            "index_date", "booking_horizon", "methodology_version",
+            "index_date", "booking_horizon", "source_type", "acquisition_method", "methodology_version",
             name="uq_national_index",
         ),
         Index("ix_national_index_date", "index_date"),
@@ -499,6 +519,9 @@ class NationalIndex(Base):
     weighting_status: Mapped[str] = mapped_column(String(32), nullable=False)
 
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
     provenance_label: Mapped[str] = mapped_column(String(32), nullable=False)
     methodology_version: Mapped[str] = mapped_column(String(32), nullable=False)
     validation_rules_version: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -556,6 +579,9 @@ class Anomaly(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    acquisition_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="WEB_SCRAPE"
+    )
 
 
 class IndexRevision(Base):
@@ -591,6 +617,49 @@ class IndexRevision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class RequestBudget(Base):
+    """
+    Budget limits and threshold policies for collection sources.
+    """
+
+    __tablename__ = "request_budgets"
+    __table_args__ = (
+        UniqueConstraint("source_id", "period_type", name="uq_request_budget_source_period"),
+        Index("ix_budget_source", "source_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    period_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'daily' | 'monthly'
+    limit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    warning_threshold_pct: Mapped[float] = mapped_column(Float, nullable=False, default=80.0)
+    reduced_basket_threshold_pct: Mapped[float] = mapped_column(Float, nullable=False, default=95.0)
+    is_hard_stop: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RequestUsage(Base):
+    """
+    Usage tracking aggregated by source and period.
+    """
+
+    __tablename__ = "request_usages"
+    __table_args__ = (
+        UniqueConstraint("source_id", "period_type", "period_key", name="uq_request_usage_period"),
+        Index("ix_usage_source_key", "source_id", "period_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    period_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'daily' | 'monthly'
+    period_key: Mapped[str] = mapped_column(String(32), nullable=False)   # 'YYYY-MM-DD' or 'YYYY-MM'
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    successful_requests: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_requests: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 ALL_TABLES = [
     Source.__tablename__,
     RouteWeightRecord.__tablename__,
@@ -604,4 +673,6 @@ ALL_TABLES = [
     NationalIndex.__tablename__,
     Anomaly.__tablename__,
     IndexRevision.__tablename__,
+    RequestBudget.__tablename__,
+    RequestUsage.__tablename__,
 ]

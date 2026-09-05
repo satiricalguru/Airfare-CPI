@@ -68,6 +68,8 @@ class MissingDataReason(str, Enum):
     NO_BASE_PERIOD_DATA = "no_base_period_data"
     # A component (base fare / taxes) was absent, so the record could not be used.
     MISSING_FARE_COMPONENT = "missing_fare_component"
+    # More than one provenance series was selected for a single computation.
+    MIXED_PROVENANCE = "mixed_provenance"
 
     @property
     def description(self) -> str:
@@ -106,6 +108,11 @@ _MISSING_DATA_DESCRIPTIONS: dict[MissingDataReason, str] = {
         "A required fare component was absent from the source payload and the "
         "observation could not be used."
     ),
+    MissingDataReason.MIXED_PROVENANCE: (
+        "The selected observations contain more than one provenance type. Live, "
+        "simulated and offline observations are separate statistical series and "
+        "cannot share a base period or published index."
+    ),
 }
 
 
@@ -132,8 +139,12 @@ class ValidationBatchResult:
     accepted: list[FareObservation] = field(default_factory=list)
     flagged: list[FareObservation] = field(default_factory=list)
     excluded: list[FareObservation] = field(default_factory=list)
-    # observation index -> result, aligned with the sorted processing order
+    # Results are retained for the public summary/legacy callers.
     results: list[ValidationResult] = field(default_factory=list)
+    # Canonical persistence input. Keeping the evaluated observation and its decision
+    # together prevents equal sort keys from being re-paired incorrectly after the
+    # observations have been split into accepted/flagged/excluded buckets.
+    evaluated: list[tuple[FareObservation, ValidationResult]] = field(default_factory=list)
 
     @property
     def usable(self) -> list[FareObservation]:
@@ -415,6 +426,7 @@ class FareValidator:
             result = self.validate(obs)
             annotated = obs.with_validation(result.is_valid, result.flags)
             batch.results.append(result)
+            batch.evaluated.append((annotated, result))
 
             if result.action is ValidationAction.EXCLUDED:
                 batch.excluded.append(annotated)

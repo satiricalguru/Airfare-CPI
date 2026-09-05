@@ -12,7 +12,7 @@ is in the API rather than left to inference.
 from __future__ import annotations
 
 from scraper.registry import registry
-from scraper.sources import amadeus, disabled_otas, offline_fixture, simulator
+from scraper.sources import amadeus, disabled_otas, live_portal_adapter, offline_fixture, simulator
 
 
 def _register_all() -> None:
@@ -21,11 +21,16 @@ def _register_all() -> None:
     if registry.has(amadeus.SOURCE_NAME):
         return
 
-    # The one genuine live source.
+    # Live sources.
     registry.register(
         amadeus.SOURCE_NAME,
         factory=amadeus.create,
         describe=amadeus.describe,
+    )
+    registry.register(
+        live_portal_adapter.SOURCE_NAME,
+        factory=live_portal_adapter.create,
+        describe=live_portal_adapter.describe,
     )
 
     # Research instrument.
@@ -54,4 +59,4 @@ def _register_all() -> None:
 _register_all()
 
 
-__all__ = ["amadeus", "simulator", "offline_fixture", "disabled_otas", "registry"]
+__all__ = ["amadeus", "live_portal_adapter", "simulator", "offline_fixture", "disabled_otas", "registry"]

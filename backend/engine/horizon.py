@@ -5,11 +5,11 @@ The most consequential methodological property of this index. Advance-purchase
 horizons are modelled SEPARATELY and then combined with fixed, documented weights:
 
     route
-      +-- T+0   -> I_r,0(t)
-      +-- T+3   -> I_r,3(t)
+      +-- T+1   -> I_r,1(t)
       +-- T+7   -> I_r,7(t)
       +-- T+15  -> I_r,15(t)
       +-- T+30  -> I_r,30(t)
+      +-- T+45  -> I_r,45(t)
 
     I_r(t) = sum_h ( alpha_h * I_r,h(t) )      with sum_h alpha_h = 1
 

@@ -26,7 +26,7 @@ import { NOT_AVAILABLE } from "../lib/api";
 import { fmtDateTime, fmtIndex, fmtInr } from "../lib/format";
 
 const WATCHLIST_STORAGE_KEY = "airfare-cpi-watchlist-v2";
-const HORIZONS = ["T+0", "T+3", "T+7", "T+15", "T+30"];
+const HORIZONS = ["T+1", "T+7", "T+15", "T+30", "T+45"];
 
 /** Restore saved watches. Guarded for the static-export prerender. */
 function readStoredWatches() {

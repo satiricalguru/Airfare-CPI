@@ -36,6 +36,7 @@ from db.models import (
 )
 from provenance import (
     COLLECTOR_VERSION,
+    AcquisitionMethod,
     DataProvenance,
     METHODOLOGY_VERSION,
     SourceType,
@@ -193,10 +194,21 @@ async def save_collection_run(
     A failed run is stored too, with zero observations. Recording failures is how the
     system stays honest about coverage gaps instead of them simply not appearing.
     """
+    acq_method = AcquisitionMethod.WEB_SCRAPE.value
+    if run.mode.value == "SIMULATED":
+        acq_method = AcquisitionMethod.SIMULATED.value
+    elif run.mode.value == "OFFLINE":
+        acq_method = AcquisitionMethod.OFFLINE_FIXTURE.value
+    elif run.observations:
+        acq_method = run.observations[0].acquisition_method.value
+    elif any(a.source_name == "amadeus" for a in run.attempts):
+        acq_method = AcquisitionMethod.API.value
+
     record = CollectionRun(
         run_id=run.run_id,
         mode=run.mode.value,
         source_type=run.mode.source_type.value,
+        acquisition_method=acq_method,
         status=run.status.value,
         display_label=run.display_label,
         started_at=run.started_at,
@@ -264,6 +276,7 @@ async def save_collection_run(
                     product_key_hash=observation.product_key_hash(),
                     fare_inr=observation.fare_total,
                     source_type=observation.source_type.value,
+                    acquisition_method=observation.acquisition_method.value,
                     fx_rate_applied=observation.provenance.notes.get("fx_rate_to_inr"),
                     normalizer_version=NORMALIZER_VERSION,
                     is_included_in_index=True,
@@ -290,26 +303,34 @@ async def save_collection_run(
 
 def _pair_observations(validation) -> list[tuple[FareObservation, ValidationResult]]:
     """
-    Re-pair observations with their validation results.
+    Return the exact observation/result pairs produced by validation.
 
-    ``ValidationBatchResult.results`` is in the same sorted order the batch was
-    processed in, and the three bucket lists together contain exactly those
-    observations, so zipping the concatenation in processing order is safe. Rebuilt
-    here rather than stored per-observation to keep FareObservation immutable.
+    Equal collection timestamps are normal: every product returned by one source
+    request shares a route and horizon timestamp. Reconstructing pairs by sorting the
+    accepted/flagged/excluded buckets therefore loses information. New validation
+    batches retain the pair directly. The fallback exists only for manually-created
+    legacy batches and refuses ambiguous keys rather than silently corrupting rows.
     """
-    ordered: list[FareObservation] = []
-    # Reconstruct processing order: accepted/flagged/excluded were appended in order,
-    # so merge them back by collection timestamp and route the same way validate_batch
-    # sorted them.
+    if validation.evaluated:
+        if len(validation.evaluated) != validation.total:
+            raise ValueError(
+                "Validation batch pair count does not match its observation buckets"
+            )
+        return list(validation.evaluated)
+
     combined = validation.accepted + validation.flagged + validation.excluded
-    ordered = sorted(
-        combined,
-        key=lambda o: (o.collection_datetime, o.route_id, o.booking_horizon_days),
-    )
-    if len(ordered) != len(validation.results):
-        logger.warning(
+    if len(combined) != len(validation.results):
+        raise ValueError(
             f"Validation result count ({len(validation.results)}) does not match "
-            f"observation count ({len(ordered)}); pairing by index may be approximate"
+            f"observation count ({len(combined)})"
+        )
+
+    key = lambda o: (o.collection_datetime, o.route_id, o.booking_horizon_days)
+    ordered = sorted(combined, key=key)
+    if len({key(obs) for obs in ordered}) != len(ordered):
+        raise ValueError(
+            "Legacy validation batch has duplicate ordering keys and cannot be "
+            "persisted safely; construct it with explicit evaluated pairs"
         )
     return list(zip(ordered, validation.results))
 
@@ -342,6 +363,7 @@ def _observation_row(
         source_fare_total=obs.source_fare_total,
         source_offer_id=obs.source_offer_id,
         source_type=p.source_type.value,
+        acquisition_method=p.acquisition_method.value,
         source_name=p.source_name,
         collection_timestamp=p.collection_timestamp,
         collection_date=obs.collection_date,
@@ -389,6 +411,7 @@ def _anomaly_row(
         reviewed_by=None,
         reviewed_at=None,
         source_type=obs.source_type.value,
+        acquisition_method=obs.acquisition_method.value,
     )
 
 
@@ -415,6 +438,7 @@ async def load_observations(
     booking_horizons: Optional[Sequence[int]] = None,
     valid_only: bool = True,
     source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
     limit: Optional[int] = None,
 ) -> list[FareObservationRecord]:
     """Load stored observations. Returns rows, never regenerated values."""
@@ -434,6 +458,16 @@ async def load_observations(
         query = query.where(FareObservationRecord.is_valid.is_(True))
     if source_type:
         query = query.where(FareObservationRecord.source_type == source_type.value)
+        if source_type is SourceType.LIVE:
+            query = query.where(
+                FareObservationRecord.source_name.notin_(
+                    ("simulator", "offline_fixture")
+                )
+            )
+    if acquisition_method:
+        query = query.where(
+            FareObservationRecord.acquisition_method == acquisition_method.value
+        )
 
     query = query.order_by(
         FareObservationRecord.collection_date, FareObservationRecord.id
@@ -445,13 +479,25 @@ async def load_observations(
 
 
 async def latest_observations(
-    session: AsyncSession, limit: int = 50
+    session: AsyncSession,
+    limit: int = 50,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
 ) -> list[FareObservationRecord]:
-    query = (
-        select(FareObservationRecord)
-        .order_by(FareObservationRecord.id.desc())
-        .limit(limit)
-    )
+    query = select(FareObservationRecord)
+    if source_type is not None:
+        query = query.where(FareObservationRecord.source_type == source_type.value)
+        if source_type is SourceType.LIVE:
+            query = query.where(
+                FareObservationRecord.source_name.notin_(
+                    ("simulator", "offline_fixture")
+                )
+            )
+    if acquisition_method is not None:
+        query = query.where(
+            FareObservationRecord.acquisition_method == acquisition_method.value
+        )
+    query = query.order_by(FareObservationRecord.id.desc()).limit(limit)
     return list((await session.execute(query)).scalars())
 
 
@@ -478,16 +524,44 @@ async def get_all_route_endpoints_map(session: AsyncSession) -> dict[int, tuple[
 
 
 
-async def quick_observation_stats(session: AsyncSession) -> dict[str, Any]:
-    """Fast stats summary derived from collection_runs without table-scanning 850k fare rows."""
-    row = (
-        await session.execute(
-            select(
-                func.coalesce(func.sum(CollectionRun.observations_collected), 0),
-                func.coalesce(func.sum(CollectionRun.observations_accepted), 0),
-            )
+async def quick_observation_stats(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+) -> dict[str, Any]:
+    """
+    Accurate descriptive statistics over persisted fare observations.
+
+    These values are public data-quality outputs, so substituting illustrative
+    constants is never acceptable. Production deployments can replace this query with
+    a reconciled materialized aggregate, but it must retain the same exact semantics.
+    """
+    aggregate_query = select(
+        func.count(FareObservationRecord.id),
+        func.count(FareObservationRecord.id).filter(
+            FareObservationRecord.is_valid.is_(True)
+        ),
+        func.avg(FareObservationRecord.fare_total),
+        func.min(FareObservationRecord.fare_total),
+        func.max(FareObservationRecord.fare_total),
+        func.count(func.distinct(FareObservationRecord.route_id)),
+        func.count(func.distinct(FareObservationRecord.airline_code)),
+    )
+    if source_type is not None:
+        aggregate_query = aggregate_query.where(
+            FareObservationRecord.source_type == source_type.value
         )
-    ).one()
+        if source_type is SourceType.LIVE:
+            aggregate_query = aggregate_query.where(
+                FareObservationRecord.source_name.notin_(
+                    ("simulator", "offline_fixture")
+                )
+            )
+    if acquisition_method is not None:
+        aggregate_query = aggregate_query.where(
+            FareObservationRecord.acquisition_method == acquisition_method.value
+        )
+    row = (await session.execute(aggregate_query)).one()
 
     total, valid = int(row[0] or 0), int(row[1] or 0)
     if not total:
@@ -496,51 +570,115 @@ async def quick_observation_stats(session: AsyncSession) -> dict[str, Any]:
             "valid_observations": 0,
             "mean_fare": None,
             "median_fare": None,
+            "median_status": "not_computed",
             "min_fare": None,
             "max_fare": None,
             "routes_covered": 0,
             "airlines_covered": 0,
             "source_types": {},
+            "acquisition_methods": {},
         }
 
-    by_source = (
-        await session.execute(
-            select(CollectionRun.source_type, func.sum(CollectionRun.observations_collected))
-            .group_by(CollectionRun.source_type)
+    source_query = select(
+        FareObservationRecord.source_type, func.count(FareObservationRecord.id)
+    )
+    if source_type is not None:
+        source_query = source_query.where(
+            FareObservationRecord.source_type == source_type.value
         )
+        if source_type is SourceType.LIVE:
+            source_query = source_query.where(
+                FareObservationRecord.source_name.notin_(
+                    ("simulator", "offline_fixture")
+                )
+            )
+    if acquisition_method is not None:
+        source_query = source_query.where(
+            FareObservationRecord.acquisition_method == acquisition_method.value
+        )
+    by_source = (
+        await session.execute(source_query.group_by(FareObservationRecord.source_type))
+    ).all()
+
+    method_query = select(
+        FareObservationRecord.acquisition_method, func.count(FareObservationRecord.id)
+    )
+    if source_type is not None:
+        method_query = method_query.where(
+            FareObservationRecord.source_type == source_type.value
+        )
+    if acquisition_method is not None:
+        method_query = method_query.where(
+            FareObservationRecord.acquisition_method == acquisition_method.value
+        )
+    by_method = (
+        await session.execute(method_query.group_by(FareObservationRecord.acquisition_method))
     ).all()
 
     return {
         "total_observations": total,
         "valid_observations": valid,
-        "mean_fare": 5420.50,
-        "median_fare": 4850.00,
-        "min_fare": 1200.00,
-        "max_fare": 45000.00,
-        "routes_covered": 25,
-        "airlines_covered": 5,
+        "mean_fare": float(row[2]) if row[2] is not None else None,
+        # Portable exact median support differs between SQLite and PostgreSQL. Report
+        # it unavailable until a materialized percentile aggregate is implemented.
+        "median_fare": None,
+        "median_status": "not_computed",
+        "min_fare": float(row[3]) if row[3] is not None else None,
+        "max_fare": float(row[4]) if row[4] is not None else None,
+        "routes_covered": int(row[5] or 0),
+        "airlines_covered": int(row[6] or 0),
         "source_types": {str(k): int(v) for k, v in by_source},
+        "acquisition_methods": {str(k): int(v) for k, v in by_method},
     }
 
 
-async def observation_stats(session: AsyncSession) -> dict[str, Any]:
+async def observation_stats(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+) -> dict[str, Any]:
     """Aggregate statistics over stored observations."""
-    return await quick_observation_stats(session)
+    return await quick_observation_stats(
+        session, source_type=source_type, acquisition_method=acquisition_method
+    )
+
+
+async def count_observations_by_acquisition_method(session: AsyncSession) -> dict[str, int]:
+    query = select(
+        FareObservationRecord.acquisition_method, func.count(FareObservationRecord.id)
+    ).group_by(FareObservationRecord.acquisition_method)
+    rows = (await session.execute(query)).all()
+    return {row[0]: int(row[1]) for row in rows if row[0]}
 
 
 # ── collection runs ──
 
 async def list_collection_runs(
-    session: AsyncSession, limit: int = 25
+    session: AsyncSession,
+    limit: int = 25,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
 ) -> list[CollectionRun]:
-    query = (
-        select(CollectionRun).order_by(CollectionRun.started_at.desc()).limit(limit)
-    )
+    query = select(CollectionRun)
+    if source_type is not None:
+        query = query.where(CollectionRun.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(CollectionRun.acquisition_method == acquisition_method.value)
+    query = query.order_by(CollectionRun.started_at.desc()).limit(limit)
     return list((await session.execute(query)).scalars())
 
 
-async def latest_collection_run(session: AsyncSession) -> Optional[CollectionRun]:
-    query = select(CollectionRun).order_by(CollectionRun.started_at.desc()).limit(1)
+async def latest_collection_run(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+) -> Optional[CollectionRun]:
+    query = select(CollectionRun)
+    if source_type is not None:
+        query = query.where(CollectionRun.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(CollectionRun.acquisition_method == acquisition_method.value)
+    query = query.order_by(CollectionRun.started_at.desc()).limit(1)
     return (await session.execute(query)).scalar_one_or_none()
 
 
@@ -599,10 +737,14 @@ async def save_horizon_indices(session: AsyncSession, rows: list[dict[str, Any]]
         return 0
     index_date = rows[0]["index_date"]
     version = rows[0]["methodology_version"]
+    source_type = rows[0]["source_type"]
+    acq_method = rows[0].get("acquisition_method", AcquisitionMethod.WEB_SCRAPE.value)
     await session.execute(
         delete(HorizonIndex).where(
             HorizonIndex.index_date == index_date,
             HorizonIndex.methodology_version == version,
+            HorizonIndex.source_type == source_type,
+            HorizonIndex.acquisition_method == acq_method,
         )
     )
     session.add_all([HorizonIndex(**r) for r in rows])
@@ -615,10 +757,14 @@ async def save_route_indices(session: AsyncSession, rows: list[dict[str, Any]]) 
         return 0
     index_date = rows[0]["index_date"]
     version = rows[0]["methodology_version"]
+    source_type = rows[0]["source_type"]
+    acq_method = rows[0].get("acquisition_method", AcquisitionMethod.WEB_SCRAPE.value)
     await session.execute(
         delete(RouteIndex).where(
             RouteIndex.index_date == index_date,
             RouteIndex.methodology_version == version,
+            RouteIndex.source_type == source_type,
+            RouteIndex.acquisition_method == acq_method,
         )
     )
     session.add_all([RouteIndex(**r) for r in rows])
@@ -630,11 +776,14 @@ async def save_national_index(
     session: AsyncSession, row: dict[str, Any], revision_reason: str
 ) -> None:
     """
-    Insert or replace a national index value, recording a revision either way.
+    Insert or replace a national index value, recording a revision only when it changes.
 
-    Every publication and every recomputation appends to ``index_revisions``, so a
-    figure that changes always carries a recorded reason.
+    A recomputation can be a no-op when the collected inputs and methodology are
+    identical. In that case it must not manufacture a new revision merely because a
+    new ``computed_at`` timestamp was generated. A changed figure still receives an
+    append-only revision with its reason.
     """
+    acq_method = row.get("acquisition_method", AcquisitionMethod.WEB_SCRAPE.value)
     existing = (
         await session.execute(
             select(NationalIndex).where(
@@ -643,9 +792,21 @@ async def save_national_index(
                 if row.get("booking_horizon") is None
                 else NationalIndex.booking_horizon == row["booking_horizon"],
                 NationalIndex.methodology_version == row["methodology_version"],
+                NationalIndex.source_type == row["source_type"],
+                NationalIndex.acquisition_method == acq_method,
             )
         )
     ).scalar_one_or_none()
+
+    # ``computed_at`` is operational metadata, not part of the published statistic.
+    # Compare every actual persisted value supplied by the index engine before
+    # deleting/reinserting a row. JSON lists and dicts are compared structurally.
+    comparable_keys = tuple(key for key in row if key != "computed_at")
+    if existing is not None and all(
+        getattr(existing, key) == value for key, value in row.items()
+        if key in comparable_keys
+    ):
+        return
 
     previous_value = existing.index_value if existing else None
     revision_type = "initial_publication" if existing is None else "recomputation"
@@ -680,7 +841,11 @@ async def save_national_index(
 # ── index reads ──
 
 async def get_latest_national_index(
-    session: AsyncSession, booking_horizon: Optional[int] = None
+    session: AsyncSession,
+    booking_horizon: Optional[int] = None,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
 ) -> Optional[NationalIndex]:
     query = select(NationalIndex)
     query = query.where(
@@ -688,7 +853,17 @@ async def get_latest_national_index(
         if booking_horizon is None
         else NationalIndex.booking_horizon == booking_horizon
     )
-    query = query.order_by(NationalIndex.index_date.desc()).limit(1)
+    if source_type is not None:
+        query = query.where(NationalIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(NationalIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            NationalIndex.methodology_version == methodology_version
+        )
+    query = query.order_by(
+        NationalIndex.index_date.desc(), NationalIndex.computed_at.desc()
+    ).limit(1)
     return (await session.execute(query)).scalar_one_or_none()
 
 
@@ -697,6 +872,9 @@ async def get_national_history(
     days: int = 30,
     booking_horizon: Optional[int] = None,
     end_date: Optional[date] = None,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
 ) -> list[NationalIndex]:
     query = select(NationalIndex).where(
         NationalIndex.booking_horizon.is_(None)
@@ -706,13 +884,26 @@ async def get_national_history(
     if end_date:
         query = query.where(NationalIndex.index_date <= end_date)
         query = query.where(NationalIndex.index_date >= end_date - timedelta(days=days))
+    if source_type is not None:
+        query = query.where(NationalIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(NationalIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            NationalIndex.methodology_version == methodology_version
+        )
     query = query.order_by(NationalIndex.index_date)
     rows = list((await session.execute(query)).scalars())
     return rows[-days:] if not end_date else rows
 
 
 async def get_national_index_on(
-    session: AsyncSession, index_date: date, booking_horizon: Optional[int] = None
+    session: AsyncSession,
+    index_date: date,
+    booking_horizon: Optional[int] = None,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
 ) -> Optional[NationalIndex]:
     query = select(NationalIndex).where(NationalIndex.index_date == index_date)
     query = query.where(
@@ -720,11 +911,23 @@ async def get_national_index_on(
         if booking_horizon is None
         else NationalIndex.booking_horizon == booking_horizon
     )
+    if source_type is not None:
+        query = query.where(NationalIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(NationalIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            NationalIndex.methodology_version == methodology_version
+        )
     return (await session.execute(query)).scalar_one_or_none()
 
 
 async def get_national_index_nearest_before(
-    session: AsyncSession, index_date: date, booking_horizon: Optional[int] = None
+    session: AsyncSession,
+    index_date: date,
+    booking_horizon: Optional[int] = None,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
 ) -> Optional[NationalIndex]:
     """Most recent stored index strictly before ``index_date``, used for MoM."""
     query = select(NationalIndex).where(NationalIndex.index_date < index_date)
@@ -733,20 +936,38 @@ async def get_national_index_nearest_before(
         if booking_horizon is None
         else NationalIndex.booking_horizon == booking_horizon
     )
+    if source_type is not None:
+        query = query.where(NationalIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(NationalIndex.acquisition_method == acquisition_method.value)
     query = query.order_by(NationalIndex.index_date.desc()).limit(1)
     return (await session.execute(query)).scalar_one_or_none()
 
 
-async def get_latest_route_indices(session: AsyncSession) -> list[RouteIndex]:
+async def get_latest_route_indices(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
+) -> list[RouteIndex]:
     """The most recent route index for every unique route."""
-    subq = (
-        select(
-            RouteIndex.route_id,
-            func.max(RouteIndex.index_date).label("max_date"),
-        )
-        .group_by(RouteIndex.route_id)
-        .subquery()
+    latest_query = select(
+        RouteIndex.route_id,
+        func.max(RouteIndex.index_date).label("max_date"),
     )
+    if source_type is not None:
+        latest_query = latest_query.where(
+            RouteIndex.source_type == source_type.value
+        )
+    if acquisition_method is not None:
+        latest_query = latest_query.where(
+            RouteIndex.acquisition_method == acquisition_method.value
+        )
+    if methodology_version is not None:
+        latest_query = latest_query.where(
+            RouteIndex.methodology_version == methodology_version
+        )
+    subq = latest_query.group_by(RouteIndex.route_id).subquery()
     query = (
         select(RouteIndex)
         .join(
@@ -757,19 +978,37 @@ async def get_latest_route_indices(session: AsyncSession) -> list[RouteIndex]:
             ),
         )
     )
+    if source_type is not None:
+        query = query.where(RouteIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(RouteIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            RouteIndex.methodology_version == methodology_version
+        )
     return list((await session.execute(query)).scalars())
 
 
-
 async def get_route_index_history(
-    session: AsyncSession, route_id: int, days: int = 30
+    session: AsyncSession,
+    route_id: int,
+    days: int = 30,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
 ) -> list[RouteIndex]:
-    query = (
-        select(RouteIndex)
-        .where(RouteIndex.route_id == route_id)
-        .order_by(RouteIndex.index_date.desc())
-        .limit(days)
-    )
+    query = select(RouteIndex).where(RouteIndex.route_id == route_id)
+    if source_type is not None:
+        query = query.where(RouteIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(RouteIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            RouteIndex.methodology_version == methodology_version
+        )
+    query = query.order_by(
+        RouteIndex.index_date.desc(), RouteIndex.computed_at.desc()
+    ).limit(days)
     rows = list((await session.execute(query)).scalars())
     return list(reversed(rows))
 
@@ -779,6 +1018,9 @@ async def get_horizon_indices(
     index_date: Optional[date] = None,
     route_id: Optional[int] = None,
     booking_horizon: Optional[int] = None,
+    source_type: Optional[SourceType] = None,
+    acquisition_method: Optional[AcquisitionMethod] = None,
+    methodology_version: Optional[str] = None,
     limit: int = 500,
 ) -> list[HorizonIndex]:
     query = select(HorizonIndex)
@@ -788,27 +1030,51 @@ async def get_horizon_indices(
         query = query.where(HorizonIndex.route_id == route_id)
     if booking_horizon is not None:
         query = query.where(HorizonIndex.booking_horizon == booking_horizon)
+    if source_type is not None:
+        query = query.where(HorizonIndex.source_type == source_type.value)
+    if acquisition_method is not None:
+        query = query.where(HorizonIndex.acquisition_method == acquisition_method.value)
+    if methodology_version is not None:
+        query = query.where(
+            HorizonIndex.methodology_version == methodology_version
+        )
     query = query.order_by(
         HorizonIndex.index_date.desc(), HorizonIndex.route_id, HorizonIndex.booking_horizon
     ).limit(limit)
     return list((await session.execute(query)).scalars())
 
 
-async def latest_horizon_index_date(session: AsyncSession) -> Optional[date]:
-    return (
-        await session.execute(select(func.max(HorizonIndex.index_date)))
-    ).scalar_one_or_none()
-
-
-async def get_index_dates(session: AsyncSession) -> list[date]:
-    """All dates for which a national index exists. Used for rebasing and seasonality."""
-    rows = (
-        await session.execute(
-            select(NationalIndex.index_date)
-            .where(NationalIndex.booking_horizon.is_(None))
-            .order_by(NationalIndex.index_date)
+async def latest_horizon_index_date(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    methodology_version: Optional[str] = None,
+) -> Optional[date]:
+    query = select(func.max(HorizonIndex.index_date))
+    if source_type is not None:
+        query = query.where(HorizonIndex.source_type == source_type.value)
+    if methodology_version is not None:
+        query = query.where(
+            HorizonIndex.methodology_version == methodology_version
         )
-    ).scalars()
+    return (await session.execute(query)).scalar_one_or_none()
+
+
+async def get_index_dates(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+    methodology_version: Optional[str] = None,
+) -> list[date]:
+    """All dates for which a national index exists. Used for rebasing and seasonality."""
+    query = select(NationalIndex.index_date).where(
+        NationalIndex.booking_horizon.is_(None)
+    )
+    if source_type is not None:
+        query = query.where(NationalIndex.source_type == source_type.value)
+    if methodology_version is not None:
+        query = query.where(
+            NationalIndex.methodology_version == methodology_version
+        )
+    rows = (await session.execute(query.order_by(NationalIndex.index_date))).scalars()
     return list(rows)
 
 
@@ -979,8 +1245,10 @@ def record_to_observation(row: FareObservationRecord) -> FareObservation:
     Used when recomputing an index from stored data — the path that makes a published
     figure reproducible rather than regenerated.
     """
+    acq_val = getattr(row, "acquisition_method", None) or "WEB_SCRAPE"
     provenance = DataProvenance(
         source_type=SourceType(row.source_type),
+        acquisition_method=AcquisitionMethod(acq_val),
         source_name=row.source_name,
         collection_timestamp=_as_utc(row.collection_timestamp),
         request_id=row.request_id,

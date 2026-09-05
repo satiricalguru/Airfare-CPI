@@ -44,6 +44,7 @@ from loguru import logger
 
 from config import get_settings
 from provenance import (
+    AcquisitionMethod,
     CollectionStatus,
     DataProvenance,
     SourceType,
@@ -76,7 +77,7 @@ ROUTE_BASE_FARES: dict[str, int] = {
 DEFAULT_BASE_FARE = 4500
 
 # Advance-purchase price curve used by the generator.
-HORIZON_MULTIPLIERS: dict[int, float] = {0: 2.5, 3: 2.0, 7: 1.5, 15: 1.2, 30: 1.0}
+HORIZON_MULTIPLIERS: dict[int, float] = {1: 2.3, 7: 1.5, 15: 1.2, 30: 1.0, 45: 0.9}
 
 # Day-of-week effect on the departure date (0 = Monday).
 DOW_MULTIPLIERS: dict[int, float] = {
@@ -87,13 +88,16 @@ DOW_MULTIPLIERS: dict[int, float] = {
 # index makes no attempt to remove them: seasonal adjustment is not implemented and
 # is reported as such (see engine/seasonality.py).
 SEASONAL_EVENTS: list[dict[str, Any]] = [
+    {"name": "DurgaPuja", "month": 10, "day_start": 8, "day_end": 18, "multiplier": 1.45},
     {"name": "Diwali", "month": 10, "day_start": 20, "day_end": 31, "multiplier": 1.8},
     {"name": "Diwali", "month": 11, "day_start": 1, "day_end": 5, "multiplier": 1.6},
+    {"name": "ChhathPuja", "month": 11, "day_start": 6, "day_end": 12, "multiplier": 1.7},
     {"name": "Christmas", "month": 12, "day_start": 20, "day_end": 31, "multiplier": 1.5},
     {"name": "NewYear", "month": 1, "day_start": 1, "day_end": 5, "multiplier": 1.4},
+    {"name": "PongalSankranti", "month": 1, "day_start": 12, "day_end": 18, "multiplier": 1.35},
+    {"name": "Holi", "month": 3, "day_start": 10, "day_end": 18, "multiplier": 1.3},
     {"name": "SummerPeak", "month": 5, "day_start": 1, "day_end": 31, "multiplier": 1.3},
     {"name": "SummerPeak", "month": 6, "day_start": 1, "day_end": 15, "multiplier": 1.25},
-    {"name": "Holi", "month": 3, "day_start": 10, "day_end": 18, "multiplier": 1.3},
 ]
 
 # Known annual drift injected by the generator. The index should recover roughly
@@ -366,6 +370,7 @@ class SimulatorFareSource(BaseFareSource):
 
         provenance = DataProvenance(
             source_type=SourceType.SIMULATED,
+            acquisition_method=AcquisitionMethod.SIMULATED,
             source_name=SOURCE_NAME,
             collection_timestamp=collected_at,
             request_id=new_request_id(),

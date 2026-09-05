@@ -3,7 +3,7 @@
 SIH26056 — Seed 1-Year (395-day) Historical Dataset.
 
 Seeds observations and computes Matched-Model Jevons indices from 2025-08-01 to 2026-08-30
-across all 25 domestic corridors and 5 advance booking horizons (T+0, T+3, T+7, T+15, T+30).
+across all 25 domestic corridors and 5 advance booking horizons (T+1, T+7, T+15, T+30, T+45).
 """
 
 from __future__ import annotations
@@ -26,10 +26,9 @@ from engine.ingest_service import IngestService
 async def main():
     settings = get_settings()
     db = get_database()
-    await db.create_schema()
 
     start_date = date(2025, 8, 1)
-    end_date = date(2026, 8, 30)
+    end_date = date.today()
 
     print(f"🚀 Starting 1-Year History Backfill: {start_date} to {end_date}")
     t0 = time.time()
@@ -42,7 +41,7 @@ async def main():
             start_date=start_date,
             end_date=end_date,
             route_ids=list(range(1, 26)),
-            horizons=[0, 3, 7, 15, 30],
+            horizons=[1, 7, 15, 30, 45],
         )
         await session.commit()
         persisted = sum(r.observations_persisted for r in results)

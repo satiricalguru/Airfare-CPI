@@ -51,7 +51,7 @@ export default function TermsOfServicePage() {
             />
             <span>
               <strong>Airfare CPI</strong>
-              <small>India / MoSPI</small>
+              <small>SIH26056 research prototype</small>
             </span>
           </Link>
 
@@ -76,14 +76,14 @@ export default function TermsOfServicePage() {
         <div className="page-wrap page-wrap-reading">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Terms of Service &amp; Usage Policy · NDSAP 2026</p>
-              <h2>Terms of service</h2>
+              <p className="eyebrow">Prototype use notice</p>
+              <h2>Use and limitations</h2>
               <p className="section-description">
-                Statutory open data usage license, academic citation requirements, API rate governance, and provisional status disclaimers.
+                Research-use guidance, provenance requirements, provider constraints, and limitations of the experimental API and index.
               </p>
             </div>
             <span className="status-pill status-pill-success" style={{ height: "fit-content", padding: "6px 12px" }}>
-              <Scale size={14} /> Open Data License
+              <Scale size={14} /> Experimental output
             </span>
           </div>
 
@@ -92,14 +92,14 @@ export default function TermsOfServicePage() {
               <p className="eyebrow">Provisional Status Disclaimer</p>
               <h3>High-Frequency Experimental Price Indicator</h3>
               <p>
-                All daily and high-frequency indices published on this dashboard are provisional research indicators designed to study big data augmentation of transport inflation. Official national macroeconomic statistics remain those released by the National Statistical Office (NSO) on the 12th of each month.
+                All daily and high-frequency values shown here are provisional research indicators. They are not official statistics and must not be presented as issued, endorsed, or validated by any government body.
               </p>
             </div>
             <div>
-              <p className="eyebrow">National Data Sharing Policy</p>
-              <h3>Open data for researchers, policy desks, and the public.</h3>
+              <p className="eyebrow">Research access</p>
+              <h3>Use only with provenance and limitations attached.</h3>
               <p>
-                Under the National Data Sharing and Accessibility Policy (NDSAP), index time series are accessible for open non-commercial research, econometric modeling, and economic analysis with statutory attribution.
+                Repository source code is governed by its included software license. Fare observations and provider-derived fields can be subject to separate source terms; this page does not grant rights that the project does not own.
               </p>
             </div>
           </div>
@@ -109,23 +109,23 @@ export default function TermsOfServicePage() {
               <span>01</span>
               <h3>Permitted Usage</h3>
               <p>
-                Academic researchers, financial institutions, media desks, and the general public may query, compute, and republish index statistics for analytical, educational, and research purposes.
+                The API may be used for testing, education, and research where applicable law and source terms permit. Consumers must preserve the data-provenance label and experimental-status disclaimer.
               </p>
             </article>
 
             <article className="method-card">
               <span>02</span>
-              <h3>Required Attribution</h3>
+              <h3>Attribution</h3>
               <p>
-                Any published analysis or citation must reference: <em>&ldquo;Source: Ministry of Statistics &amp; Programme Implementation (MoSPI) — Airfare CPI Prototype, 2026.&rdquo;</em>
+                Do not attribute this project to MoSPI, the NSO, or the Government of India. Cite the SIH26056 Airfare CPI research prototype and identify whether the data was live, simulated, or offline.
               </p>
             </article>
 
             <article className="method-card">
               <span>03</span>
-              <h3>API Fair Use Limits</h3>
+              <h3>API availability</h3>
               <p>
-                REST API queries via <code>/api/v1/</code> are governed by fair-use thresholds (10,000 requests/day). Automated polling scripts must respect HTTP 429 throttling headers.
+                No public uptime, retention, or request-quota guarantee is offered. Read endpoints are public in the reference app; mutation endpoints require the configured administrator token and fail closed when it is absent.
               </p>
             </article>
 
@@ -133,7 +133,7 @@ export default function TermsOfServicePage() {
               <span>04</span>
               <h3>Prohibited Misuse</h3>
               <p>
-                Users are strictly prohibited from attempting to reverse-engineer commercial airline revenue management engines, scraping passenger portals, or engaging in ticket scalping.
+                Do not use the project to bypass access controls, CAPTCHAs, robots restrictions, provider rate limits, or contractual terms; access passenger accounts; interfere with source systems; or misrepresent simulated data as observed data.
               </p>
             </article>
           </div>
@@ -143,18 +143,18 @@ export default function TermsOfServicePage() {
               <p className="eyebrow">Integrity &amp; No Warranty</p>
               <h3>As-is statistical indicator</h3>
               <p>
-                While the engine enforces IQR outlier filtering, zero-fare validation, and Jevons geometric index chaining, the data is provided on an &ldquo;as-is&rdquo; basis for macroeconomic research without commercial travel guarantees.
+                Data and indices are provided on an &ldquo;as-is&rdquo; experimental basis. Coverage gaps, quote changes, product churn, provider outages, provisional weights, and methodology revisions can materially affect results.
               </p>
             </article>
 
             <article className="formula-panel formula-panel-dark">
-              <p className="eyebrow">Statutory Jurisdiction</p>
-              <h3>Governing Law</h3>
+              <p className="eyebrow">No institutional affiliation</p>
+              <h3>Research prototype</h3>
               <p>
-                These Terms are governed by and construed in accordance with the laws of the Republic of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts of New Delhi, India.
+                This page is a factual project-use notice, not a government-issued statutory license or a substitute for legal advice. Deployment operators must provide their own legally reviewed terms where required.
               </p>
               <code style={{ background: "rgba(255,255,255,0.08)", color: "#9ac3a0" }}>
-                Jurisdiction: New Delhi · Government of India (MoSPI)
+                Status: independent SIH26056 research prototype
               </code>
             </article>
           </div>
@@ -166,7 +166,7 @@ export default function TermsOfServicePage() {
         <div>
           <Link href="/" className="footer-brand" style={{ textDecoration: "none" }}>
             <img src={getAssetPath(dark ? "/logo_dark.png" : "/logo.png")} alt="Airfare CPI Logo" className="brand-logo-img" />
-            <span><strong>Airfare CPI</strong> <span>India / MoSPI</span></span>
+            <span><strong>Airfare CPI</strong> <span>SIH26056 prototype</span></span>
           </Link>
           <p>Research prototype for transparent, real-time aviation price intelligence.</p>
         </div>
@@ -176,7 +176,7 @@ export default function TermsOfServicePage() {
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
         </div>
-        <span className="footer-meta">v1.0 / provisional · NDSAP 2026</span>
+        <span className="footer-meta">prototype · as-is research output</span>
       </footer>
     </div>
   );

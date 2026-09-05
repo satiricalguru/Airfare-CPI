@@ -12,9 +12,9 @@ Matched-model fixes it by pairing each product with itself:
     I(t) = geometric_mean over matched products p of ( price_p(t) / price_p(0) )
 
 A product is identified by :meth:`FareObservation.product_key`: origin, destination,
-airline, cabin, fare family, stops, refundability, baggage allowance, and booking
-horizon. Two observations only form a price relative when they describe the same
-purchasable thing.
+airline, flight number, cabin, fare family, stops, refundability, baggage allowance,
+and booking horizon. Two observations only form a price relative when they describe
+the same repeatable service specification.
 
 Product churn
 -------------

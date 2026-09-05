@@ -208,8 +208,8 @@ class ResearchBulletin:
                 "open_anomalies": self.anomalies_open,
                 "status": "provisional",
                 "note": (
-                    "All figures are provisional. Every publication and recomputation is "
-                    "recorded in the revision log."
+                    "All figures are provisional. Initial publications and changed "
+                    "recomputations are recorded in the revision log."
                 ),
             },
             "top_increasing_routes": self.top_increasing_routes,
@@ -460,7 +460,7 @@ class ResearchReportGenerator:
         baggage allowance. Matching prevents a change in product quality or sample mix
         from being read as a price change.</dd>
     <dt>Booking-horizon treatment</dt>
-    <dd>Horizons T+0, T+3, T+7, T+15 and T+30 are indexed <strong>separately</strong>
+    <dd>Horizons T+1, T+7, T+15, T+30 and T+45 are indexed <strong>separately</strong>
         and combined with fixed equal weights, so the index does not move when the
         horizon mix of the sample changes.</dd>
     <dt>Upper-level aggregation</dt>
@@ -519,8 +519,8 @@ class ResearchReportGenerator:
     <dt>Open anomalies awaiting review</dt>
     <dd>{bulletin.anomalies_open}</dd>
     <dt>Revision policy</dt>
-    <dd>Every publication and recomputation appends a revision record, so any change to
-        a published figure carries a recorded reason.</dd>
+    <dd>Initial publications and changed recomputations append a revision record; an
+        unchanged recomputation is a no-op, and every change carries a recorded reason.</dd>
   </dl>
 
   <footer>

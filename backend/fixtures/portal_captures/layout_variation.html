@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flight Search Results — Tabular View</title>
+</head>
+<body>
+    <div class="search-summary" data-origin="DEL" data-destination="BLR" data-date="2026-09-15" data-cabin="ECONOMY">
+        <h2>DEL → BLR</h2>
+    </div>
+
+    <!-- Layout variation: Table-based grid view with semantic data attributes -->
+    <table class="flight-matrix-table" role="table">
+        <thead>
+            <tr>
+                <th>Flight</th>
+                <th>Departure</th>
+                <th>Arrival</th>
+                <th>Base Fare</th>
+                <th>Taxes</th>
+                <th>Total Fare</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="flight-row" data-airline-code="6E" data-airline="IndiGo" data-flight-number="6E-501">
+                <td class="flight-col">IndiGo 6E-501</td>
+                <td class="dep-time">07:00</td>
+                <td class="arr-time">09:45</td>
+                <td class="fare-base" data-amount="4200.00">₹4,200</td>
+                <td class="fare-taxes" data-amount="1250.00">₹1,250</td>
+                <td class="fare-total" data-amount="5450.00">₹5,450</td>
+            </tr>
+            <tr class="flight-row" data-airline-code="AI" data-airline="Air India" data-flight-number="AI-506">
+                <td class="flight-col">Air India AI-506</td>
+                <td class="dep-time">09:15</td>
+                <td class="arr-time">12:00</td>
+                <td class="fare-base" data-amount="4500.00">₹4,500</td>
+                <td class="fare-taxes" data-amount="1300.00">₹1,300</td>
+                <td class="fare-total" data-amount="5800.00">₹5,800</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

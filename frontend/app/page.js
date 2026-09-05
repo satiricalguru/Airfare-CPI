@@ -79,6 +79,8 @@ import PriceAlertEngine from "./components/PriceAlertEngine";
 import RouteDetailModal from "./components/RouteDetailModal";
 import AuthModal, { AUTH_STORAGE_KEY } from "./components/AuthModal";
 import DataModeBanner, { DataModeChip } from "./components/DataModeBanner";
+import FestiveAndFlightMovers from "./components/FestiveAndFlightMovers";
+import DGCABacktestPanel from "./components/DGCABacktestPanel";
 import { getAssetPath } from "./utils/assetPath";
 import {
   AIRLINES_LIST,
@@ -206,6 +208,9 @@ function ModalFrame({ title, eyebrow, onClose, children, wide = false, testId })
       <div
         className={cx("modal-panel", wide && "modal-panel-wide")}
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
       >
         <div className="modal-header">
           <div>
@@ -293,7 +298,7 @@ export default function AirfareCPI() {
   // Monitoring panel
   const [collecting, setCollecting] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, setAdminToken] = useState(process.env.NEXT_PUBLIC_ADMIN_TOKEN || "");
   const [apiIndex, setApiIndex] = useState(0);
   const [apiResponse, setApiResponse] = useState(null);
   const [apiLoading, setApiLoading] = useState(false);
@@ -585,15 +590,15 @@ export default function AirfareCPI() {
     const resolvedDestCity = destinationCity || destObj?.city || destination;
 
     try {
-      setScrapingProgress(`Scraping fare quotes for ${origin} (${resolvedOriginCity}) → ${destination} (${resolvedDestCity}) across advance booking horizons (T+0, T+3, T+7, T+15, T+30)...`);
+      setScrapingProgress(`Scraping fare quotes for ${origin} (${resolvedOriginCity}) → ${destination} (${resolvedDestCity}) across advance booking horizons (T+1, T+7, T+15, T+30, T+45)...`);
 
       const res = await scrapeRouteFares({
         origin,
         destination,
         originCity: resolvedOriginCity,
         destinationCity: resolvedDestCity,
-        mode: mode || (state.mode === DATA_MODE.LIVE ? "LIVE" : "SIMULATED"),
-        horizons: [0, 3, 7, 15, 30],
+        mode: mode || "LIVE",
+        horizons: [1, 7, 15, 30, 45],
         adminToken,
       });
 
@@ -608,7 +613,15 @@ export default function AirfareCPI() {
       await refresh();
 
       const obsCount = res.data?.observations_persisted || res.data?.collection?.observation_count || 0;
-      notify(`Scraping complete: collected ${obsCount} observations for ${origin} → ${destination}!`);
+      if (!res.data?.data_available) {
+        const msg = res.data?.error_message || "The live source returned no fare observations.";
+        setScrapingError(msg);
+        notify(`Live collection unavailable: ${msg}`);
+        return;
+      }
+      notify(
+        `${res.data?.display_label || "LIVE DATA"}: collected ${obsCount} observations for ${origin} → ${destination}.`,
+      );
 
       if (res.data?.route) {
         const found = (state.routeIndices || []).find((r) => r.route_id === res.data.route.route_id);
@@ -630,7 +643,7 @@ export default function AirfareCPI() {
         setScrapingProgress(null);
       }, 4000);
     }
-  }, [scrapingRoute, state.mode, adminToken, notify, refresh, state.routeIndices]);
+  }, [scrapingRoute, adminToken, notify, refresh, state.routeIndices]);
 
   const filteredRouteIndices = useMemo(() => {
     let list = state.routeIndices || [];
@@ -700,36 +713,6 @@ export default function AirfareCPI() {
     routeSearch,
   ]);
 
-  // ── Auto-fetch on route selection if uncollected ──
-  useEffect(() => {
-    if (
-      routeOriginCode !== "ALL" &&
-      routeDestCode !== "ALL" &&
-      routeOriginCode !== routeDestCode
-    ) {
-      const code = `${routeOriginCode}-${routeDestCode}`;
-      const exists = (state.routeIndices || []).some(
-        (r) =>
-          r.route_code === code ||
-          (r.origin_code === routeOriginCode && r.destination_code === routeDestCode)
-      );
-
-      if (!exists && !scrapingRoute) {
-        const timer = setTimeout(() => {
-          handleScrapeRoute({
-            origin: routeOriginCode,
-            destination: routeDestCode,
-            originCity: getAirport(routeOriginCode)?.city,
-            destinationCity: getAirport(routeDestCode)?.city,
-          });
-        }, 0);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [routeOriginCode, routeDestCode, state.routeIndices, scrapingRoute, handleScrapeRoute]);
-
-
-
   // ── shared fragments ──
   const noIndexYet = state.headlineIndex == null;
 
@@ -786,7 +769,7 @@ export default function AirfareCPI() {
             <strong>{fmtIndex(state.headlineIndex)}</strong>
             <small>
               {state.momStatus === "available"
-                ? `${fmtChange(state.momChangePct)} vs previous period`
+                ? `${fmtChange(state.momChangePct)} vs previous month`
                 : changeReason(state.momStatus) || "Period change not available"}
             </small>
             <DataModeChip mode={state.mode} className="hero-stamp-chip" />
@@ -846,7 +829,13 @@ export default function AirfareCPI() {
             <p className="eyebrow">Data provenance</p>
             <strong>{state.mode}</strong>
             <p>
-              Observations were collected from active flight search scrapes across domestic corridors.
+              {state.mode === DATA_MODE.LIVE || state.mode === DATA_MODE.PORTAL_SCRAPED
+                ? "Observations were retrieved directly via web scraping across monitored airline portals and route quotations."
+                : state.mode === DATA_MODE.SIMULATED
+                  ? "Values were generated by the simulator for a labelled methodology demonstration."
+                  : state.mode === DATA_MODE.OFFLINE
+                    ? "Values were replayed from the bundled offline fixture."
+                    : "No usable observation series is currently available."}
             </p>
           </article>
           <article className="integrity-card">
@@ -857,8 +846,8 @@ export default function AirfareCPI() {
                 : state.seasonalAdjustment || "Observed (NSA)"}
             </strong>
             <p>
-              The series is published as an observed nominal index (NSA). Festive
-              and holiday fare movements reflect authentic transaction prices.
+              No seasonal adjustment is applied. These are offered fare quotations,
+              not completed ticket transactions, and calendar effects remain in the series.
             </p>
           </article>
           <article className="integrity-card">
@@ -901,6 +890,19 @@ export default function AirfareCPI() {
             </p>
           </article>
         </div>
+      </section>
+
+      {/* Indian Festive Spikes and Flight Brand Movers */}
+      <section className="content-section">
+        <FestiveAndFlightMovers
+          data={state.festiveAndMovers}
+          onSelectRoute={(r) => setDetailRoute(r)}
+        />
+      </section>
+
+      {/* DGCA 30-Day Benchmark Back-Testing & Statistical Validation */}
+      <section className="content-section">
+        <DGCABacktestPanel data={state} />
       </section>
 
       <section className="content-section">
@@ -986,7 +988,7 @@ export default function AirfareCPI() {
               <strong>{fmtIndex(state.headlineIndex)}</strong>
               <span>
                 {state.momStatus === "available"
-                  ? `${fmtChange(state.momChangePct)} vs previous period`
+                  ? `${fmtChange(state.momChangePct)} vs previous month`
                   : changeReason(state.momStatus)}
               </span>
               <div className="index-baseline">
@@ -1221,7 +1223,7 @@ export default function AirfareCPI() {
                   className={cx("category-pill", routeFilterCategory === "CUSTOM" && "active")}
                   onClick={() => setRouteFilterCategory("CUSTOM")}
                 >
-                  Custom Scraped ({customCount})
+                  Custom routes ({customCount})
                 </button>
               )}
             </div>
@@ -1337,7 +1339,7 @@ export default function AirfareCPI() {
                 <div className="flight-arrow-path">
                   <span className="path-line" />
                   <Plane size={18} className="plane-icon" />
-                  <span className="path-label">T+0 · T+3 · T+7 · T+15 · T+30</span>
+                  <span className="path-label">T+1 · T+7 · T+15 · T+30 · T+45</span>
                 </div>
                 <div className="airport-badge">
                   <span className="code">{routeDestCode}</span>
@@ -1376,7 +1378,7 @@ export default function AirfareCPI() {
                 <div className="cached-actions">
                   <p className="cached-desc">
                     Corridor index computed from <strong>{fmtCount(specificPairRow.matched_products)}</strong> matched products across booking horizons{" "}
-                    {(specificPairRow.horizon_stratification?.horizons_included || []).map((h) => `T+${h}`).join(", ") || "T+0..T+30"}.
+                    {(specificPairRow.horizon_stratification?.horizons_included || []).map((h) => `T+${h}`).join(", ") || "T+1..T+45"}.
                   </p>
                   <div className="action-buttons">
                     <button
@@ -1414,7 +1416,7 @@ export default function AirfareCPI() {
               ) : (
                 <div className="auto-ingest-console">
                   <div className="radar-meter-rail">
-                    {["T+0 (Same-Day)", "T+3 (Urgent)", "T+7 (1-Week)", "T+15 (Mid-Term)", "T+30 (Advance)"].map((h, i) => (
+                    {["T+1 (Next-Day)", "T+7 (1-Week)", "T+15 (Mid-Term)", "T+30 (Advance)", "T+45 (Early Plan)"].map((h, i) => (
                       <div key={h} className="radar-horizon-node active">
                         <span className="horizon-pulse-ring" />
                         <small>{h}</small>
@@ -1428,7 +1430,7 @@ export default function AirfareCPI() {
                     </div>
                     <p className="telemetry-text">
                       <Sparkles size={14} className="telemetry-spark" />{" "}
-                      {scrapingProgress || `Intercepting multi-carrier airline fare quotes for ${originInfo?.city || routeOriginCode} ✈ ${destInfo?.city || routeDestCode}...`}
+                      {scrapingProgress || `Requesting permitted fare offers for ${originInfo?.city || routeOriginCode} ✈ ${destInfo?.city || routeDestCode}...`}
                     </p>
                   </div>
                 </div>
@@ -1826,7 +1828,7 @@ export default function AirfareCPI() {
                       </td>
                       <td>
                         <span className="status-pill status-pill-success">
-                          {o.data_provenance?.display_label === "OFFLINE PREVIEW" ? "OFFLINE PREVIEW" : "SCRAPED DATA"}
+                          {o.data_provenance?.display_label || DATA_MODE.UNAVAILABLE}
                         </span>
                         <small className="mono">{o.data_provenance?.source_name}</small>
                       </td>
@@ -2088,7 +2090,7 @@ export default function AirfareCPI() {
         <div className="panel-header">
           <div>
             <p className="eyebrow">Admin token</p>
-            <h3>Required when the backend configures one</h3>
+            <h3>Required for every state-changing request</h3>
           </div>
         </div>
         <label className="modal-field">
@@ -2097,13 +2099,13 @@ export default function AirfareCPI() {
             type="password"
             value={adminToken}
             onChange={(e) => setAdminToken(e.target.value)}
-            placeholder="Leave blank if the backend has no token configured"
+            placeholder="Enter the backend ADMIN_API_TOKEN"
             data-testid="admin-token-input"
           />
         </label>
         <p className="muted-note">
-          Held in memory for this browser session only and sent solely to the collection
-          trigger endpoint. It is never persisted.
+          Held in memory for this browser session only and sent to protected collection
+          and route-ingestion endpoints. It is never persisted by the frontend.
         </p>
       </div>
 
@@ -2417,6 +2419,7 @@ export default function AirfareCPI() {
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
         dashboardState={state}
+        adminToken={adminToken}
       />
 
       <RouteDetailModal
@@ -2425,6 +2428,7 @@ export default function AirfareCPI() {
         onClose={() => setDetailRoute(null)}
         isDarkMode={dark}
         dataMode={state.mode}
+        adminToken={adminToken}
       />
 
       {toast && (

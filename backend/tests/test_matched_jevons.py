@@ -59,6 +59,15 @@ def _obs(
 
 class TestMatchedJevons:
 
+    def test_different_flight_numbers_are_different_products(self):
+        first = _obs(5000.0, airline="6E", fare_family="SAVER", flight_num="6E-101")
+        second = _obs(5100.0, airline="6E", fare_family="SAVER", flight_num="6E-202")
+
+        prices = aggregate_product_prices([first, second])
+
+        assert len(prices) == 2
+        assert first.product_key() != second.product_key()
+
     def test_exact_matched_pairs_yield_accurate_index(self):
         """When products match exactly between base and current, Jevons = GM of relatives."""
         # 3 products: p1 (+10%), p2 (-10%), p3 (+0%)

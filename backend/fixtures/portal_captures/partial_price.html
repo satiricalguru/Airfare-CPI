@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flight Search Results — Headline Only</title>
+</head>
+<body>
+    <div class="search-summary" data-origin="BOM" data-destination="DEL" data-date="2026-09-20">
+        <h2>BOM to DEL</h2>
+    </div>
+
+    <!-- Partial price fixture: only headline total is exposed, itemized base/tax missing -->
+    <main id="flight-results-list">
+        <div class="flight-card" data-flight-id="offer-301">
+            <div class="airline-info">
+                <span class="airline-name">IndiGo</span>
+                <span class="airline-code">6E</span>
+                <span class="flight-number">6E-101</span>
+            </div>
+            <div class="schedule">
+                <time class="dep-time">14:00</time>
+                <time class="arr-time">16:15</time>
+            </div>
+            <div class="fare-details" data-currency="INR">
+                <!-- Base fare and taxes are not itemized on this screen -->
+                <span class="fare-total" data-amount="4800.00">Total: ₹4,800</span>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

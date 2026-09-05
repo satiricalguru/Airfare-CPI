@@ -151,6 +151,7 @@ class IngestService:
                     session,
                     start_date=recompute_day,
                     end_date=recompute_day,
+                    source_type=effective_mode.source_type,
                     reason=(
                         f"recomputation after collection run {run.run_id[:8]} "
                         f"({effective_mode.value}, triggered by {triggered_by})"

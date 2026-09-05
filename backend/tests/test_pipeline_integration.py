@@ -55,7 +55,7 @@ def test_full_engine_pipeline_integration():
         coll_day = base_period.start + timedelta(days=day_offset)
         coll_dt = datetime(coll_day.year, coll_day.month, coll_day.day, 10, 0, tzinfo=timezone.utc)
         for route in basket.routes[:5]:  # Use top 5 routes for fast test execution
-            for h in [0, 3, 7, 15, 30]:
+            for h in [1, 7, 15, 30, 45]:
                 dep_date = coll_day + timedelta(days=h)
                 obs_list = simulator.generate(
                     route_id=route.route_id,
@@ -80,7 +80,7 @@ def test_full_engine_pipeline_integration():
     curr_observations = []
     target_dt = datetime(target_date.year, target_date.month, target_date.day, 10, 0, tzinfo=timezone.utc)
     for route in basket.routes[:5]:
-        for h in [0, 3, 7, 15, 30]:
+        for h in [1, 7, 15, 30, 45]:
             dep_date = target_date + timedelta(days=h)
             obs_list = simulator.generate(
                 route_id=route.route_id,
@@ -105,7 +105,7 @@ def test_full_engine_pipeline_integration():
     route_index_inputs: list[RouteIndexInput] = []
     for route in basket.routes[:5]:
         horizon_inputs: list[HorizonIndexInput] = []
-        for h in [0, 3, 7, 15, 30]:
+        for h in [1, 7, 15, 30, 45]:
             key = (route.route_id, h)
             if key not in base_prices or key not in curr_by_route_h:
                 continue
@@ -165,6 +165,7 @@ def test_api_endpoints_live(monkeypatch):
     """Test all primary FastAPI endpoints with ASGI transport and lifespan context."""
     monkeypatch.setenv("COLLECTION_MODE", "SIMULATED")
     monkeypatch.setenv("INDEX_BASE_PERIOD_START", "2026-08-01")
+    monkeypatch.setenv("ADMIN_API_TOKEN", "integration-test-token")
     from config import get_settings
     get_settings.cache_clear() if hasattr(get_settings, "cache_clear") else None
 
@@ -225,11 +226,12 @@ def test_api_endpoints_live(monkeypatch):
                 # 10. Seed simulated history
                 res_backfill = await client.post(
                     "/api/v1/collection/backfill-simulated",
+                    headers={"X-Admin-Token": "integration-test-token"},
                     json={
                         "start_date": "2026-08-01",
                         "end_date": "2026-08-10",
                         "routes": [1, 2, 3],
-                        "horizons": [0, 7],
+                        "horizons": [1, 7],
                     },
                 )
                 assert res_backfill.status_code == 200
@@ -249,18 +251,23 @@ def test_api_endpoints_live(monkeypatch):
     asyncio.run(_run())
 
 
-def test_scraper_trigger_endpoint():
+def test_scraper_trigger_endpoint(monkeypatch):
     """Test collection trigger endpoint via AsyncClient."""
+    monkeypatch.setenv("ADMIN_API_TOKEN", "integration-test-token")
+    from config import reload_settings
+    reload_settings()
+
     async def _run():
         async with app.router.lifespan_context(app):
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
                 res = await client.post(
                     "/api/v1/collection/trigger",
+                    headers={"X-Admin-Token": "integration-test-token"},
                     json={
                         "mode": "SIMULATED",
                         "routes": [1, 2],
-                        "horizons": [0, 7],
+                        "horizons": [1, 7],
                         "compute_index": True,
                     },
                 )

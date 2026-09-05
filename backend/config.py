@@ -26,7 +26,10 @@ BACKEND_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
 FIXTURE_DIR = BACKEND_DIR / "fixtures"
-DEFAULT_DB_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'airfare_cpi.db'}"
+# Keep the historical, unversioned `airfare_cpi.db` read-only.  Fresh local runs
+# use an explicitly versioned store created by Alembic, just like deployments.
+DEFAULT_DB_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'airfare_cpi_managed.db'}"
+SUPPORTED_BOOKING_HORIZONS = (1, 7, 15, 30, 45)
 
 load_dotenv(BACKEND_DIR / ".env")
 load_dotenv(REPO_ROOT / ".env")
@@ -114,6 +117,9 @@ class AmadeusSettings:
     # A conservative default leaves headroom.
     min_request_interval_seconds: float = 0.25
     max_offers_per_search: int = 40
+    # For paid-capable APIs, default ALLOW_PAID_OVERAGE=false; startup must reject a
+    # configuration that can bill without an explicit second control.
+    allow_paid_overage: bool = False
 
     @property
     def is_configured(self) -> bool:
@@ -143,7 +149,7 @@ class ScraperSettings:
     # Which sources may be attempted, in priority order. A name listed here that is
     # not registered, or is registered as disabled, is skipped with a logged reason.
     enabled_sources: list[str] = field(default_factory=lambda: ["amadeus"])
-    booking_horizons: list[int] = field(default_factory=lambda: [0, 3, 7, 15, 30])
+    booking_horizons: list[int] = field(default_factory=lambda: [1, 7, 15, 30, 45])
     passengers: int = 1
     cabin: str = "ECONOMY"
 
@@ -182,7 +188,7 @@ class SchedulerSettings:
 class IndexSettings:
     """Index computation parameters."""
 
-    base_period_start: date = date(2025, 8, 1)
+    base_period_start: date = date(2026, 9, 3)
     base_period_days: int = 7
     min_matched_products: int = 3
     # Safety bounds on a single price relative, applied before aggregation.
@@ -226,6 +232,9 @@ class DatabaseSettings:
     pool_size: int = 10
     max_overflow: int = 20
     echo: bool = False
+    # Metadata-driven schema creation is allowed only for isolated tests/local
+    # throwaway work. Shared deployments must run Alembic before the API starts.
+    auto_create_schema: bool = False
 
     @property
     def is_postgres(self) -> bool:
@@ -240,8 +249,17 @@ class ApiSettings:
     admin_token: str = ""
     # Server-side key for the Copilot LLM proxy. Never exposed to the client.
     copilot_api_key: str = ""
-    copilot_model: str = "gemini-3.5-flash-lite"
+    # An explicit provider model is required; there is intentionally no invented
+    # default model name which could make the UI claim a model was used when it was
+    # not available from the provider.
+    copilot_model: str = ""
     copilot_enabled: bool = False
+    # Per-process caps for operations with external cost or collection side effects.
+    # Production deployments with multiple workers also need equivalent gateway caps.
+    copilot_rate_limit: int = 20
+    copilot_rate_window_seconds: int = 600
+    mutation_rate_limit: int = 6
+    mutation_rate_window_seconds: int = 60
 
 
 @dataclass(frozen=True)
@@ -285,7 +303,17 @@ class Settings:
 
 def build_settings() -> Settings:
     """Read the environment once and construct an immutable Settings object."""
-    mode = CollectionMode.parse(_env_str("COLLECTION_MODE"), CollectionMode.SIMULATED)
+    # Production-facing default is honest failure: without live credentials the
+    # collector reports SOURCE UNAVAILABLE. Simulation must always be opted into.
+    mode = CollectionMode.parse(_env_str("COLLECTION_MODE"), CollectionMode.LIVE)
+
+    allow_paid_overage = _env_bool("ALLOW_PAID_OVERAGE", False)
+    allow_paid_overage_confirmed = _env_bool("ALLOW_PAID_OVERAGE_CONFIRMED", False)
+    if allow_paid_overage and not allow_paid_overage_confirmed:
+        raise RuntimeError(
+            "ALLOW_PAID_OVERAGE is enabled without explicit second control. "
+            "Set ALLOW_PAID_OVERAGE_CONFIRMED=true to acknowledge billing risk."
+        )
 
     amadeus = AmadeusSettings(
         client_id=_env_str("AMADEUS_CLIENT_ID"),
@@ -294,11 +322,12 @@ def build_settings() -> Settings:
         timeout_seconds=_env_float("AMADEUS_TIMEOUT_SECONDS", 20.0),
         min_request_interval_seconds=_env_float("AMADEUS_MIN_REQUEST_INTERVAL", 0.25),
         max_offers_per_search=_env_int("AMADEUS_MAX_OFFERS", 40),
+        allow_paid_overage=allow_paid_overage,
     )
 
     scraper = ScraperSettings(
         enabled_sources=_env_str_list("ENABLED_SOURCES", "amadeus"),
-        booking_horizons=_env_int_list("BOOKING_HORIZONS", "0,3,7,15,30"),
+        booking_horizons=_env_int_list("BOOKING_HORIZONS", "1,7,15,30,45"),
         passengers=_env_int("COLLECTION_PASSENGERS", 1),
         cabin=_env_str("COLLECTION_CABIN", "ECONOMY").upper(),
         max_retries=_env_int("SCRAPER_MAX_RETRIES", 2),
@@ -313,6 +342,16 @@ def build_settings() -> Settings:
             "contact: repository maintainer)",
         ),
     )
+    invalid_horizons = sorted(
+        set(scraper.booking_horizons) - set(SUPPORTED_BOOKING_HORIZONS)
+    )
+    if invalid_horizons:
+        raise ValueError(
+            "BOOKING_HORIZONS contains values outside the SIH26056 policy "
+            f"{list(SUPPORTED_BOOKING_HORIZONS)}: {invalid_horizons}"
+        )
+    if not scraper.booking_horizons:
+        raise ValueError("BOOKING_HORIZONS must contain at least one policy horizon")
 
     scheduler = SchedulerSettings(
         enabled=_env_bool("SCHEDULER_ENABLED", False),
@@ -323,7 +362,7 @@ def build_settings() -> Settings:
     )
 
     index = IndexSettings(
-        base_period_start=_env_date("INDEX_BASE_PERIOD_START", "2025-08-01"),
+        base_period_start=_env_date("INDEX_BASE_PERIOD_START", "2026-09-03"),
         base_period_days=max(1, _env_int("INDEX_BASE_PERIOD_DAYS", 7)),
         min_matched_products=_env_int("INDEX_MIN_MATCHED_PRODUCTS", 3),
     )
@@ -340,6 +379,7 @@ def build_settings() -> Settings:
         pool_size=_env_int("DB_POOL_SIZE", 10),
         max_overflow=_env_int("DB_MAX_OVERFLOW", 20),
         echo=_env_bool("DB_ECHO", False),
+        auto_create_schema=_env_bool("DB_AUTO_CREATE_SCHEMA", False),
     )
 
     copilot_key = _env_str("COPILOT_API_KEY")
@@ -349,8 +389,16 @@ def build_settings() -> Settings:
         ),
         admin_token=_env_str("ADMIN_API_TOKEN"),
         copilot_api_key=copilot_key,
-        copilot_model=_env_str("COPILOT_MODEL", "gemini-3.5-flash-lite"),
-        copilot_enabled=bool(copilot_key),
+        copilot_model=_env_str("COPILOT_MODEL"),
+        copilot_enabled=bool(copilot_key and _env_str("COPILOT_MODEL")),
+        copilot_rate_limit=_env_int("API_COPILOT_RATE_LIMIT", 20),
+        copilot_rate_window_seconds=_env_int(
+            "API_COPILOT_RATE_WINDOW_SECONDS", 600
+        ),
+        mutation_rate_limit=_env_int("API_MUTATION_RATE_LIMIT", 6),
+        mutation_rate_window_seconds=_env_int(
+            "API_MUTATION_RATE_WINDOW_SECONDS", 60
+        ),
     )
 
     settings = Settings(
@@ -393,8 +441,17 @@ def _warn_on_risky_configuration(settings: Settings) -> None:
         )
     if not settings.api.admin_token:
         logger.warning(
-            "ADMIN_API_TOKEN is unset: state-mutating endpoints are unguarded. "
-            "Acceptable for a local demo only."
+            "ADMIN_API_TOKEN is unset: state-mutating endpoints are disabled until "
+            "a token is configured."
+        )
+    if not settings.api.copilot_enabled and settings.api.copilot_api_key:
+        logger.warning(
+            "COPILOT_API_KEY is set but COPILOT_MODEL is empty. The Copilot will use "
+            "its labelled local fallback until an explicit provider model is set."
+        )
+    if settings.amadeus.allow_paid_overage:
+        logger.warning(
+            "ALLOW_PAID_OVERAGE is active: requests exceeding free quotas may bill the account."
         )
 
 

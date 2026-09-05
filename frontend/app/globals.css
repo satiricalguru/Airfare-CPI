@@ -5488,8 +5488,8 @@ html.dark .copilot-send-btn {
 .aerospace-map-viewport {
   position: relative;
   width: 100%;
-  aspect-ratio: 1200 / 896;
-  max-height: 760px;
+  aspect-ratio: 896 / 1200;
+  max-height: 840px;
   margin: 0 auto;
   overflow: hidden;
   user-select: none;
@@ -5692,7 +5692,7 @@ html.dark .copilot-send-btn {
     padding: 12px 14px !important;
   }
   .aerospace-map-viewport {
-    aspect-ratio: 1200 / 896 !important;
+    aspect-ratio: 896 / 1200 !important;
     width: 100% !important;
     height: auto !important;
   }
@@ -6234,68 +6234,70 @@ html.dark .copilot-send-btn {
   }
 }
 
-/* ── Minimalist Underline Timeframe Selector (Matching Image 2) ── */
+/* ── Timeframe Selector Bar / Segmented Selection Box ── */
 .minimal-timeframe-bar {
   display: inline-flex;
   align-items: center;
-  gap: 28px;
+  gap: 2px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
   position: relative;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0 4px;
 }
 
-[data-theme="light"] .minimal-timeframe-bar {
-  border-bottom-color: rgba(0, 0, 0, 0.16);
+html.dark .minimal-timeframe-bar {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--line);
 }
 
 .minimal-timeframe-btn {
   background: transparent;
   border: none;
-  padding: 8px 6px 10px 6px;
-  font-size: 14px;
-  font-family: inherit;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.52);
+  padding: 5px 12px;
+  font-size: 11px;
+  font-family: var(--sans);
+  font-weight: 600;
+  color: var(--muted);
   cursor: pointer;
   position: relative;
-  transition: color 0.18s ease;
+  border-radius: 6px;
+  transition: all 0.15s ease;
   letter-spacing: 0.02em;
-}
-
-[data-theme="light"] .minimal-timeframe-btn {
-  color: rgba(0, 0, 0, 0.52);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .minimal-timeframe-btn:hover {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-[data-theme="light"] .minimal-timeframe-btn:hover {
-  color: rgba(0, 0, 0, 0.9);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .minimal-timeframe-btn.is-active {
-  color: #ffffff;
-  font-weight: 800;
+  color: var(--ink);
+  background: var(--paper-bright);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
-[data-theme="light"] .minimal-timeframe-btn.is-active {
-  color: #0f172a;
-  font-weight: 800;
+html.dark .minimal-timeframe-btn {
+  color: var(--muted);
+}
+
+html.dark .minimal-timeframe-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .minimal-timeframe-btn.is-active {
+  color: #ffffff;
+  background: var(--surface);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
 }
 
 .minimal-timeframe-btn .active-underline {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2.5px;
-  background: #ffffff;
-  border-radius: 2px 2px 0 0;
-}
-
-[data-theme="light"] .minimal-timeframe-btn .active-underline {
-  background: #0f172a;
+  display: none;
 }
 
 .empty-panel-wrapper {
@@ -6306,6 +6308,535 @@ html.dark .copilot-send-btn {
   align-items: center;
   justify-content: center;
 }
+
+/* ============================================================
+   SIH26056 — Indian Festive Spikes & Flight Brand Movers
+   ============================================================ */
+
+.fm-wrapper {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fm-nav-segmented {
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.fm-nav-segmented button {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 8px 14px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  transition: all 0.18s ease;
+}
+
+.fm-nav-segmented button:hover {
+  color: var(--ink);
+}
+
+.fm-nav-segmented button.is-active {
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom: 2px solid var(--ink);
+}
+
+/* Grids */
+.fm-events-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .fm-events-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .fm-events-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Festive Event Cards */
+.fm-event-card {
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fm-event-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-light);
+  box-shadow: var(--shadow);
+}
+
+.fm-event-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fm-event-name {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  margin: 0 0 5px 0;
+}
+
+.fm-event-dates {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fm-surge-pill {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.fm-surge-pill.severity-CRITICAL,
+.fm-surge-pill.severity-critical {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.fm-surge-pill.severity-HIGH,
+.fm-surge-pill.severity-high {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.fm-surge-pill.severity-MODERATE,
+.fm-surge-pill.severity-medium {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.fm-event-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fm-meter-bar-bg {
+  height: 5px;
+  background: var(--surface-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line-light);
+}
+
+.fm-meter-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--amber), #ef4444);
+}
+
+.fm-corridors-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.fm-corridors-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fm-corridor-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fm-corridor-tag:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--paper);
+}
+
+.fm-advice-box {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  border-left: 3px solid var(--amber);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  line-height: 1.5;
+  margin-top: auto;
+}
+
+.fm-advice-box strong {
+  color: var(--ink);
+}
+
+/* Flight Movers Cards Grid */
+.fm-flights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.fm-flight-card {
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fm-flight-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.fm-flight-card.is-surge:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.fm-flight-card.is-deal:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.fm-flight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fm-flight-num-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.fm-flight-num {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fm-airline-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line-light);
+  color: var(--muted);
+}
+
+.fm-badge-surge {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.fm-badge-deal {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.fm-flight-route-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.fm-flight-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.fm-flight-fare-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-top: 1px solid var(--line-light);
+  padding-top: 10px;
+}
+
+.fm-current-fare {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fm-current-fare.is-deal-fare {
+  color: #10b981;
+}
+
+.fm-baseline-fare {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.fm-empty-state {
+  text-align: center;
+  padding: 36px;
+  color: var(--muted);
+  grid-column: 1 / -1;
+  font-size: 13px;
+}
+
+/* Brand Benchmark Styling */
+.fm-corridor-selector-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.fm-corridor-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fm-corridor-chip {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fm-corridor-chip:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.fm-corridor-chip.is-active {
+  background: var(--paper-bright);
+  color: var(--ink);
+  border-color: var(--ink);
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+
+.fm-corridor-info-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.fm-corridor-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.fm-corridor-median {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.fm-corridor-median strong {
+  font-family: var(--mono);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.fm-brands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.fm-brand-card {
+  background: var(--paper-bright);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.fm-brand-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-light);
+}
+
+.fm-brand-card.is-cheapest {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.fm-brand-card.is-premium {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.fm-brand-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fm-brand-name {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.fm-brand-position {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.fm-brand-position.cheapest {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.fm-brand-position.premium {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.fm-brand-fare-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.fm-brand-avg-fare {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fm-brand-diff-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.fm-brand-diff-tag.cheaper {
+  color: #10b981;
+}
+
+.fm-brand-diff-tag.higher {
+  color: #ef4444;
+}
+
+.fm-brand-stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  border-top: 1px solid var(--line-light);
+  padding-top: 10px;
+  margin-top: auto;
+}
+
+.fm-brand-stat-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.fm-brand-stat-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 
 
 

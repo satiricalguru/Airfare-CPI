@@ -5,6 +5,7 @@ Each test here pins a specific defect that was fixed, so it cannot silently retu
 Test names reference the audit finding IDs.
 """
 
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sys
@@ -14,10 +15,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api import main as api_main
+from api.models import BackfillRequest, CollectionTriggerRequest, RouteScrapeRequest
 from config import IndexSettings, ValidationSettings, get_settings, reload_settings
 from engine.aggregator import NationalAggregator, RouteIndexInput
+from engine.index_service import IndexService, _previous_month_anchor
 from engine.rebase import BasePeriod, compute_base_prices, rebase_series
 from engine.weights import get_route_basket
+from db import repository as repo
 from provenance import (
     CollectionMode,
     CollectionStatus,
@@ -27,6 +31,7 @@ from provenance import (
 )
 from reports.generator import ResearchBulletin, ResearchReportGenerator
 from scraper.base import CABIN_ECONOMY, FareObservation, SourceResult
+from scraper.pipeline import CollectionPipeline, CollectionRequest
 from scraper.validator import FareValidator, ValidationAction
 
 
@@ -39,9 +44,10 @@ def _make_obs(
     coll_date: date,
     route_id: int = 1,
     horizon: int = 7,
+    source_type: SourceType = SourceType.SIMULATED,
 ) -> FareObservation:
     prov = DataProvenance(
-        source_type=SourceType.SIMULATED,
+        source_type=source_type,
         source_name="test_fixture",
         collection_timestamp=datetime(coll_date.year, coll_date.month, coll_date.day, 10, 0, tzinfo=timezone.utc),
         request_id=new_request_id(),
@@ -209,6 +215,149 @@ def test_q2_normal_day_over_day_movement_is_not_flagged():
     assert not any("daily_change" in f for f in res.flags)
 
 
+def test_validation_pairs_survive_duplicate_sort_keys():
+    """A rejected fare must not transfer its decision to a clean fare with the same timestamp."""
+    validator = FareValidator(
+        settings=ValidationSettings(max_fare_inr=80000.0, min_observations_for_iqr=10)
+    )
+    rejected = _make_obs(90000.0, date(2026, 8, 2))
+    accepted = _make_obs(5000.0, date(2026, 8, 2))
+
+    batch = validator.validate_batch([rejected, accepted])
+    pairs = repo._pair_observations(batch)
+
+    assert pairs[0][0].fare_total == 90000.0
+    assert pairs[0][1].action is ValidationAction.EXCLUDED
+    assert pairs[1][0].fare_total == 5000.0
+    assert pairs[1][1].action is ValidationAction.ACCEPTED
+
+
+def test_index_service_refuses_mixed_provenance_base(monkeypatch):
+    """A larger live sample must never hide simulator rows inside its base prices."""
+    service = IndexService()
+    service.base_period = BasePeriod(start=date(2026, 8, 1), days=7)
+
+    base_live = _make_obs(
+        5000.0, date(2026, 8, 2), source_type=SourceType.LIVE
+    )
+    base_simulated = _make_obs(
+        5100.0, date(2026, 8, 2), source_type=SourceType.SIMULATED
+    )
+    target_live = _make_obs(
+        5200.0, date(2026, 8, 10), source_type=SourceType.LIVE
+    )
+
+    async def fake_load(_session, start_date=None, **_kwargs):
+        if start_date == service.base_period.start:
+            return [base_live, base_simulated]
+        return [target_live]
+
+    monkeypatch.setattr(repo, "load_observations", fake_load)
+    monkeypatch.setattr(repo, "record_to_observation", lambda row: row)
+
+    result = asyncio.run(service.recompute(session=object()))
+
+    assert result.dates_computed == []
+    assert result.skipped_dates[0]["reason"] == "mixed_provenance"
+    assert result.skipped_dates[0]["source_types"] == ["live", "simulated"]
+
+
+@pytest.mark.parametrize(
+    ("current", "expected"),
+    [
+        (date(2026, 3, 31), date(2026, 2, 28)),
+        (date(2024, 3, 31), date(2024, 2, 29)),
+        (date(2026, 1, 15), date(2025, 12, 15)),
+        (date(2026, 9, 3), date(2026, 8, 3)),
+    ],
+)
+def test_month_on_month_anchor_is_previous_calendar_month(current, expected):
+    assert _previous_month_anchor(current) == expected
+
+
+def test_route_history_get_is_read_only(monkeypatch):
+    """A read of an empty route series must never start ingestion as a side effect."""
+    async def empty_history(_session, _route_id, days=365, **_kwargs):
+        return []
+
+    async def forbidden_ingest(*_args, **_kwargs):
+        raise AssertionError("GET route history attempted to mutate collection state")
+
+    monkeypatch.setattr(repo, "get_route_index_history", empty_history)
+    monkeypatch.setattr(api_main.IngestService, "ingest", forbidden_ingest)
+
+    payload = asyncio.run(
+        api_main.get_route_history(route_id=1, days=365, session=object())
+    )
+    assert payload["history"] == []
+    assert payload["count"] == 0
+
+
+@pytest.mark.parametrize(
+    "model, payload",
+    [
+        (CollectionTriggerRequest, {"horizons": [0, 7]}),
+        (
+            RouteScrapeRequest,
+            {"origin": "DEL", "destination": "BOM", "horizons": [3]},
+        ),
+        (
+            BackfillRequest,
+            {
+                "start_date": "2026-08-01",
+                "end_date": "2026-08-02",
+                "horizons": [60],
+            },
+        ),
+    ],
+)
+def test_api_rejects_horizons_outside_policy(model, payload):
+    """Old or arbitrary horizons cannot silently create a different series."""
+    with pytest.raises(ValueError, match="must be selected from"):
+        model(**payload)
+
+
+def test_live_collection_cannot_backdate_observations():
+    """A quote retrieved now cannot be represented as a historical live quote."""
+    route = get_route_basket().routes[0]
+    request = CollectionRequest(
+        mode=CollectionMode.LIVE,
+        routes=[route],
+        booking_horizons=[1],
+        collection_day=date(2020, 1, 1),
+    )
+
+    result = asyncio.run(CollectionPipeline().run(request))
+
+    assert result.status is CollectionStatus.UNAVAILABLE
+    assert result.observations == []
+    assert "Historical backfill" in (result.error_message or "")
+
+
+def test_unconfigured_live_source_never_falls_back_to_simulator(monkeypatch):
+    monkeypatch.delenv("AMADEUS_CLIENT_ID", raising=False)
+    monkeypatch.delenv("AMADEUS_CLIENT_SECRET", raising=False)
+    cfg = reload_settings()
+    route = get_route_basket().routes[0]
+
+    result = asyncio.run(
+        CollectionPipeline(cfg).run(
+            CollectionRequest(
+                mode=CollectionMode.LIVE,
+                routes=[route],
+                booking_horizons=[1],
+            )
+        )
+    )
+
+    assert result.status is CollectionStatus.UNAVAILABLE
+    assert result.observations == []
+    assert all(item["source"] != "simulator" for item in result.skipped_sources)
+    assert "No observations were produced and none were substituted" in (
+        result.error_message or ""
+    )
+
+
 # ═══════════════════════════════════════════════════════════
 # C2 — Research report / Bulletin honesty (No fake MoSPI branding)
 # ═══════════════════════════════════════════════════════════
@@ -321,8 +470,15 @@ def test_admin_guard_rejects_bad_token_when_configured(monkeypatch):
         reload_settings()
 
 
-def test_admin_guard_is_open_when_unconfigured(monkeypatch):
-    """Local demo stays frictionless when no token is set."""
+def test_admin_guard_fails_closed_when_unconfigured(monkeypatch):
+    """A missing deployment secret disables mutation instead of making it public."""
+    from fastapi import HTTPException
+
     monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
     reload_settings()
-    api_main.require_admin(None)
+    try:
+        with pytest.raises(HTTPException) as exc:
+            api_main.require_admin(None)
+        assert exc.value.status_code == 503
+    finally:
+        reload_settings()

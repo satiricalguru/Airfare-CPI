@@ -39,7 +39,30 @@ COLLECTOR_VERSION = "collector-2.0.0"
 # Bumped whenever index computation changes in a way that would alter published
 # figures. Persisted per index record so any published value can be traced to the
 # exact calculation that produced it.
-METHODOLOGY_VERSION = "methodology-2.0.0"
+METHODOLOGY_VERSION = "methodology-2.1.0"
+
+
+class AcquisitionMethod(str, Enum):
+    """The technical acquisition method used to capture an observation."""
+
+    WEB_SCRAPE = "WEB_SCRAPE"            # Fares read from a permitted airline/OTA web portal
+    API = "API"                          # Fares returned by a documented external API (e.g. Amadeus)
+    SIMULATED = "SIMULATED"              # Locally generated methodology/test data
+    OFFLINE_FIXTURE = "OFFLINE_FIXTURE"  # Replayed test or static-preview data
+
+    @property
+    def display_label(self) -> str:
+        return ACQUISITION_METHOD_LABELS[self]
+
+    @property
+    def counts_as_portal_scraping(self) -> bool:
+        """Only genuine web scrape observations count toward portal-scraping targets."""
+        return self is AcquisitionMethod.WEB_SCRAPE
+
+    @property
+    def is_empirical(self) -> bool:
+        """Only real external captures (portal scrapes or API) are empirical."""
+        return self in {AcquisitionMethod.WEB_SCRAPE, AcquisitionMethod.API}
 
 
 class SourceType(str, Enum):
@@ -119,9 +142,16 @@ class CollectionStatus(str, Enum):
 
 
 PROVENANCE_LABELS: dict[SourceType, str] = {
-    SourceType.LIVE: "LIVE DATA",
+    SourceType.LIVE: "SCRAPED DATA",
     SourceType.SIMULATED: "SIMULATED DATA",
     SourceType.OFFLINE: "OFFLINE PREVIEW",
+}
+
+ACQUISITION_METHOD_LABELS: dict[AcquisitionMethod, str] = {
+    AcquisitionMethod.WEB_SCRAPE: "PORTAL-SCRAPED DATA",
+    AcquisitionMethod.API: "API-COLLECTED DATA",
+    AcquisitionMethod.SIMULATED: "SIMULATED DATA",
+    AcquisitionMethod.OFFLINE_FIXTURE: "OFFLINE PREVIEW",
 }
 
 # Shown when a live collection attempt produced nothing. Never replaced by data.
@@ -172,6 +202,7 @@ class DataProvenance:
     source_name: str
     collection_timestamp: datetime
     request_id: str
+    acquisition_method: Optional[AcquisitionMethod] = None
     collector_version: str = COLLECTOR_VERSION
     source_url: Optional[str] = None
     raw_payload_hash: Optional[str] = None
@@ -188,10 +219,45 @@ class DataProvenance:
             raise ValueError(
                 "DataProvenance.collection_timestamp must be timezone-aware"
             )
+        if self.acquisition_method is None:
+            if self.source_type is SourceType.SIMULATED:
+                object.__setattr__(self, "acquisition_method", AcquisitionMethod.SIMULATED)
+            elif self.source_type is SourceType.OFFLINE:
+                object.__setattr__(self, "acquisition_method", AcquisitionMethod.OFFLINE_FIXTURE)
+            elif self.source_type is SourceType.LIVE:
+                object.__setattr__(self, "acquisition_method", AcquisitionMethod.WEB_SCRAPE)
+        elif not isinstance(self.acquisition_method, AcquisitionMethod):
+            object.__setattr__(
+                self, "acquisition_method", AcquisitionMethod(self.acquisition_method)
+            )
+
+        # ── Invariant checks across source_type and acquisition_method ──
+        if self.source_type is SourceType.SIMULATED and self.acquisition_method is not AcquisitionMethod.SIMULATED:
+            raise ValueError(
+                f"DataProvenance invariant violation: source_type=SIMULATED requires "
+                f"acquisition_method=SIMULATED, got {self.acquisition_method.value}"
+            )
+        if self.source_type is SourceType.OFFLINE and self.acquisition_method is not AcquisitionMethod.OFFLINE_FIXTURE:
+            raise ValueError(
+                f"DataProvenance invariant violation: source_type=OFFLINE requires "
+                f"acquisition_method=OFFLINE_FIXTURE, got {self.acquisition_method.value}"
+            )
+        if self.source_type is SourceType.LIVE and self.acquisition_method not in {
+            AcquisitionMethod.WEB_SCRAPE,
+            AcquisitionMethod.API,
+        }:
+            raise ValueError(
+                f"DataProvenance invariant violation: source_type=LIVE requires "
+                f"acquisition_method in (WEB_SCRAPE, API), got {self.acquisition_method.value}"
+            )
 
     @property
     def display_label(self) -> str:
         return PROVENANCE_LABELS[self.source_type]
+
+    @property
+    def acquisition_label(self) -> str:
+        return ACQUISITION_METHOD_LABELS[self.acquisition_method]
 
     @property
     def is_real(self) -> bool:
@@ -200,8 +266,10 @@ class DataProvenance:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["source_type"] = self.source_type.value
+        data["acquisition_method"] = self.acquisition_method.value
         data["collection_timestamp"] = self.collection_timestamp.isoformat()
         data["display_label"] = self.display_label
+        data["acquisition_label"] = self.acquisition_label
         return data
 
     @classmethod
@@ -211,8 +279,22 @@ class DataProvenance:
             ts = datetime.fromisoformat(ts)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
+
+        st = SourceType(data["source_type"])
+        acq_raw = data.get("acquisition_method")
+        if acq_raw:
+            acq = AcquisitionMethod(acq_raw)
+        else:
+            if st is SourceType.SIMULATED:
+                acq = AcquisitionMethod.SIMULATED
+            elif st is SourceType.OFFLINE:
+                acq = AcquisitionMethod.OFFLINE_FIXTURE
+            else:
+                acq = AcquisitionMethod.WEB_SCRAPE
+
         return cls(
-            source_type=SourceType(data["source_type"]),
+            source_type=st,
+            acquisition_method=acq,
             source_name=data["source_name"],
             collection_timestamp=ts,
             request_id=data["request_id"],
@@ -232,6 +314,7 @@ class DataProvenance:
         """Provenance for generated data. source_url is always None: nothing was fetched."""
         return cls(
             source_type=SourceType.SIMULATED,
+            acquisition_method=AcquisitionMethod.SIMULATED,
             source_name=source_name,
             collection_timestamp=timestamp or utc_now(),
             request_id=new_request_id(),
@@ -251,6 +334,7 @@ class DataProvenance:
         """Provenance for fixture replay."""
         return cls(
             source_type=SourceType.OFFLINE,
+            acquisition_method=AcquisitionMethod.OFFLINE_FIXTURE,
             source_name=source_name,
             collection_timestamp=timestamp or utc_now(),
             request_id=new_request_id(),
@@ -259,10 +343,55 @@ class DataProvenance:
             notes={"fixture": fixture_path},
         )
 
+    @classmethod
+    def for_api(
+        cls,
+        source_name: str,
+        source_url: str,
+        request_id: Optional[str] = None,
+        raw_payload: Any = None,
+        timestamp: Optional[datetime] = None,
+        notes: Optional[dict[str, Any]] = None,
+    ) -> "DataProvenance":
+        """Provenance for external documented API collection."""
+        return cls(
+            source_type=SourceType.LIVE,
+            acquisition_method=AcquisitionMethod.API,
+            source_name=source_name,
+            collection_timestamp=timestamp or utc_now(),
+            request_id=request_id or new_request_id(),
+            source_url=source_url,
+            raw_payload_hash=payload_hash(raw_payload),
+            notes=notes or {},
+        )
+
+    @classmethod
+    def for_web_scrape(
+        cls,
+        source_name: str,
+        source_url: str,
+        request_id: Optional[str] = None,
+        raw_payload: Any = None,
+        timestamp: Optional[datetime] = None,
+        notes: Optional[dict[str, Any]] = None,
+    ) -> "DataProvenance":
+        """Provenance for permitted web portal scraping."""
+        return cls(
+            source_type=SourceType.LIVE,
+            acquisition_method=AcquisitionMethod.WEB_SCRAPE,
+            source_name=source_name,
+            collection_timestamp=timestamp or utc_now(),
+            request_id=request_id or new_request_id(),
+            source_url=source_url,
+            raw_payload_hash=payload_hash(raw_payload),
+            notes=notes or {},
+        )
+
 
 def resolve_display_label(
     source_type: SourceType | str | None,
     status: CollectionStatus | str | None = None,
+    acquisition_method: AcquisitionMethod | str | None = None,
 ) -> str:
     """
     The single place that decides which honest label a consumer should render.
@@ -270,6 +399,13 @@ def resolve_display_label(
     A failed or unavailable live attempt reports SOURCE UNAVAILABLE rather than
     falling back to any data label, because there is no data to label.
     """
+    # Accommodate callers passing acquisition_method as second positional parameter
+    if isinstance(status, AcquisitionMethod) or (
+        isinstance(status, str) and status in {m.value for m in AcquisitionMethod}
+    ):
+        acquisition_method = status
+        status = None
+
     if status is not None:
         status = CollectionStatus(status) if isinstance(status, str) else status
         if status.is_failure:
@@ -279,4 +415,13 @@ def resolve_display_label(
         return SOURCE_UNAVAILABLE_LABEL
 
     source_type = SourceType(source_type) if isinstance(source_type, str) else source_type
+
+    if acquisition_method is not None:
+        acq = (
+            AcquisitionMethod(acquisition_method)
+            if isinstance(acquisition_method, str)
+            else acquisition_method
+        )
+        return ACQUISITION_METHOD_LABELS[acq]
+
     return PROVENANCE_LABELS[source_type]

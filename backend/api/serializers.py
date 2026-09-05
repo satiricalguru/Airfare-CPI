@@ -32,12 +32,15 @@ from provenance import (
     NOT_IMPLEMENTED_LABEL,
     PROVENANCE_LABELS,
     SOURCE_UNAVAILABLE_LABEL,
+    AcquisitionMethod,
     SourceType,
+    resolve_display_label,
 )
 
 
 def provenance_block(
     source_type: Optional[str],
+    acquisition_method: Optional[str] = None,
     *,
     is_live_data: Optional[bool] = None,
 ) -> dict[str, Any]:
@@ -50,15 +53,19 @@ def provenance_block(
     if not source_type:
         return {
             "source_type": None,
+            "acquisition_method": None,
             "display_label": SOURCE_UNAVAILABLE_LABEL,
             "is_live_data": False,
             "is_official_statistic": False,
         }
 
     st = SourceType(source_type)
+    acq = AcquisitionMethod(acquisition_method) if acquisition_method else None
+    display_label = resolve_display_label(st, acq)
     return {
         "source_type": st.value,
-        "display_label": PROVENANCE_LABELS[st],
+        "acquisition_method": acq.value if acq else None,
+        "display_label": display_label,
         "is_live_data": st.is_real if is_live_data is None else bool(is_live_data),
         # Constant False. This project is not authorized to publish official
         # statistics, and the API says so on every response rather than leaving it to
@@ -93,7 +100,7 @@ def national_index(row: NationalIndex) -> dict[str, Any]:
         # ── required envelope ──
         "value": _round(row.index_value, 4),
         "base_period": row.base_period_label,
-        "data_provenance": provenance_block(row.source_type),
+        "data_provenance": provenance_block(row.source_type, getattr(row, "acquisition_method", None)),
         "sample_size": row.total_observations,
         "methodology_version": row.methodology_version,
         # ── identity ──
@@ -146,6 +153,7 @@ def national_index_summary(row: NationalIndex) -> dict[str, Any]:
         "is_publishable": row.is_publishable,
         "standard_error": _round(row.standard_error, 6),
         "source_type": row.source_type,
+        "acquisition_method": getattr(row, "acquisition_method", None),
     }
 
 
@@ -162,7 +170,7 @@ def route_index(row: RouteIndex, route: Optional[Any] = None) -> dict[str, Any]:
         "value": _round(row.index_100, 4),
         "index_ratio": _round(row.index_value, 6),
         "base_period": f"{row.base_period_start.isoformat()} to {row.base_period_end.isoformat()}",
-        "data_provenance": provenance_block(row.source_type),
+        "data_provenance": provenance_block(row.source_type, getattr(row, "acquisition_method", None)),
         "sample_size": row.observation_count,
         "methodology_version": row.methodology_version,
         "route_id": row.route_id,
@@ -199,7 +207,7 @@ def horizon_index(row: HorizonIndex) -> dict[str, Any]:
         "value": _round(row.index_100, 4),
         "index_ratio": _round(row.index_value, 6),
         "base_period": f"{row.base_period_start.isoformat()} to {row.base_period_end.isoformat()}",
-        "data_provenance": provenance_block(row.source_type),
+        "data_provenance": provenance_block(row.source_type, getattr(row, "acquisition_method", None)),
         "sample_size": row.observation_count,
         "methodology_version": row.methodology_version,
         "route_id": row.route_id,
@@ -257,7 +265,7 @@ def fare_observation(row: FareObservationRecord) -> dict[str, Any]:
         "seats_available": row.seats_available,
         "product_key": row.product_key,
         "data_provenance": {
-            **provenance_block(row.source_type),
+            **provenance_block(row.source_type, getattr(row, "acquisition_method", None)),
             "source_name": row.source_name,
             "request_id": row.request_id,
             "collector_version": row.collector_version,
@@ -287,7 +295,9 @@ def collection_run(row: CollectionRun, include_attempts: bool = False) -> dict[s
         "status": row.status,
         "display_label": row.display_label,
         "data_provenance": provenance_block(
-            row.source_type, is_live_data=row.source_type == SourceType.LIVE.value
+            row.source_type,
+            getattr(row, "acquisition_method", None),
+            is_live_data=row.source_type == SourceType.LIVE.value,
         ),
         "data_available": row.observations_collected > 0,
         "started_at": _iso(row.started_at),
@@ -324,6 +334,9 @@ def source(row: Source) -> dict[str, Any]:
     Exposing the disabled set is deliberate: it answers "why aren't you scraping
     MakeMyTrip?" in the API rather than leaving a reviewer to infer an oversight.
     """
+    from scraper.source_registry import get_source_registry
+
+    gov = get_source_registry().get(row.name)
     return {
         "name": row.name,
         "display_name": row.display_name,
@@ -338,6 +351,7 @@ def source(row: Source) -> dict[str, Any]:
         "compliance_note": row.compliance_note,
         "native_currency": row.native_currency,
         "last_updated_at": _iso(row.last_updated_at),
+        "governance": gov.to_dict() if gov else None,
     }
 
 

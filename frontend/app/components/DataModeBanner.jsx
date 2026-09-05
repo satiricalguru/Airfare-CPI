@@ -28,7 +28,25 @@ const PRESENTATION = {
     tone: "live",
     Icon: CheckCircle2,
     detail:
-      "Figures are computed by the index engine from scraped airfare observations collected across domestic corridors and booking horizons.",
+      "Figures are computed by the index engine from airfare offers scraped across monitored airline portals and route quotations.",
+  },
+  [DATA_MODE.PORTAL_SCRAPED]: {
+    tone: "live",
+    Icon: CheckCircle2,
+    detail:
+      "Figures are computed directly from airfares scraped across public airline web portals and monitored route quotations.",
+  },
+  [DATA_MODE.API_COLLECTED]: {
+    tone: "live",
+    Icon: CheckCircle2,
+    detail:
+      "Figures are computed from airfare offers retrieved via authorized API integration (Amadeus GDS / direct connect).",
+  },
+  [DATA_MODE.SIMULATED]: {
+    tone: "simulated",
+    Icon: FlaskConical,
+    detail:
+      "Figures are generated research data used to exercise the collection and index pipeline. They are not observed market prices.",
   },
   [DATA_MODE.OFFLINE]: {
     tone: "offline",

@@ -2,45 +2,82 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
-import { Compass } from "lucide-react";
+import { Compass, Layers } from "lucide-react";
 import { getAssetPath } from "../utils/assetPath";
 import { NOT_AVAILABLE } from "../lib/api";
 import { fmtCount, fmtIndex, fmtPctFromFraction } from "../lib/format";
 
-// ── Exact Ground-Truth Coordinates (1200 × 896 Centered Satellite Basemap) ──
+// ── Exact Calibrated Coordinates for High-Definition Space View with Marked Borders (896 × 1200) ──
 const HUBS_CONFIG = [
-  { code: "DEL", city: "New Delhi", state: "Delhi", x: 475, y: 310, labelOffset: { x: 14, y: -10 } },
-  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 380, y: 550, labelOffset: { x: -36, y: 4 } },
-  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 485, y: 730, labelOffset: { x: -36, y: 4 } },
-  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 520, y: 610, labelOffset: { x: 14, y: 4 } },
-  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 745, y: 460, labelOffset: { x: 14, y: 4 } },
-  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 540, y: 735, labelOffset: { x: 14, y: 4 } },
-  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 370, y: 445, labelOffset: { x: -36, y: 0 } },
-  { code: "GOI", city: "Goa", state: "Goa", x: 415, y: 650, labelOffset: { x: -34, y: 4 } },
-  { code: "COK", city: "Kochi", state: "Kerala", x: 470, y: 800, labelOffset: { x: -34, y: 4 } },
-  { code: "JAI", city: "Jaipur", state: "Rajasthan", x: 420, y: 365, labelOffset: { x: -32, y: 4 } },
-  { code: "LKO", city: "Lucknow", state: "Uttar Pradesh", x: 560, y: 345, labelOffset: { x: 12, y: -8 } },
-  { code: "PAT", city: "Patna", state: "Bihar", x: 660, y: 375, labelOffset: { x: 12, y: -8 } },
-  { code: "GAU", city: "Guwahati", state: "Assam", x: 855, y: 360, labelOffset: { x: 12, y: -8 } },
-  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 385, y: 155, labelOffset: { x: -34, y: -6 } },
-  { code: "IXZ", city: "Port Blair", state: "Andaman & Nicobar", x: 885, y: 805, labelOffset: { x: 12, y: 4 } },
+  { code: "DEL", city: "New Delhi", state: "Delhi", x: 345, y: 350, labelOffset: { x: 14, y: -10 } },
+  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 230, y: 600, labelOffset: { x: -38, y: 4 } },
+  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 258, y: 620, labelOffset: { x: 14, y: 8 } },
+  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 330, y: 775, labelOffset: { x: -38, y: 4 } },
+  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 375, y: 635, labelOffset: { x: 14, y: 4 } },
+  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 560, y: 495, labelOffset: { x: 14, y: 4 } },
+  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 400, y: 775, labelOffset: { x: 14, y: 4 } },
+  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 215, y: 485, labelOffset: { x: -38, y: 0 } },
+  { code: "GOI", city: "Goa", state: "Goa", x: 250, y: 690, labelOffset: { x: -34, y: 4 } },
+  { code: "COK", city: "Kochi", state: "Kerala", x: 310, y: 865, labelOffset: { x: -34, y: 4 } },
+  { code: "JAI", city: "Jaipur", state: "Rajasthan", x: 300, y: 385, labelOffset: { x: -34, y: 4 } },
+  { code: "LKO", city: "Lucknow", state: "Uttar Pradesh", x: 430, y: 395, labelOffset: { x: 12, y: -8 } },
+  { code: "PAT", city: "Patna", state: "Bihar", x: 520, y: 425, labelOffset: { x: 12, y: -8 } },
+  { code: "GAU", city: "Guwahati", state: "Assam", x: 720, y: 415, labelOffset: { x: 12, y: -8 } },
+  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 360, y: 195, labelOffset: { x: -34, y: -8 } },
+  { code: "IXZ", city: "Port Blair", state: "Andaman & Nicobar", x: 825, y: 810, labelOffset: { x: 14, y: 4 } },
 ];
 
 const HUB_MAP = Object.fromEntries(HUBS_CONFIG.map((h) => [h.code, h]));
 
-// ── Golden Trunk Corridors ──
+// ── Clearly Marked State Name Badges on Space View ──
+const STATE_LABELS = [
+  { name: "JAMMU & KASHMIR", x: 375, y: 155 },
+  { name: "PUNJAB", x: 290, y: 275 },
+  { name: "HARYANA", x: 305, y: 320 },
+  { name: "RAJASTHAN", x: 235, y: 375 },
+  { name: "UTTAR PRADESH", x: 440, y: 355 },
+  { name: "GUJARAT", x: 165, y: 470 },
+  { name: "MADHYA PRADESH", x: 335, y: 495 },
+  { name: "BIHAR", x: 545, y: 395 },
+  { name: "WEST BENGAL", x: 595, y: 475 },
+  { name: "MAHARASHTRA", x: 260, y: 550 },
+  { name: "CHHATTISGARH", x: 435, y: 535 },
+  { name: "ODISHA", x: 495, y: 585 },
+  { name: "TELANGANA", x: 360, y: 595 },
+  { name: "ANDHRA PRADESH", x: 395, y: 710 },
+  { name: "KARNATAKA", x: 285, y: 745 },
+  { name: "TAMIL NADU", x: 375, y: 840 },
+  { name: "KERALA", x: 280, y: 855 },
+  { name: "ASSAM", x: 760, y: 385 },
+];
+
+// ── Complete 25 Domestic Aviation Corridors in MoSPI Representative Basket ──
 const ALL_NETWORK_ROUTES = [
-  { from: "DEL", to: "BOM", name: "Delhi ⇄ Mumbai", desc: "Golden Trunk Corridor" },
-  { from: "DEL", to: "BLR", name: "Delhi ⇄ Bengaluru", desc: "Tech Expressway" },
-  { from: "BOM", to: "BLR", name: "Mumbai ⇄ Bengaluru", desc: "Commercial Shuttle" },
-  { from: "DEL", to: "HYD", name: "Delhi ⇄ Hyderabad", desc: "Deccan Trunk" },
-  { from: "BOM", to: "HYD", name: "Mumbai ⇄ Hyderabad", desc: "Western Gateway" },
-  { from: "DEL", to: "CCU", name: "Delhi ⇄ Kolkata", desc: "Eastern Express" },
-  { from: "DEL", to: "MAA", name: "Delhi ⇄ Chennai", desc: "Southern Trunk" },
-  { from: "BLR", to: "MAA", name: "Bengaluru ⇄ Chennai", desc: "Short-Haul Shuttle" },
-  { from: "BOM", to: "GOI", name: "Mumbai ⇄ Goa", desc: "Leisure Heavyweight" },
-  { from: "BOM", to: "AMD", name: "Mumbai ⇄ Ahmedabad", desc: "Industrial Corridor" },
-  { from: "BLR", to: "COK", name: "Bengaluru ⇄ Kochi", desc: "Southern Connector" },
+  { from: "DEL", to: "BOM", name: "Delhi ⇄ Mumbai", desc: "Golden Trunk Corridor", weightPct: 10.02 },
+  { from: "DEL", to: "BLR", name: "Delhi ⇄ Bengaluru", desc: "Tech Expressway", weightPct: 7.93 },
+  { from: "BOM", to: "BLR", name: "Mumbai ⇄ Bengaluru", desc: "Commercial Shuttle", weightPct: 7.26 },
+  { from: "DEL", to: "HYD", name: "Delhi ⇄ Hyderabad", desc: "Deccan Trunk", weightPct: 6.51 },
+  { from: "DEL", to: "CCU", name: "Delhi ⇄ Kolkata", desc: "Eastern Express", weightPct: 6.18 },
+  { from: "BOM", to: "HYD", name: "Mumbai ⇄ Hyderabad", desc: "Western Gateway", weightPct: 5.43 },
+  { from: "DEL", to: "MAA", name: "Delhi ⇄ Chennai", desc: "Southern Trunk", weightPct: 5.01 },
+  { from: "BOM", to: "CCU", name: "Mumbai ⇄ Kolkata", desc: "Trans-India Heavy", weightPct: 4.34 },
+  { from: "BLR", to: "HYD", name: "Bengaluru ⇄ Hyderabad", desc: "Cyber Corridor", weightPct: 4.01 },
+  { from: "DEL", to: "GOI", name: "Delhi ⇄ Goa", desc: "Leisure Flagship", weightPct: 3.76 },
+  { from: "BOM", to: "MAA", name: "Mumbai ⇄ Chennai", desc: "Coastal Trunk", weightPct: 3.59 },
+  { from: "BLR", to: "CCU", name: "Bengaluru ⇄ Kolkata", desc: "East-South Link", weightPct: 3.34 },
+  { from: "DEL", to: "PNQ", name: "Delhi ⇄ Pune", desc: "Auto-IT Corridor", weightPct: 3.26 },
+  { from: "BOM", to: "GOI", name: "Mumbai ⇄ Goa", desc: "Konkan Shuttle", weightPct: 3.17 },
+  { from: "DEL", to: "AMD", name: "Delhi ⇄ Ahmedabad", desc: "Business Corridor", weightPct: 3.09 },
+  { from: "BLR", to: "MAA", name: "Bengaluru ⇄ Chennai", desc: "Short-Haul Shuttle", weightPct: 2.84 },
+  { from: "DEL", to: "JAI", name: "Delhi ⇄ Jaipur", desc: "Heritage Commuter", weightPct: 2.67 },
+  { from: "BOM", to: "AMD", name: "Mumbai ⇄ Ahmedabad", desc: "Industrial Shuttle", weightPct: 2.59 },
+  { from: "DEL", to: "LKO", name: "Delhi ⇄ Lucknow", desc: "Awadh Express", weightPct: 2.50 },
+  { from: "BLR", to: "GOI", name: "Bengaluru ⇄ Goa", desc: "Southern Holiday Link", weightPct: 2.34 },
+  { from: "HYD", to: "CCU", name: "Hyderabad ⇄ Kolkata", desc: "East-Coast Trunk", weightPct: 2.25 },
+  { from: "DEL", to: "PAT", name: "Delhi ⇄ Patna", desc: "Ganga Trunk", weightPct: 2.17 },
+  { from: "BOM", to: "JAI", name: "Mumbai ⇄ Jaipur", desc: "Royal Route", weightPct: 2.00 },
+  { from: "DEL", to: "COK", name: "Delhi ⇄ Kochi", desc: "Kerala Long-Haul", weightPct: 1.92 },
+  { from: "BOM", to: "PNQ", name: "Mumbai ⇄ Pune", desc: "Sahyadri Feeder", weightPct: 1.84 },
 ];
 
 function subscribeToDocumentDark(callback) {
@@ -60,6 +97,8 @@ function getDocumentDarkServerSnapshot() {
 
 export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] }) {
   const [selectedRoute, setSelectedRoute] = useState(ALL_NETWORK_ROUTES[0]);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "top5" | "trunk"
+  const [hoveredHub, setHoveredHub] = useState(null);
   const [utcTime, setUtcTime] = useState(() => new Date().toUTCString().slice(17, 25) + " UTC");
 
   const domDarkMode = useSyncExternalStore(subscribeToDocumentDark, getDocumentDarkSnapshot, getDocumentDarkServerSnapshot);
@@ -92,15 +131,13 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
 
   const activeFrom = selectedRoute?.from || "DEL";
   const activeTo = selectedRoute?.to || "BOM";
-  const fromHub = HUB_MAP[activeFrom] || HUBS_CONFIG[0];
-  const toHub = HUB_MAP[activeTo] || HUBS_CONFIG[1];
 
   // Geodesic Corridor Curvature
   const getControlPoint = useCallback((h1, h2) => {
     const dx = h2.x - h1.x;
     const dy = h2.y - h1.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const curvature = Math.min(dist * 0.08, 24);
+    const curvature = Math.min(dist * 0.11, 36);
     const nx = -dy / dist;
     const ny = dx / dist;
     return {
@@ -121,15 +158,22 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
     isDarkRef.current = isDarkMode;
   }, [isDarkMode]);
 
-  // 60FPS Flight Animation (Selected Corridor Only)
+  // Filtered routes list for quick switcher chips
+  const displayedRoutes = useMemo(() => {
+    if (filterMode === "top5") return ALL_NETWORK_ROUTES.slice(0, 5);
+    if (filterMode === "trunk") return ALL_NETWORK_ROUTES.filter((r) => r.weightPct >= 4.0);
+    return ALL_NETWORK_ROUTES;
+  }, [filterMode]);
+
+  // 60FPS Flight Animation — Renders ALL 25 Corridors on 896 × 1200 Space View
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
     let animId;
-    const VB_W = 1200;
-    const VB_H = 896;
+    const VB_W = 896;
+    const VB_H = 1200;
 
     const setupCanvas = () => {
       const rect = canvas.getBoundingClientRect();
@@ -143,12 +187,30 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
     setupCanvas();
     window.addEventListener("resize", setupCanvas);
 
-    let progress = 0;
+    let mainProgress = 0;
     let time = 0;
+
+    // Pre-calculate control points for all 25 corridors
+    const corridorCurves = ALL_NETWORK_ROUTES.map((r, i) => {
+      const h1 = HUB_MAP[r.from];
+      const h2 = HUB_MAP[r.to];
+      if (!h1 || !h2) return null;
+      const cp = getControlPoint(h1, h2);
+      return {
+        from: r.from,
+        to: r.to,
+        h1,
+        h2,
+        cp,
+        weight: r.weightPct,
+        speed: 0.003 + (i % 5) * 0.0008,
+        offset: (i * 0.17) % 1,
+      };
+    }).filter(Boolean);
 
     const render = () => {
       time += 0.016;
-      progress = (progress + 0.0055) % 1;
+      mainProgress = (mainProgress + 0.005) % 1;
 
       const rect = canvas.getBoundingClientRect();
       const scaleX = rect.width / VB_W;
@@ -156,56 +218,86 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
+      const isDark = isDarkRef.current;
+      const bgRouteColor = isDark ? "rgba(101, 201, 138, 0.28)" : "rgba(46, 125, 50, 0.35)";
+      const greenColor = isDark ? "#65C98A" : "#2e7d32";
+      const glowColor = isDark ? "rgba(101, 201, 138, 0.95)" : "rgba(46, 125, 50, 0.85)";
+      const softGlowColor = isDark ? "rgba(101, 201, 138, 0.3)" : "rgba(46, 125, 50, 0.25)";
+
+      // ── 1. Draw ALL 25 Background Network Corridors ──
+      corridorCurves.forEach((item) => {
+        const isSelected =
+          (item.from === activeFrom && item.to === activeTo) ||
+          (item.from === activeTo && item.to === activeFrom);
+
+        if (isSelected) return; // Drawn prominently in layer 2
+
+        ctx.beginPath();
+        ctx.moveTo(item.h1.x * scaleX, item.h1.y * scaleY);
+        ctx.quadraticCurveTo(item.cp.x * scaleX, item.cp.y * scaleY, item.h2.x * scaleX, item.h2.y * scaleY);
+        ctx.strokeStyle = bgRouteColor;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+
+        // Ambient moving pulse on major non-selected routes
+        if (item.weight >= 4.0) {
+          const ambProg = (time * item.speed * 20 + item.offset) % 1;
+          const ambPt = getBezierPoint(item.h1, item.cp, item.h2, ambProg);
+          ctx.beginPath();
+          ctx.arc(ambPt.x * scaleX, ambPt.y * scaleY, 2.8, 0, Math.PI * 2);
+          ctx.fillStyle = isDark ? "rgba(255, 255, 255, 0.75)" : "rgba(46, 125, 50, 0.75)";
+          ctx.fill();
+        }
+      });
+
+      // ── 2. Draw Prominent Selected Corridor ──
       const h1 = HUB_MAP[activeFrom];
       const h2 = HUB_MAP[activeTo];
 
-      const isDark = isDarkRef.current;
-      const greenColor = isDark ? "#65C98A" : "#2e7d32";
-      const glowColor = isDark ? "rgba(101, 201, 138, 0.9)" : "rgba(46, 125, 50, 0.7)";
-      const softGlowColor = isDark ? "rgba(101, 201, 138, 0.25)" : "rgba(46, 125, 50, 0.2)";
-
       if (h1 && h2) {
         const cp = getControlPoint(h1, h2);
-
-        // 1. Prominent Selected Corridor Arc
-        ctx.beginPath();
-        ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
-        ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
-        ctx.strokeStyle = greenColor;
-        ctx.lineWidth = 3.6;
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 18;
-        ctx.stroke();
 
         // Outer soft glow
         ctx.beginPath();
         ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
         ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
         ctx.strokeStyle = softGlowColor;
-        ctx.lineWidth = 8.5;
-        ctx.shadowBlur = 0;
+        ctx.lineWidth = 12;
         ctx.stroke();
 
-        // 2. Single Traveling Flight Pulse
-        const pt = getBezierPoint(h1, cp, h2, progress);
+        // Sharp vibrant laser arc
         ctx.beginPath();
-        ctx.arc(pt.x * scaleX, pt.y * scaleY, 5.5, 0, Math.PI * 2);
+        ctx.moveTo(h1.x * scaleX, h1.y * scaleY);
+        ctx.quadraticCurveTo(cp.x * scaleX, cp.y * scaleY, h2.x * scaleX, h2.y * scaleY);
+        ctx.strokeStyle = greenColor;
+        ctx.lineWidth = 3.8;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 18;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // ── 3. Traveling Flight Beacon Pulse with Tail ──
+        const pt = getBezierPoint(h1, cp, h2, mainProgress);
+
+        // Core airplane beacon
+        ctx.beginPath();
+        ctx.arc(pt.x * scaleX, pt.y * scaleY, 6, 0, Math.PI * 2);
         ctx.fillStyle = "#ffffff";
         ctx.shadowColor = greenColor;
         ctx.shadowBlur = 16;
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // 3. Subtle Radar Rings on Selected Hubs
+        // ── 4. Radar Expanding Rings on Selected Hubs ──
         [h1, h2].forEach((hub, idx) => {
-          const phase = (time * 1.4 + idx * 0.7) % 1;
-          const radius = (8 + phase * 26) * ((scaleX + scaleY) / 2);
-          const opacity = (1 - phase) * 0.75;
+          const phase = (time * 1.5 + idx * 0.6) % 1;
+          const radius = (6 + phase * 28) * ((scaleX + scaleY) / 2);
+          const opacity = (1 - phase) * 0.8;
 
           ctx.beginPath();
           ctx.arc(hub.x * scaleX, hub.y * scaleY, radius, 0, Math.PI * 2);
           ctx.strokeStyle = isDark ? `rgba(101, 201, 138, ${opacity})` : `rgba(46, 125, 50, ${opacity})`;
-          ctx.lineWidth = 1.8;
+          ctx.lineWidth = 2;
           ctx.stroke();
         });
       }
@@ -221,17 +313,9 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
     };
   }, [activeFrom, activeTo, getControlPoint, getBezierPoint]);
 
-
-  const activeHubs = useMemo(() => {
-    const list = [];
-    if (fromHub) list.push({ ...fromHub, isOrigin: true });
-    if (toHub && toHub.code !== fromHub?.code) list.push({ ...toHub, isDest: true });
-    return list;
-  }, [fromHub, toHub]);
-
   const nodeColor = isDarkMode ? "#65C98A" : "#2e7d32";
-  const badgeBg = isDarkMode ? "#65C98A" : "var(--ink, #191917)";
-  const badgeTextColor = isDarkMode ? "#050B14" : "#ffffff";
+  const badgeBg = isDarkMode ? "rgba(10, 18, 28, 0.88)" : "rgba(255, 255, 255, 0.95)";
+  const badgeTextColor = isDarkMode ? "#f3f1e9" : "#191917";
 
   return (
     <div
@@ -244,10 +328,10 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div className="aerospace-pill">
             <span className="aerospace-live-dot" />
-            <strong>BHARAT-SAT · LEO SPACE VIEW</strong>
+            <strong>BHARAT-SAT · SPACE VIEW · STATES &amp; BORDERS DEMARCATED</strong>
           </div>
           <span className="aerospace-coords">
-            20.59° N, 78.96° E · ALT: 480 KM
+            20.59° N, 78.96° E · ORBIT: 480 KM
           </span>
         </div>
 
@@ -256,79 +340,133 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
             {utcTime}
           </span>
           <span className="aerospace-engine-tag">
-            JEVONS GEO-ENGINE
+            <Layers size={11} style={{ display: "inline", marginRight: "4px" }} />
+            25 MONITORED CORRIDORS
           </span>
         </div>
       </div>
 
-      {/* ── Main Clean Space Map Viewport (1200 × 896) ── */}
+      {/* ── Main Clean Space Map Viewport (896 × 1200) ── */}
       <div className="aerospace-map-viewport">
-        {/* Layer 0: Centered Satellite Layer */}
+        {/* Layer 0: High-Resolution Satellite Space View with Glowing National & State Borders */}
         <div style={{ position: "absolute", inset: 0 }}>
           <img
-            src={getAssetPath("/satellite_india_v2.jpg")}
-            alt="Satellite View of India and South Asian Subcontinent from Space"
+            src={getAssetPath("/india_space_satellite_borders.jpg")}
+            alt="Photorealistic Satellite Space View of India with Demarcated State Borders"
             style={{
               width: "100%",
               height: "100%",
               objectFit: "fill",
               objectPosition: "center center",
-              filter: isDarkMode ? "contrast(1.06) brightness(0.96) saturate(1.04)" : "contrast(1.02) brightness(1.02) saturate(1.05)",
+              filter: isDarkMode
+                ? "contrast(1.08) brightness(0.96) saturate(1.04)"
+                : "contrast(1.02) brightness(1.02) saturate(1.05)",
               pointerEvents: "none",
             }}
           />
 
-          {/* Atmospheric Vignette */}
+          {/* Atmospheric Edge Vignette */}
           <div className="aerospace-vignette" />
         </div>
 
-        {/* Layer 1: Airport Hub Markers (ONLY the 2 Active Route Endpoints) */}
-        <svg
-          viewBox="0 0 1200 896"
-          preserveAspectRatio="none"
+        {/* Layer 1: Flight Arc Canvas (Renders 25 arcs & flight pulses) */}
+        <canvas
+          ref={canvasRef}
           style={{
             position: "absolute",
             inset: 0,
             width: "100%",
             height: "100%",
             pointerEvents: "none",
+            zIndex: 1,
+          }}
+        />
+
+        {/* Layer 2: Demarcated State Labels & All 16 Airport Hub Markers */}
+        <svg
+          viewBox="0 0 896 1200"
+          preserveAspectRatio="none"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 2,
           }}
         >
+          {/* Subtle Demarcated State Labels Across the Subcontinent */}
+          <g id="demarcated-state-names" style={{ pointerEvents: "none" }}>
+            {STATE_LABELS.map((st) => (
+              <text
+                key={st.name}
+                x={st.x}
+                y={st.y}
+                textAnchor="middle"
+                fill={isDarkMode ? "rgba(255, 255, 255, 0.42)" : "rgba(25, 25, 23, 0.55)"}
+                fontSize={8.5}
+                fontWeight={700}
+                letterSpacing="0.14em"
+                fontFamily="var(--mono)"
+                style={{
+                  textShadow: isDarkMode ? "0 1px 4px rgba(0,0,0,0.9)" : "0 1px 3px rgba(255,255,255,0.9)",
+                }}
+              >
+                {st.name}
+              </text>
+            ))}
+          </g>
+
+          {/* All 16 Airport Hub Markers (Interactive & Hoverable) */}
           <g id="aerospace-airport-nodes">
-            {activeHubs.map((hub) => {
-              const offset = hub.labelOffset || { x: 12, y: 4 };
+            {HUBS_CONFIG.map((hub) => {
+              const isOrigin = hub.code === activeFrom;
+              const isDest = hub.code === activeTo;
+              const isActive = isOrigin || isDest;
+              const offset = hub.labelOffset || { x: 14, y: 4 };
 
               return (
                 <g
                   key={hub.code}
                   transform={`translate(${hub.x}, ${hub.y})`}
-                  style={{ pointerEvents: "none" }}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => setHoveredHub(hub)}
+                  onMouseLeave={() => setHoveredHub(null)}
+                  onClick={() => {
+                    // Quick select a route connected to this hub
+                    const match = ALL_NETWORK_ROUTES.find(
+                      (r) => r.from === hub.code || r.to === hub.code
+                    );
+                    if (match) setSelectedRoute(match);
+                  }}
                   data-testid={`india-map-hub-${hub.code.toLowerCase()}`}
                 >
                   {/* Active Selected Target Ring */}
-                  <circle
-                    r={18}
-                    fill={isDarkMode ? "rgba(101, 201, 138, 0.22)" : "rgba(46, 125, 50, 0.2)"}
-                    stroke={nodeColor}
-                    strokeWidth={1.8}
-                    strokeDasharray="4 3"
-                  />
+                  {isActive && (
+                    <circle
+                      r={18}
+                      fill={isDarkMode ? "rgba(101, 201, 138, 0.25)" : "rgba(46, 125, 50, 0.2)"}
+                      stroke={nodeColor}
+                      strokeWidth={1.8}
+                      strokeDasharray="4 3"
+                    />
+                  )}
 
-                  {/* Airport Pin Dot */}
+                  {/* Airport Pin Outer Ring */}
                   <circle
-                    r={8}
-                    fill={nodeColor}
+                    r={isActive ? 8 : 5}
+                    fill={isActive ? nodeColor : isDarkMode ? "rgba(101, 201, 138, 0.65)" : "rgba(46, 125, 50, 0.7)"}
                     stroke="#ffffff"
-                    strokeWidth={2.4}
+                    strokeWidth={isActive ? 2.4 : 1.5}
                     style={{
-                      filter: `drop-shadow(0 0 10px ${nodeColor})`,
+                      filter: isActive ? `drop-shadow(0 0 10px ${nodeColor})` : "none",
+                      transition: "all 0.2s ease",
                     }}
                   />
 
                   {/* Small Inner Core */}
-                  <circle r={2.8} fill={isDarkMode ? "#050B14" : "#ffffff"} />
+                  <circle r={isActive ? 2.8 : 1.8} fill={isDarkMode ? "#050B14" : "#ffffff"} />
 
-                  {/* Clean IATA Badge */}
+                  {/* Clean IATA Airport Badge */}
                   <g transform={`translate(${offset.x}, ${offset.y})`}>
                     <rect
                       x={-4}
@@ -336,18 +474,21 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
                       width={32}
                       height={16}
                       rx={4}
-                      fill={badgeBg}
-                      stroke="#ffffff"
-                      strokeWidth={1.2}
-                      style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.35))" }}
+                      fill={isActive ? (isDarkMode ? "#65C98A" : "var(--ink, #191917)") : badgeBg}
+                      stroke={isActive ? "#ffffff" : isDarkMode ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)"}
+                      strokeWidth={isActive ? 1.4 : 0.8}
+                      style={{
+                        filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.5))",
+                        transition: "all 0.2s ease",
+                      }}
                     />
                     <text
                       x={12}
                       y={1}
                       textAnchor="middle"
-                      fill={badgeTextColor}
-                      fontSize={10}
-                      fontWeight={800}
+                      fill={isActive ? (isDarkMode ? "#050B14" : "#ffffff") : badgeTextColor}
+                      fontSize={9.5}
+                      fontWeight={isActive ? 800 : 700}
                       fontFamily="var(--mono)"
                     >
                       {hub.code}
@@ -359,17 +500,31 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
           </g>
         </svg>
 
-        {/* Layer 2: 60FPS Flight Arc Canvas */}
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-          }}
-        />
+        {/* Hover Hub Tooltip Overlay */}
+        {hoveredHub && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${(hoveredHub.x / 896) * 100}%`,
+              top: `${(hoveredHub.y / 1200) * 100}%`,
+              transform: "translate(-50%, -130%)",
+              background: "var(--paper-bright)",
+              color: "var(--ink)",
+              border: "1px solid var(--line)",
+              borderRadius: "8px",
+              padding: "6px 12px",
+              fontSize: "11px",
+              fontFamily: "var(--mono)",
+              boxShadow: "var(--shadow)",
+              pointerEvents: "none",
+              zIndex: 10,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <strong>{hoveredHub.city} ({hoveredHub.code})</strong>
+            <div style={{ color: "var(--muted)", fontSize: "10px" }}>State: {hoveredHub.state}</div>
+          </div>
+        )}
       </div>
 
       {/* ── Analytics Console ── */}
@@ -379,14 +534,14 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
           <div>
             <div className="aerospace-corridor-eyebrow">
               <Compass size={12} />
-              <span>Active Aviation Corridor</span>
+              <span>Selected Corridor ({ALL_NETWORK_ROUTES.findIndex((r) => r.from === activeFrom && r.to === activeTo) + 1} of 25)</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span className="aerospace-corridor-title">
                 {activeFrom} ⇄ {activeTo}
               </span>
               <span className={`aerospace-status-pill ${activeRouteData ? "" : "is-missing"}`}>
-                {activeRouteData ? "Index Available" : "No Basket Index"}
+                {activeRouteData ? "Index Available" : "Basket Corridor"}
               </span>
               <span className="aerospace-corridor-desc">
                 {selectedRoute?.desc}
@@ -419,38 +574,93 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
                 Basket Weight
               </div>
               <div className="aerospace-stat-value">
-                {activeRouteData ? fmtPctFromFraction(activeRouteData.weight, 2) : NOT_AVAILABLE}
+                {activeRouteData ? fmtPctFromFraction(activeRouteData.weight, 2) : `${selectedRoute?.weightPct}%`}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Golden Trunk Corridor Switcher Chips */}
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            marginTop: 14,
-            overflowX: "auto",
-            paddingBottom: 4,
-          }}
-        >
-          {ALL_NETWORK_ROUTES.map((r) => {
-            const isCurrent = r.from === activeFrom && r.to === activeTo;
-            return (
+        {/* Route Filter Controls & All 25 Corridor Switcher Chips */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--line-light)", paddingTop: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
-                key={`${r.from}-${r.to}`}
-                onClick={() => setSelectedRoute(r)}
-                data-testid={`india-map-route-${r.from.toLowerCase()}-${r.to.toLowerCase()}-button`}
-                className={`aerospace-chip-btn ${isCurrent ? "is-active" : ""}`}
+                onClick={() => setFilterMode("all")}
+                style={{
+                  fontSize: "10.5px",
+                  fontFamily: "var(--mono)",
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--line)",
+                  background: filterMode === "all" ? "var(--ink)" : "var(--surface-subtle)",
+                  color: filterMode === "all" ? "var(--paper)" : "var(--muted)",
+                  cursor: "pointer",
+                }}
               >
-                {r.from} ⇄ {r.to}
+                All 25 Corridors
               </button>
-            );
-          })}
+              <button
+                onClick={() => setFilterMode("top5")}
+                style={{
+                  fontSize: "10.5px",
+                  fontFamily: "var(--mono)",
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--line)",
+                  background: filterMode === "top5" ? "var(--ink)" : "var(--surface-subtle)",
+                  color: filterMode === "top5" ? "var(--paper)" : "var(--muted)",
+                  cursor: "pointer",
+                }}
+              >
+                Top 5 Heavyweight
+              </button>
+              <button
+                onClick={() => setFilterMode("trunk")}
+                style={{
+                  fontSize: "10.5px",
+                  fontFamily: "var(--mono)",
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--line)",
+                  background: filterMode === "trunk" ? "var(--ink)" : "var(--surface-subtle)",
+                  color: filterMode === "trunk" ? "var(--paper)" : "var(--muted)",
+                  cursor: "pointer",
+                }}
+              >
+                Major Trunks (&gt;4%)
+              </button>
+            </div>
+            <span style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "var(--mono)" }}>
+              Click corridor chip or map hub to inspect
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              overflowX: "auto",
+              paddingBottom: 6,
+              scrollbarWidth: "thin",
+            }}
+          >
+            {displayedRoutes.map((r) => {
+              const isCurrent = r.from === activeFrom && r.to === activeTo;
+              return (
+                <button
+                  key={`${r.from}-${r.to}`}
+                  onClick={() => setSelectedRoute(r)}
+                  data-testid={`india-map-route-${r.from.toLowerCase()}-${r.to.toLowerCase()}-button`}
+                  className={`aerospace-chip-btn ${isCurrent ? "is-active" : ""}`}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {r.from} ⇄ {r.to} <span style={{ opacity: 0.65, fontSize: "10px" }}>({r.weightPct}%)</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

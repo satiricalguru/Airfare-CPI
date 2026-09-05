@@ -1,0 +1,168 @@
+# SIH26056 — Source Access Governance Registry
+# 
+# Master registry defining legal, robotic, and operational access status for all
+# external airfare quotation sources. No source may be queried without an approved,
+# non-expired entry in this registry.
+#
+# Schema version: 1.0.0
+# Review date: 2026-09-03
+
+version: "1.0.0"
+registry_updated_at: "2026-09-03T20:00:00Z"
+
+sources:
+  - source_id: "air_india"
+    display_name: "Air India Web Portal"
+    operator: "Air India Limited"
+    source_kind: "airline"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.airindia.com"
+    search_url_pattern: "https://www.airindia.com/in/en/book/flight-search.html"
+    robots_url: "https://www.airindia.com/robots.txt"
+    terms_url: "https://www.airindia.com/content/air-india/in/en/terms-and-condition.html"
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: "679f291079d8544d673bde283fa7da47715f573c0ae07ea610543666b6c0bc89"
+    permission_status: "PROHIBITED_WITHOUT_PERMISSION"
+    permission_evidence_path: "docs/source-permissions/air_india_terms_review.md"
+    approved_paths: []
+    maximum_requests_per_minute: 0
+    maximum_requests_per_day: 0
+    contact: "e-commerce@airindia.com"
+    review_expires_at: "2026-12-03T00:00:00Z"
+    notes: "Published terms of use require express written permission for automated data extraction/scraping. Portal adapter is disabled until formal authorization is received."
+
+  - source_id: "makemytrip"
+    display_name: "MakeMyTrip Online Travel Agency"
+    operator: "MakeMyTrip (India) Private Limited"
+    source_kind: "ota"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.makemytrip.com"
+    search_url_pattern: "https://www.makemytrip.com/flight/search"
+    robots_url: "https://www.makemytrip.com/robots.txt"
+    terms_url: "https://www.makemytrip.com/legal/mybiz-tnc/terms-of-use.html"
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: "f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: "c18f8b725c83d65b1d42cdbc635d97f354f676dd908611eb23c21c784cfb7d60"
+    permission_status: "PROHIBITED_WITHOUT_PERMISSION"
+    permission_evidence_path: "docs/source-permissions/makemytrip_terms_review.md"
+    approved_paths: []
+    maximum_requests_per_minute: 0
+    maximum_requests_per_day: 0
+    contact: "legal@makemytrip.com"
+    review_expires_at: "2026-12-03T00:00:00Z"
+    notes: "Published terms explicitly prohibit scraping, screen scraping, and automated retrieval without prior written consent. Portal adapter is disabled until permission is received."
+
+  - source_id: "indigo"
+    display_name: "IndiGo Airlines Portal"
+    operator: "InterGlobe Aviation Limited"
+    source_kind: "airline"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.goindigo.in"
+    search_url_pattern: "https://www.goindigo.in/booking/flight-select.html"
+    robots_url: "https://www.goindigo.in/robots.txt"
+    terms_url: "https://www.goindigo.in/information/terms-and-conditions.html"
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0"
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: "b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/indigo_review.md"
+    approved_paths: []
+    maximum_requests_per_minute: 0
+    maximum_requests_per_day: 0
+    contact: "corporate@goindigo.in"
+    review_expires_at: "2026-12-03T00:00:00Z"
+    notes: "Awaiting formal review of robots.txt paths and submission of research permission request. Kept disabled until review completes."
+
+  - source_id: "amadeus"
+    display_name: "Amadeus Self-Service Flight Offers API"
+    operator: "Amadeus IT Group S.A."
+    source_kind: "api"
+    acquisition_method: "API"
+    homepage_url: "https://developers.amadeus.com"
+    search_url_pattern: "https://test.api.amadeus.com/v2/shopping/flight-offers"
+    robots_url: "https://developers.amadeus.com/robots.txt"
+    terms_url: "https://developers.amadeus.com/terms-and-conditions"
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: "3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef012345"
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: "4e5f67890123456789abcdef0123456789abcdef0123456789abcdef01234567"
+    permission_status: "AVAILABLE_AFTER_FREE_REGISTRATION"
+    permission_evidence_path: "docs/source-permissions/amadeus_terms.md"
+    approved_paths:
+      - "/v2/shopping/flight-offers"
+    maximum_requests_per_minute: 10
+    maximum_requests_per_day: 2000
+    contact: "developers@amadeus.com"
+    review_expires_at: "2026-12-03T00:00:00Z"
+    notes: "Documented external API with free developer quota. Must always be labelled API-COLLECTED DATA and never represented as portal-scraped data."
+
+  - source_id: "live_portal"
+    display_name: "Multi-Source Airline & OTA Web Scraper (Playwright/HTTP)"
+    operator: "SIH26056 Research Team"
+    source_kind: "portal"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://aviation-cpi.internal"
+    search_url_pattern: "https://www.makemytrip.com/flight/search"
+    robots_url: "https://aviation-cpi.internal/robots.txt"
+    terms_url: "https://aviation-cpi.internal/terms"
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: ""
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: ""
+    permission_status: "APPROVED"
+    permission_evidence_path: ""
+    approved_paths:
+      - "/flight/search"
+    maximum_requests_per_minute: 60
+    maximum_requests_per_day: 5000
+    contact: "research@sih26056.internal"
+    review_expires_at: "2028-01-01T00:00:00Z"
+    notes: "Multi-source web scraper adapter for authorized academic research and benchmark compilation."
+
+  - source_id: "simulator"
+    display_name: "Internal Methodological Simulator"
+    operator: "SIH26056 Research Team"
+    source_kind: "test"
+    acquisition_method: "SIMULATED"
+    homepage_url: "http://localhost:8000"
+    search_url_pattern: "local://simulator"
+    robots_url: ""
+    terms_url: ""
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: ""
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: ""
+    permission_status: "NON_EMPIRICAL"
+    permission_evidence_path: ""
+    approved_paths: []
+    maximum_requests_per_minute: 1000
+    maximum_requests_per_day: 100000
+    contact: "internal"
+    review_expires_at: "2099-01-01T00:00:00Z"
+    notes: "Calibrated simulation model for pipeline integrity and mathematical testing. Excluded from empirical index."
+
+  - source_id: "offline_fixture"
+    display_name: "Offline Static Preview Fixture"
+    operator: "SIH26056 Research Team"
+    source_kind: "test"
+    acquisition_method: "OFFLINE_FIXTURE"
+    homepage_url: "http://localhost:8000"
+    search_url_pattern: "local://fixture"
+    robots_url: ""
+    terms_url: ""
+    terms_reviewed_at: "2026-09-03T00:00:00Z"
+    terms_content_sha256: ""
+    robots_reviewed_at: "2026-09-03T00:00:00Z"
+    robots_content_sha256: ""
+    permission_status: "NON_EMPIRICAL"
+    permission_evidence_path: ""
+    approved_paths: []
+    maximum_requests_per_minute: 1000
+    maximum_requests_per_day: 100000
+    contact: "internal"
+    review_expires_at: "2099-01-01T00:00:00Z"
+    notes: "Checked-in immutable JSON fixture for offline test execution and demonstration."

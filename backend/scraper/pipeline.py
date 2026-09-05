@@ -28,7 +28,7 @@ from typing import Any, Optional
 
 from loguru import logger
 
-from config import Settings, get_settings
+from config import SUPPORTED_BOOKING_HORIZONS, Settings, get_settings
 from provenance import (
     COLLECTOR_VERSION,
     CollectionMode,
@@ -40,8 +40,11 @@ from provenance import (
     utc_now,
 )
 from engine.weights import Route, get_route_basket
+from db.engine import get_database
 from scraper.base import FareObservation, FareSource, SourceResult
+from scraper.budget import BudgetController, TRACER_BASKET_ROUTE_CODES
 from scraper.dedupe import DedupeStrategy, deduplicate
+from scraper.governance import check_source_permitted
 from scraper.registry import get_registry
 
 
@@ -230,7 +233,22 @@ class CollectionPipeline:
         # provenance timestamp must be the real moment of retrieval.
         kwargs = {} if mode is CollectionMode.LIVE else dict(request.source_kwargs)
 
-        return registry.resolve(requested, source_type=mode.source_type, **kwargs)
+        sources, skipped = registry.resolve(requested, source_type=mode.source_type, **kwargs)
+
+        if mode is CollectionMode.LIVE:
+            permitted: list[FareSource] = []
+            for src in sources:
+                gate = check_source_permitted(src.capability.name)
+                if not gate.is_permitted:
+                    logger.warning(
+                        f"Source '{src.capability.name}' blocked by source governance: {gate.reason}"
+                    )
+                    skipped.append({"source": src.capability.name, "reason": gate.reason})
+                else:
+                    permitted.append(src)
+            sources = permitted
+
+        return sources, skipped
 
     # ── execution ──
 
@@ -238,6 +256,40 @@ class CollectionPipeline:
         run_id = new_request_id()
         started = utc_now()
         collection_day = request.resolved_collection_day()
+
+        invalid_horizons = sorted(
+            set(request.booking_horizons) - set(SUPPORTED_BOOKING_HORIZONS)
+        )
+        if invalid_horizons or not request.booking_horizons:
+            raise ValueError(
+                "Collection horizons must be a non-empty subset of "
+                f"{list(SUPPORTED_BOOKING_HORIZONS)}; got "
+                f"{request.booking_horizons}"
+            )
+
+        # Historical live collection is impossible: an external quote retrieved now
+        # cannot truthfully be stamped as if it was observed on another day.
+        if request.mode is CollectionMode.LIVE and request.collection_day is not None:
+            actual_day = started.date()
+            if request.collection_day != actual_day:
+                message = (
+                    "LIVE collection_day must be the actual retrieval date "
+                    f"{actual_day.isoformat()}; requested "
+                    f"{request.collection_day.isoformat()}. Historical backfill is "
+                    "available only in explicitly labelled SIMULATED/OFFLINE modes."
+                )
+                return CollectionRunResult(
+                    run_id=run_id,
+                    mode=request.mode,
+                    status=CollectionStatus.UNAVAILABLE,
+                    started_at=started,
+                    finished_at=utc_now(),
+                    collection_day=actual_day,
+                    observations=[],
+                    routes_requested=len(request.routes),
+                    horizons_requested=list(request.booking_horizons),
+                    error_message=message,
+                )
 
         logger.info(
             f"Collection run {run_id[:8]} | mode={request.mode.value} | "
@@ -270,11 +322,52 @@ class CollectionPipeline:
                 error_message=message,
             )
 
+        target_routes = list(request.routes)
+        if request.mode is CollectionMode.LIVE and sources:
+            projected = len(target_routes) * len(request.booking_horizons)
+            try:
+                db = get_database()
+                session = db.session()
+                try:
+                    for src in sources:
+                        b_eval = await BudgetController.evaluate_budget(
+                            session, src.capability.name, projected_count=projected
+                        )
+                        if not b_eval.can_proceed:
+                            err_msg = f"QUOTA_EXHAUSTED: {b_eval.reason}"
+                            logger.error(err_msg)
+                            return CollectionRunResult(
+                                run_id=run_id,
+                                mode=request.mode,
+                                status=CollectionStatus.FAILURE,
+                                started_at=started,
+                                finished_at=utc_now(),
+                                collection_day=collection_day,
+                                observations=[],
+                                attempts=[],
+                                skipped_sources=skipped,
+                                routes_requested=len(request.routes),
+                                horizons_requested=list(request.booking_horizons),
+                                error_message=err_msg,
+                            )
+                        if b_eval.is_reduced_basket:
+                            target_routes = [
+                                r for r in target_routes
+                                if r.route_code in TRACER_BASKET_ROUTE_CODES
+                            ]
+                            logger.warning(
+                                f"Reduced basket mode: trimmed routes to {len(target_routes)} tracer routes."
+                            )
+                finally:
+                    await session.close()
+            except Exception as exc:
+                logger.warning(f"Could not verify budget against DB: {exc}")
+
         semaphore = asyncio.Semaphore(max(1, self.settings.scraper.max_concurrent_requests))
         tasks = [
             self._collect_one(semaphore, source, request, route, horizon)
             for source in sources
-            for route in request.routes
+            for route in target_routes
             for horizon in request.booking_horizons
         ]
 
@@ -286,6 +379,22 @@ class CollectionPipeline:
                     await source.aclose()
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.warning(f"Error closing source {source.capability.name}: {exc}")
+
+        if request.mode is CollectionMode.LIVE:
+            try:
+                db = get_database()
+                session = db.session()
+                try:
+                    for item in results:
+                        if isinstance(item, SourceResult):
+                            await BudgetController.record_usage(
+                                session, item.source_name, count=1, success=item.success
+                            )
+                    await session.commit()
+                finally:
+                    await session.close()
+            except Exception as exc:
+                logger.warning(f"Could not record usage in DB: {exc}")
 
         observations: list[FareObservation] = []
         attempts: list[SourceAttempt] = []

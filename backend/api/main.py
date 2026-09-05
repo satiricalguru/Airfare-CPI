@@ -29,15 +29,15 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from loguru import logger
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api import copilot as copilot_service
 from api import serializers as ser
+from api.rate_limit import enforce_rate_limit
 from api.models import (
     AnomalyReviewRequest,
     BackfillRequest,
@@ -48,9 +48,8 @@ from api.models import (
 from config import get_settings
 from db import repository as repo
 from db.engine import get_database, get_session
-from db.models import RouteIndex
-
 from engine.airports_data import AIRPORTS_BY_CODE, INDIAN_AIRPORTS, INDIAN_STATES
+from engine.dgca_backtest import DGCABacktestEngine
 from engine.horizon import get_horizon_policy
 from engine.index_service import IndexService
 from engine.ingest_service import IngestService
@@ -64,15 +63,20 @@ from provenance import (
     NOT_IMPLEMENTED_LABEL,
     PROVENANCE_LABELS,
     SourceType,
-    utc_now,
 )
 
 from reports.generator import ResearchBulletin, ResearchReportGenerator
+from scraper.budget import BudgetController, TRACER_BASKET_ROUTE_CODES
+from scraper.governance import GovernanceValidator
 from scraper.registry import get_registry
+from scraper.source_registry import get_source_registry
 from scraper.scheduler import CollectionScheduler
 from scraper.validator import missing_data_policy
 
 API_VERSION = "2.0.0"
+# Keep the process from silently opening an unversioned legacy schema. This must
+# match the head revision in backend/alembic/versions.
+REQUIRED_DATABASE_REVISION = "20260903_0003"
 
 _scheduler: Optional[CollectionScheduler] = None
 
@@ -95,7 +99,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"Configuration: {settings.describe()}")
 
     database = get_database()
-    await database.create_schema()
+    if settings.database.auto_create_schema:
+        logger.warning(
+            "DB_AUTO_CREATE_SCHEMA=true: creating metadata directly for an isolated "
+            "development/test database. Shared deployments must use Alembic."
+        )
+        await database.create_schema()
+    else:
+        await database.require_migration_revision(REQUIRED_DATABASE_REVISION)
 
     basket = get_route_basket(settings.route_basket_path)
     registry = get_registry()
@@ -105,8 +116,14 @@ async def lifespan(app: FastAPI):
         await repo.snapshot_route_weights(session, basket)
         await session.commit()
 
-        stats = await repo.observation_stats(session)
-        latest = await repo.get_latest_national_index(session)
+        stats = await repo.observation_stats(
+            session, source_type=settings.mode.source_type
+        )
+        latest = await repo.get_latest_national_index(
+            session,
+            source_type=settings.mode.source_type,
+            methodology_version=METHODOLOGY_VERSION,
+        )
 
     if stats["total_observations"]:
         logger.info(
@@ -181,13 +198,18 @@ def require_admin(token: Optional[str]) -> None:
     """
     Guard state-mutating endpoints.
 
-    A no-op when ``ADMIN_API_TOKEN`` is unset, which keeps a local demo frictionless.
-    Any internet-reachable deployment must configure it: without a token, anyone can
-    trigger collection and mutate published index state.
+    Mutation fails closed when ``ADMIN_API_TOKEN`` is unset. A missing security
+    setting must disable writes rather than silently make them public.
     """
     configured = get_settings().api.admin_token
     if not configured:
-        return
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "State-changing API operations are disabled because "
+                "ADMIN_API_TOKEN is not configured."
+            ),
+        )
     if token != configured:
         raise HTTPException(
             status_code=401,
@@ -196,6 +218,33 @@ def require_admin(token: Optional[str]) -> None:
                 "published index state."
             ),
         )
+
+
+def enforce_mutation_rate_limit(request: Request) -> None:
+    """Protect collection and review operations from repeated expensive requests.
+
+    The token check remains the authorization boundary. This is a separate
+    per-process guard against accidental double-submission and external-cost abuse;
+    a horizontally scaled production deployment must mirror it at the gateway.
+    """
+    cfg = get_settings().api
+    enforce_rate_limit(
+        request,
+        bucket="mutation",
+        limit=cfg.mutation_rate_limit,
+        window_seconds=cfg.mutation_rate_window_seconds,
+    )
+
+
+def enforce_copilot_rate_limit(request: Request) -> None:
+    """Cap public Copilot requests before optional provider work is initiated."""
+    cfg = get_settings().api
+    enforce_rate_limit(
+        request,
+        bucket="copilot",
+        limit=cfg.copilot_rate_limit,
+        window_seconds=cfg.copilot_rate_window_seconds,
+    )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -260,12 +309,20 @@ async def get_provenance(session: AsyncSession = Depends(get_session)):
     data exists, and the provenance of the most recent published figure.
     """
     cfg = get_settings()
-    stats = await repo.observation_stats(session)
-    latest = await repo.get_latest_national_index(session)
-    last_run = await repo.latest_collection_run(session)
+    all_stats = await repo.observation_stats(session)
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
+    latest = await repo.get_latest_national_index(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
+    last_run = await repo.latest_collection_run(
+        session, source_type=cfg.mode.source_type
+    )
 
     has_data = stats["total_observations"] > 0
     published_type = latest.source_type if latest else None
+    published_method = getattr(latest, "acquisition_method", None) if latest else None
 
     return {
         "configured_mode": cfg.mode.value,
@@ -277,21 +334,23 @@ async def get_provenance(session: AsyncSession = Depends(get_session)):
                 "index_date": latest.index_date.isoformat(),
                 "value": round(latest.index_value, 4),
                 "is_publishable": latest.is_publishable,
-                **ser.provenance_block(published_type),
+                **ser.provenance_block(published_type, published_method),
             }
             if latest
             else {"exists": False, **ser.provenance_block(None)}
         ),
-        "observation_counts_by_source_type": stats["source_types"],
+        "observation_counts_by_source_type": all_stats["source_types"],
+        "observation_counts_by_acquisition_method": all_stats.get("acquisition_methods", {}),
+        "configured_series_observation_count": stats["total_observations"],
         "last_collection_run": (
             ser.collection_run(last_run) if last_run else None
         ),
         "is_official_statistic": False,
         "mixed_provenance_warning": (
-            "Stored observations span more than one provenance type. The index is "
-            "computed from the dominant type only; clear the database when switching "
-            "collection modes."
-            if len(stats["source_types"]) > 1
+            "Stored observations span more than one provenance type. Public reads are "
+            "restricted to the configured source type and current methodology; use "
+            "separate databases for live and demonstration series."
+            if len(all_stats["source_types"]) > 1
             else None
         ),
     }
@@ -304,7 +363,11 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
     basket = get_route_basket(cfg.route_basket_path)
     policy = get_horizon_policy(cfg.horizon_policy_path)
     base_period = BasePeriod.from_settings(cfg.index)
-    index_dates = await repo.get_index_dates(session)
+    index_dates = await repo.get_index_dates(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
 
     return {
         "methodology_version": METHODOLOGY_VERSION,
@@ -317,7 +380,8 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
             "computed_in_log_space": True,
             "matching_dimensions": [
                 "origin", "destination", "airline", "cabin_class", "fare_family",
-                "stops", "refundability", "baggage_allowance", "booking_horizon",
+                "flight_number", "stops", "refundability", "baggage_allowance",
+                "booking_horizon",
             ],
             "why_matched": (
                 "A price relative is only formed between two observations of the same "
@@ -348,6 +412,12 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
                     "substitution can never be read as a price movement."
                 ),
             },
+            "matching_limitation": (
+                "Departure date is excluded so service specifications can match across "
+                "collection periods at a fixed horizon. The unadjusted index therefore "
+                "also reflects seasonality and travel-date mix; seasonal adjustment is "
+                "not implemented."
+            ),
             "rejected_alternatives": {
                 "carli": (
                     "Arithmetic mean of relatives. Proven upward bias by AM-GM, fails "
@@ -438,8 +508,9 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
         "revision_policy": {
             "recorded_in": "index_revisions",
             "note": (
-                "Every publication and recomputation appends a revision row, so a figure "
-                "that changes always carries a recorded reason."
+                "Initial publications and changed recomputations append a revision row. "
+                "An unchanged recomputation is a no-op; every changed figure carries "
+                "a recorded reason."
             ),
             "triggers": [
                 "initial_publication", "recomputation", "anomaly_review",
@@ -462,7 +533,12 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
 @app.get("/api/v1/methodology/seasonality")
 async def get_seasonality(session: AsyncSession = Depends(get_session)):
     """Seasonal adjustment status. Currently NOT IMPLEMENTED, stated as such."""
-    index_dates = await repo.get_index_dates(session)
+    cfg = get_settings()
+    index_dates = await repo.get_index_dates(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     return seasonality_metadata(index_dates)
 
 
@@ -479,7 +555,13 @@ async def get_national_index(
     session: AsyncSession = Depends(get_session),
 ):
     """Latest national index, with the full provenance envelope."""
-    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    cfg = get_settings()
+    row = await repo.get_latest_national_index(
+        session,
+        booking_horizon=booking_horizon,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if row is None:
         return ser.unavailable(
             reason=(
@@ -499,8 +581,13 @@ async def get_national_history(
     session: AsyncSession = Depends(get_session),
 ):
     """Stored national index series. Returns what was published, not a recomputation."""
+    cfg = get_settings()
     rows = await repo.get_national_history(
-        session, days=days, booking_horizon=booking_horizon
+        session,
+        days=days,
+        booking_horizon=booking_horizon,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
     )
     if not rows:
         return {
@@ -534,7 +621,13 @@ async def get_mom(
 
     Null with ``mom_status`` when no prior index value exists.
     """
-    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    cfg = get_settings()
+    row = await repo.get_latest_national_index(
+        session,
+        booking_horizon=booking_horizon,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if row is None:
         return ser.unavailable("No national index has been computed.", "mom")
 
@@ -548,10 +641,13 @@ async def get_mom(
         "sample_size": row.total_observations,
         "methodology_version": row.methodology_version,
         "explanation": (
-            "Computed from the most recent prior stored index value."
+            "Compared with the same calendar day in the previous month; when that "
+            "day is missing, the nearest stored day within seven days in that same "
+            "calendar month is used."
             if row.mom_status == "available"
             else (
-                "Not available: no earlier index value exists in the stored series. "
+                "Not available: no eligible previous-month index exists in the "
+                "stored series. "
                 "No placeholder figure is substituted."
             )
         ),
@@ -569,11 +665,21 @@ async def get_yoy(
     The audit's M6: the dashboard displayed +8.12% YoY while the API could never
     compute one. This returns null with an explicit status instead.
     """
-    row = await repo.get_latest_national_index(session, booking_horizon=booking_horizon)
+    cfg = get_settings()
+    row = await repo.get_latest_national_index(
+        session,
+        booking_horizon=booking_horizon,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if row is None:
         return ser.unavailable("No national index has been computed.", "yoy")
 
-    index_dates = await repo.get_index_dates(session)
+    index_dates = await repo.get_index_dates(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     span_days = (
         (max(index_dates) - min(index_dates)).days if len(index_dates) > 1 else 0
     )
@@ -618,7 +724,13 @@ async def rebase_index(
     requested window is not covered by collected data, the original series is returned
     with a stated reason — no link factor is invented.
     """
-    rows = await repo.get_national_history(session, days=days)
+    cfg = get_settings()
+    rows = await repo.get_national_history(
+        session,
+        days=days,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if not rows:
         return ser.unavailable("No index history to re-reference.", "rebase")
 
@@ -662,7 +774,12 @@ async def rebase_index(
 @app.get("/api/v1/index/routes")
 async def get_route_indices(session: AsyncSession = Depends(get_session)):
     """Latest index for every route, with horizon-stratification detail."""
-    rows = await repo.get_latest_route_indices(session)
+    cfg = get_settings()
+    rows = await repo.get_latest_route_indices(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if not rows:
         return {
             "routes": [],
@@ -672,7 +789,7 @@ async def get_route_indices(session: AsyncSession = Depends(get_session)):
             "methodology_version": METHODOLOGY_VERSION,
         }
 
-    basket = get_route_basket(get_settings().route_basket_path)
+    basket = get_route_basket(cfg.route_basket_path)
     endpoints_map = await repo.get_all_route_endpoints_map(session)
     payload = []
     for r in rows:
@@ -713,11 +830,17 @@ async def get_route_indices(session: AsyncSession = Depends(get_session)):
 async def get_route_history(
     route_id: int,
     days: int = Query(default=365, ge=1, le=3650),
-    auto_scrape: bool = Query(default=True),
     session: AsyncSession = Depends(get_session),
 ):
-    """Stored index history for one route across requested timeframe (7D, 1M, 3M, 6M, 1Y)."""
-    basket = get_route_basket(get_settings().route_basket_path)
+    """
+    Stored index history for one route.
+
+    This GET is intentionally read-only. Collection is an explicit authenticated POST
+    operation; a dashboard read, crawler or cache revalidation must never change the
+    statistical series.
+    """
+    cfg = get_settings()
+    basket = get_route_basket(cfg.route_basket_path)
     route = basket.by_id(route_id)
     if route is None:
         endpoints = await repo.get_route_endpoints_for_id(session, route_id)
@@ -737,80 +860,13 @@ async def get_route_history(
                 status_code=404, detail=f"Route {route_id} is not recognized or found."
             )
 
-    rows = await repo.get_route_index_history(session, route_id, days=days)
-    if len(rows) < 2 and auto_scrape:
-        cfg = get_settings()
-        service = IngestService(cfg)
-        today = date.today()
-        dense_dates = [today - timedelta(days=d) for d in range(min(days, 35))]
-        sparse_dates = [today - timedelta(days=d) for d in range(35, min(days, 370), 3)]
-        sample_dates = sorted(set(dense_dates + sparse_dates))
-        effective_mode = (
-            CollectionMode.SIMULATED
-            if cfg.mode == CollectionMode.SIMULATED or not cfg.amadeus.is_configured
-            else cfg.mode
-        )
-        for d in sample_dates:
-            await service.ingest(
-                session=session,
-                mode=effective_mode,
-                custom_routes=[route] if route.route_id > 25 else None,
-                route_ids=[route.route_id] if route.route_id <= 25 else None,
-                horizons=[0, 3, 7, 15, 30],
-                collection_day=d,
-                compute_index=False,
-                triggered_by=f"autoscrape_{route.route_code}",
-            )
-        await session.commit()
-
-        obs = await repo.load_observations(session, route_ids=[route.route_id], valid_only=True)
-        by_date = {}
-        for o in obs:
-            by_date.setdefault(o.collection_date, []).append(o)
-        now = utc_now()
-        for c_date, date_obs in by_date.items():
-            horizon_set = sorted(list({f.booking_horizon_days for f in date_obs}))
-            avg_fare = float(sum(f.fare_total for f in date_obs) / len(date_obs))
-            est_ratio = round(1.0 + (((avg_fare * 13) % 200) - 100) / 2500.0, 4)
-            est_index_100 = round(est_ratio * 100.0, 2)
-            existing = await session.execute(
-                select(RouteIndex).where(
-                    RouteIndex.route_id == route.route_id,
-                    RouteIndex.index_date == c_date,
-                )
-            )
-            existing_row = existing.scalar_one_or_none()
-            if existing_row:
-                existing_row.index_value = est_ratio
-                existing_row.index_100 = est_index_100
-                existing_row.matched_products = len(date_obs)
-                existing_row.observation_count = len(date_obs)
-                existing_row.horizons_included = horizon_set
-            else:
-                session.add(
-                    RouteIndex(
-                        index_date=c_date,
-                        route_id=route.route_id,
-                        index_value=est_ratio,
-                        index_100=est_index_100,
-                        horizons_included=horizon_set,
-                        horizons_missing=[],
-                        applied_horizon_weights={str(h): 1.0 / len(horizon_set) for h in horizon_set},
-                        horizon_weighting_method="equal",
-                        horizon_weighting_status="PROVISIONAL",
-                        horizon_policy_version="v2.0.0",
-                        matched_products=len(date_obs),
-                        observation_count=len(date_obs),
-                        base_period_start=date(2025, 8, 1),
-                        base_period_end=date(2025, 8, 31),
-                        is_publishable=True,
-                        source_type=date_obs[0].source_type,
-                        methodology_version=METHODOLOGY_VERSION,
-                        computed_at=now,
-                    )
-                )
-        await session.commit()
-        rows = await repo.get_route_index_history(session, route_id, days=days)
+    rows = await repo.get_route_index_history(
+        session,
+        route_id,
+        days=days,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
 
     if not rows:
         return {
@@ -847,7 +903,14 @@ async def get_horizon_indices(
     than to prices.
     """
     if index_date is None:
-        index_date = await repo.latest_horizon_index_date(session)
+        cfg = get_settings()
+        index_date = await repo.latest_horizon_index_date(
+            session,
+            source_type=cfg.mode.source_type,
+            methodology_version=METHODOLOGY_VERSION,
+        )
+    else:
+        cfg = get_settings()
 
     if index_date is None:
         return {
@@ -863,10 +926,12 @@ async def get_horizon_indices(
         index_date=index_date,
         route_id=route_id,
         booking_horizon=booking_horizon,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
         limit=limit,
     )
 
-    policy = get_horizon_policy(get_settings().horizon_policy_path)
+    policy = get_horizon_policy(cfg.horizon_policy_path)
 
     return {
         "index_date": index_date.isoformat(),
@@ -960,8 +1025,11 @@ async def get_latest_fares(
     session: AsyncSession = Depends(get_session),
 ):
     """Most recent stored observations, each with its own provenance."""
-    rows = await repo.latest_observations(session, limit=limit)
-    stats = await repo.observation_stats(session)
+    cfg = get_settings()
+    rows = await repo.latest_observations(
+        session, limit=limit, source_type=cfg.mode.source_type
+    )
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
 
     return {
         "fares": [ser.fare_observation(r) for r in rows],
@@ -980,8 +1048,13 @@ async def get_fares_by_route(
     limit: int = Query(default=100, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ):
+    cfg = get_settings()
     rows = await repo.load_observations(
-        session, route_ids=[route_id], valid_only=False, limit=limit
+        session,
+        route_ids=[route_id],
+        valid_only=False,
+        source_type=cfg.mode.source_type,
+        limit=limit,
     )
     return {
         "route_id": route_id,
@@ -996,7 +1069,8 @@ async def get_fares_by_route(
 @app.get("/api/v1/fares/stats")
 async def get_fare_stats(session: AsyncSession = Depends(get_session)):
     """Aggregate statistics over stored observations."""
-    stats = await repo.observation_stats(session)
+    cfg = get_settings()
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
     dominant = max(stats["source_types"], key=stats["source_types"].get, default=None)
     return {
         **stats,
@@ -1016,18 +1090,29 @@ async def get_booking_horizon_analysis(session: AsyncSession = Depends(get_sessi
     """
     cfg = get_settings()
     policy = get_horizon_policy(cfg.horizon_policy_path)
-    index_date = await repo.latest_horizon_index_date(session)
+    index_date = await repo.latest_horizon_index_date(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
 
     analysis = []
     for definition in policy.horizons:
         rows = await repo.load_observations(
-            session, booking_horizons=[definition.days], valid_only=True
+            session,
+            booking_horizons=[definition.days],
+            valid_only=True,
+            source_type=cfg.mode.source_type,
         )
         fares = [float(r.fare_total) for r in rows]
 
         horizon_rows = (
             await repo.get_horizon_indices(
-                session, index_date=index_date, booking_horizon=definition.days
+                session,
+                index_date=index_date,
+                booking_horizon=definition.days,
+                source_type=cfg.mode.source_type,
+                methodology_version=METHODOLOGY_VERSION,
             )
             if index_date
             else []
@@ -1072,6 +1157,26 @@ async def get_booking_horizon_analysis(session: AsyncSession = Depends(get_sessi
     }
 
 
+@app.get("/api/v1/analysis/festive-and-movers")
+async def get_festive_and_movers(session: AsyncSession = Depends(get_session)):
+    """
+    Indian festive calendar surges and flight brand movers analysis.
+    Identifies which flights have the highest increases, lowest discounts,
+    and brand-by-brand comparison across Indian domestic corridors.
+    """
+    from engine.festive_and_movers import get_festive_analysis, get_flight_movers
+    cfg = get_settings()
+    festive_data = await get_festive_analysis(session)
+    movers_data = await get_flight_movers(session, source_type=cfg.mode.source_type)
+
+    return {
+        "festive_spikes": festive_data,
+        "flight_movers": movers_data,
+        "collection_mode": cfg.mode.value,
+        "source_type": cfg.mode.source_type,
+    }
+
+
 # ═══════════════════════════════════════════════════════════
 # COLLECTION
 # ═══════════════════════════════════════════════════════════
@@ -1080,8 +1185,10 @@ async def get_booking_horizon_analysis(session: AsyncSession = Depends(get_sessi
 async def get_collection_status(session: AsyncSession = Depends(get_session)):
     """Current collection configuration and the outcome of the last run."""
     cfg = get_settings()
-    last_run = await repo.latest_collection_run(session)
-    stats = await repo.observation_stats(session)
+    last_run = await repo.latest_collection_run(
+        session, source_type=cfg.mode.source_type
+    )
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
     registry = get_registry()
 
     enabled = [c for c in registry.capabilities() if c.enabled]
@@ -1134,7 +1241,10 @@ async def get_collection_runs(
     Failures are retained deliberately: recording the gap is how coverage stays honest
     instead of the gap simply not appearing.
     """
-    rows = await repo.list_collection_runs(session, limit=limit)
+    cfg = get_settings()
+    rows = await repo.list_collection_runs(
+        session, limit=limit, source_type=cfg.mode.source_type
+    )
     return {
         "runs": [ser.collection_run(r, include_attempts=True) for r in rows],
         "count": len(rows),
@@ -1147,6 +1257,7 @@ async def get_collection_runs(
 
 @app.post("/api/v1/collection/trigger")
 async def trigger_collection(
+    http_request: Request,
     request: Optional[CollectionTriggerRequest] = None,
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     session: AsyncSession = Depends(get_session),
@@ -1160,6 +1271,7 @@ async def trigger_collection(
     fall back to the simulator.
     """
     require_admin(x_admin_token)
+    enforce_mutation_rate_limit(http_request)
     request = request or CollectionTriggerRequest()
 
     cfg = get_settings()
@@ -1177,13 +1289,18 @@ async def trigger_collection(
     await session.commit()
 
     payload = result.to_dict()
-    latest = await repo.get_latest_national_index(session)
+    latest = await repo.get_latest_national_index(
+        session,
+        source_type=mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     payload["published_index"] = ser.national_index(latest) if latest else None
     return payload
 
 
 @app.post("/api/v1/routes/scrape")
 async def scrape_route(
+    http_request: Request,
     request: RouteScrapeRequest,
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     session: AsyncSession = Depends(get_session),
@@ -1192,10 +1309,11 @@ async def scrape_route(
     On-demand fare scraping for any specific Indian route / city-pair across all states.
 
     Executes the ingestion pipeline for the selected origin-destination pair across
-    booking horizons (T+0, T+3, T+7, T+15, T+30), persists observations, and computes
-    route and horizon indices.
+    configured booking horizons, persists observations, and computes indices only
+    through the canonical matched-model Jevons engine.
     """
     require_admin(x_admin_token)
+    enforce_mutation_rate_limit(http_request)
     cfg = get_settings()
     mode = CollectionMode.parse(request.mode, cfg.mode) if request.mode else cfg.mode
 
@@ -1224,63 +1342,27 @@ async def scrape_route(
         custom_routes=[route],
         horizons=horizons,
         collection_day=request.collection_day,
-        compute_index=False,
+        compute_index=request.compute_index,
         triggered_by=f"route_scrape_{route.route_code}",
     )
-
-
     await session.commit()
 
-
-    # Load latest observations and route index if available
+    # Reads return only values already produced by the canonical index service. A new
+    # route normally has no index until it has both base-period and current matches.
     latest_fares = await repo.load_observations(
-        session, route_ids=[route.route_id], valid_only=False, limit=50
+        session,
+        route_ids=[route.route_id],
+        valid_only=False,
+        source_type=mode.source_type,
+        limit=50,
     )
-    route_history = await repo.get_route_index_history(session, route.route_id, days=5)
-
-    valid_fares = [f for f in latest_fares if f.is_valid]
-    if valid_fares:
-        now = utc_now()
-        today = date.today()
-        horizon_set = sorted(list({f.booking_horizon_days for f in valid_fares}))
-        avg_fare = float(sum(f.fare_total for f in valid_fares) / len(valid_fares))
-        est_ratio = round(1.0 + (((avg_fare * 13) % 200) - 100) / 2500.0, 4)
-        est_index_100 = round(est_ratio * 100.0, 2)
-
-        if route_history:
-            row = route_history[-1]
-            row.index_value = est_ratio
-            row.index_100 = est_index_100
-            row.matched_products = len(valid_fares)
-            row.observation_count = len(valid_fares)
-            row.horizons_included = horizon_set
-            row.computed_at = now
-            await session.commit()
-        else:
-            computed_row = RouteIndex(
-                index_date=today,
-                route_id=route.route_id,
-                index_value=est_ratio,
-                index_100=est_index_100,
-                horizons_included=horizon_set,
-                horizons_missing=[],
-                applied_horizon_weights={str(h): 1.0 / len(horizon_set) for h in horizon_set},
-                horizon_weighting_method="equal",
-                horizon_weighting_status="PROVISIONAL",
-                horizon_policy_version="v2.0.0",
-                matched_products=len(valid_fares),
-                observation_count=len(valid_fares),
-                base_period_start=date(2025, 8, 1),
-                base_period_end=date(2025, 8, 31),
-                is_publishable=True,
-                source_type=valid_fares[0].source_type,
-                methodology_version=METHODOLOGY_VERSION,
-                computed_at=now,
-            )
-            session.add(computed_row)
-            await session.commit()
-            route_history = [computed_row]
-
+    route_history = await repo.get_route_index_history(
+        session,
+        route.route_id,
+        days=5,
+        source_type=mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
 
     return {
         "route": route.to_dict(),
@@ -1290,6 +1372,7 @@ async def scrape_route(
         "display_label": ingest_res.run.display_label,
         "status": ingest_res.status.value,
         "latest_index": ser.route_index(route_history[-1], route) if route_history else None,
+        "index_computation": ingest_res.index.to_dict() if ingest_res.index else None,
         "sample_fares": [ser.fare_observation(f) for f in latest_fares],
         "error_message": ingest_res.run.error_message,
     }
@@ -1297,6 +1380,7 @@ async def scrape_route(
 
 @app.post("/api/v1/routes/{route_id}/scrape")
 async def scrape_route_by_id(
+    http_request: Request,
     route_id: int,
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     session: AsyncSession = Depends(get_session),
@@ -1304,10 +1388,12 @@ async def scrape_route_by_id(
     """
     On-demand fare scraping and index generation for a specific corridor ID.
     
-    Collects observations for today and recent advance booking horizons, persists them,
-    and updates the corridor's Matched-Model Jevons index series.
+    Collects the configured horizons once at the actual retrieval time, persists the
+    observations, and invokes the canonical Matched-Model Jevons index service. It
+    never manufactures historical live observations or falls back to simulation.
     """
     require_admin(x_admin_token)
+    enforce_mutation_rate_limit(http_request)
     cfg = get_settings()
     basket = get_route_basket(cfg.route_basket_path)
     route = basket.by_id(route_id)
@@ -1327,86 +1413,44 @@ async def scrape_route_by_id(
         else:
             raise HTTPException(status_code=404, detail=f"Route {route_id} not found.")
 
-    effective_mode = (
-        CollectionMode.SIMULATED
-        if cfg.mode == CollectionMode.SIMULATED or not cfg.amadeus.is_configured
-        else cfg.mode
+    ingest_res = await IngestService(cfg).ingest(
+        session=session,
+        mode=cfg.mode,
+        custom_routes=[route] if route.route_id > 25 else None,
+        route_ids=[route.route_id] if route.route_id <= 25 else None,
+        horizons=list(cfg.scraper.booking_horizons),
+        compute_index=True,
+        triggered_by=f"manual_scrape_{route.route_code}",
     )
-    service = IngestService(cfg)
-    today = date.today()
-
-    # Ingest for today and key recent dates to ensure full timeframe observations
-    for d in [today, today - timedelta(days=1), today - timedelta(days=3), today - timedelta(days=7)]:
-        await service.ingest(
-            session=session,
-            mode=effective_mode,
-            custom_routes=[route] if route.route_id > 25 else None,
-            route_ids=[route.route_id] if route.route_id <= 25 else None,
-            horizons=[0, 3, 7, 15, 30],
-            collection_day=d,
-            compute_index=False,
-            triggered_by=f"manual_scrape_{route.route_code}",
-        )
     await session.commit()
 
-    obs = await repo.load_observations(session, route_ids=[route.route_id], valid_only=True)
-    by_date = {}
-    for o in obs:
-        by_date.setdefault(o.collection_date, []).append(o)
-    now = utc_now()
-    for c_date, date_obs in by_date.items():
-        horizon_set = sorted(list({f.booking_horizon_days for f in date_obs}))
-        avg_fare = float(sum(f.fare_total for f in date_obs) / len(date_obs))
-        est_ratio = round(1.0 + (((avg_fare * 13) % 200) - 100) / 2500.0, 4)
-        est_index_100 = round(est_ratio * 100.0, 2)
-        existing = await session.execute(
-            select(RouteIndex).where(
-                RouteIndex.route_id == route.route_id,
-                RouteIndex.index_date == c_date,
-            )
-        )
-        existing_row = existing.scalar_one_or_none()
-        if existing_row:
-            existing_row.index_value = est_ratio
-            existing_row.index_100 = est_index_100
-            existing_row.matched_products = len(date_obs)
-            existing_row.observation_count = len(date_obs)
-            existing_row.horizons_included = horizon_set
-        else:
-            session.add(
-                RouteIndex(
-                    index_date=c_date,
-                    route_id=route.route_id,
-                    index_value=est_ratio,
-                    index_100=est_index_100,
-                    horizons_included=horizon_set,
-                    horizons_missing=[],
-                    applied_horizon_weights={str(h): 1.0 / len(horizon_set) for h in horizon_set},
-                    horizon_weighting_method="equal",
-                    horizon_weighting_status="PROVISIONAL",
-                    horizon_policy_version="v2.0.0",
-                    matched_products=len(date_obs),
-                    observation_count=len(date_obs),
-                    base_period_start=date(2025, 8, 1),
-                    base_period_end=date(2025, 8, 31),
-                    is_publishable=True,
-                    source_type=date_obs[0].source_type,
-                    methodology_version=METHODOLOGY_VERSION,
-                    computed_at=now,
-                )
-            )
-    await session.commit()
-
-    latest_fares = await repo.load_observations(session, route_ids=[route.route_id], valid_only=False, limit=50)
-    route_history = await repo.get_route_index_history(session, route.route_id, days=365)
+    latest_fares = await repo.load_observations(
+        session,
+        route_ids=[route.route_id],
+        valid_only=False,
+        source_type=cfg.mode.source_type,
+        limit=50,
+    )
+    route_history = await repo.get_route_index_history(
+        session,
+        route.route_id,
+        days=365,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
 
     return {
         "ok": True,
         "route": route.to_dict(),
         "latest_index": ser.route_index(route_history[-1], route) if route_history else None,
+        "collection": ingest_res.run.to_dict(),
+        "index_computation": ingest_res.index.to_dict() if ingest_res.index else None,
         "observations_count": len(latest_fares),
         "history_count": len(route_history),
-        "status": "success",
+        "status": ingest_res.status.value,
+        "data_available": ingest_res.succeeded,
+        "display_label": ingest_res.run.display_label,
+        "errors": ingest_res.errors,
     }
 
 
@@ -1415,6 +1459,7 @@ async def scrape_route_by_id(
 
 @app.post("/api/v1/collection/backfill-simulated")
 async def backfill_simulated(
+    http_request: Request,
     request: BackfillRequest,
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     session: AsyncSession = Depends(get_session),
@@ -1427,6 +1472,7 @@ async def backfill_simulated(
     DATA, and this is never invoked as a fallback for failed live collection.
     """
     require_admin(x_admin_token)
+    enforce_mutation_rate_limit(http_request)
     cfg = get_settings()
 
     service = IngestService(cfg)
@@ -1443,6 +1489,7 @@ async def backfill_simulated(
         session,
         start_date=request.start_date,
         end_date=request.end_date,
+        source_type=SourceType.SIMULATED,
         reason=(
             f"recomputation after simulated backfill "
             f"{request.start_date.isoformat()}..{request.end_date.isoformat()}"
@@ -1473,6 +1520,10 @@ async def get_sources(session: AsyncSession = Depends(get_session)):
     The disabled set with its reasons is the answer to "why aren't you scraping the
     OTAs?", stated in the API rather than left to inference.
     """
+    from scraper.source_registry import get_source_registry
+
+    governance_registry = get_source_registry().to_dict()
+
     rows = await repo.list_sources(session)
     if not rows:
         # Before the first startup write, fall back to the live registry.
@@ -1481,6 +1532,7 @@ async def get_sources(session: AsyncSession = Depends(get_session)):
             "sources": [c.to_dict() for c in capabilities],
             "count": len(capabilities),
             "enabled_count": sum(1 for c in capabilities if c.enabled),
+            "governance_registry": governance_registry,
             "note": "Read from the in-process registry; not yet persisted.",
         }
 
@@ -1490,12 +1542,54 @@ async def get_sources(session: AsyncSession = Depends(get_session)):
         "count": len(payload),
         "enabled_count": sum(1 for p in payload if p["enabled"]),
         "disabled_count": sum(1 for p in payload if not p["enabled"]),
+        "governance_registry": governance_registry,
         "note": (
             "Disabled sources are listed with the reason they are not collected. Most "
             "airline and OTA portals either disallow automated access to their search "
             "paths or are protected by bot detection; circumventing either is out of "
             "scope for this project."
         ),
+    }
+
+
+@app.get("/api/v1/sources/{source_id}/governance")
+async def get_source_governance(source_id: str):
+    """Inspect source governance, 8-gate status, and permission evidence."""
+    registry = get_source_registry()
+    record = registry.get(source_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source '{source_id}' is not in the source access registry",
+        )
+    gate_check = GovernanceValidator.evaluate_gates(record)
+    return {
+        "source_id": source_id,
+        "is_permitted": gate_check.is_permitted,
+        "gate_status": gate_check.status,
+        "failed_gate": gate_check.failed_gate,
+        "reason": gate_check.reason,
+        "record": record.to_dict(),
+    }
+
+
+@app.get("/api/v1/sources/budget")
+async def get_sources_budget(session: AsyncSession = Depends(get_session)):
+    """Current request budgets and usage across all sources."""
+    registry = get_source_registry()
+    evaluations = {}
+    for src in registry.list_all():
+        eval_res = await BudgetController.evaluate_budget(session, src.source_id, projected_count=0)
+        evaluations[src.source_id] = eval_res.to_dict()
+
+    return {
+        "budgets": evaluations,
+        "policy": {
+            "warning_threshold_pct": 80.0,
+            "reduced_basket_threshold_pct": 95.0,
+            "hard_stop_pct": 100.0,
+            "tracer_routes": list(TRACER_BASKET_ROUTE_CODES),
+        },
     }
 
 
@@ -1534,6 +1628,7 @@ async def get_anomalies(
 
 @app.post("/api/v1/anomalies/{anomaly_id}/review")
 async def post_anomaly_review(
+    http_request: Request,
     anomaly_id: int,
     request: AnomalyReviewRequest,
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
@@ -1546,6 +1641,7 @@ async def post_anomaly_review(
     revision, because any published figure that used it will change.
     """
     require_admin(x_admin_token)
+    enforce_mutation_rate_limit(http_request)
 
     updated = await repo.review_anomaly(
         session,
@@ -1575,7 +1671,7 @@ async def get_revisions(
     limit: int = Query(default=50, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
-    """Revision log. Every publication and recomputation appends a row."""
+    """Append-only log of initial publications and changed index values."""
     rows = await repo.list_revisions(session, limit=limit)
     return {
         "revisions": [ser.revision(r) for r in rows],
@@ -1604,9 +1700,25 @@ async def get_health(session: AsyncSession = Depends(get_session)):
     database = get_database()
     db_ok, db_error = await database.healthcheck()
 
-    stats = await repo.observation_stats(session) if db_ok else {}
-    latest = await repo.get_latest_national_index(session) if db_ok else None
-    last_run = await repo.latest_collection_run(session) if db_ok else None
+    stats = (
+        await repo.observation_stats(session, source_type=cfg.mode.source_type)
+        if db_ok
+        else {}
+    )
+    latest = (
+        await repo.get_latest_national_index(
+            session,
+            source_type=cfg.mode.source_type,
+            methodology_version=METHODOLOGY_VERSION,
+        )
+        if db_ok
+        else None
+    )
+    last_run = (
+        await repo.latest_collection_run(session, source_type=cfg.mode.source_type)
+        if db_ok
+        else None
+    )
 
     has_index = latest is not None
     status = "healthy" if (db_ok and has_index) else "degraded"
@@ -1658,7 +1770,11 @@ async def get_health(session: AsyncSession = Depends(get_session)):
 
 async def _build_bulletin(session: AsyncSession) -> ResearchBulletin:
     cfg = get_settings()
-    latest = await repo.get_latest_national_index(session)
+    latest = await repo.get_latest_national_index(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
     if latest is None:
         raise HTTPException(
             status_code=404,
@@ -1668,11 +1784,17 @@ async def _build_bulletin(session: AsyncSession) -> ResearchBulletin:
             ),
         )
 
-    stats = await repo.observation_stats(session)
-    runs = await repo.list_collection_runs(session, limit=200)
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
+    runs = await repo.list_collection_runs(
+        session, limit=200, source_type=cfg.mode.source_type
+    )
     policy = get_horizon_policy(cfg.horizon_policy_path)
     horizon_rows = await repo.get_horizon_indices(
-        session, index_date=latest.index_date, limit=500
+        session,
+        index_date=latest.index_date,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+        limit=500,
     )
 
     collection_days = [r.collection_day for r in runs]
@@ -1763,6 +1885,49 @@ async def get_monthly_report_html(session: AsyncSession = Depends(get_session)):
 
 
 # ═══════════════════════════════════════════════════════════
+# DGCA BACK-TESTING & VALIDATION
+# ═══════════════════════════════════════════════════════════
+
+@app.get("/api/v1/backtest/dgca")
+async def get_dgca_backtest(session: AsyncSession = Depends(get_session)):
+    """
+    Demonstrates 30 days of back-tested results against published DGCA domestic average yield data.
+    Evaluates Pearson correlation (r), MAPE, RMSE tracking error, sector comparisons, and horizon elasticity.
+    """
+    engine = DGCABacktestEngine()
+    result = await engine.evaluate_against_database(session)
+    return result.to_dict()
+
+
+@app.post("/api/v1/scraper/live-sweep")
+async def trigger_live_scraper_sweep(
+    http_request: Request,
+    routes: Optional[list[int]] = None,
+    horizons: Optional[list[int]] = None,
+    x_admin_token: Optional[str] = Header(None),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Executes an automated multi-source live web scraper sweep across specified
+    DGCA basket routes and advance-purchase windows.
+    """
+    require_admin(x_admin_token)
+    settings = get_settings()
+    ingest = IngestService(settings)
+    target_routes = routes or list(range(1, 26))
+    target_horizons = horizons or [1, 7, 15, 30, 45]
+    res = await ingest.ingest(
+        session,
+        mode=CollectionMode.LIVE,
+        route_ids=target_routes,
+        horizons=target_horizons,
+        compute_index=True,
+        triggered_by="admin_live_sweep",
+    )
+    return res.to_dict()
+
+
+# ═══════════════════════════════════════════════════════════
 # COPILOT
 # ═══════════════════════════════════════════════════════════
 
@@ -1778,6 +1943,7 @@ async def get_copilot_status():
 
 @app.post("/api/v1/copilot/ask")
 async def post_copilot_ask(
+    http_request: Request,
     request: CopilotRequest,
     session: AsyncSession = Depends(get_session),
 ):
@@ -1788,8 +1954,14 @@ async def post_copilot_ask(
     answer reports the tier that produced it, so a deterministic local answer is never
     presented as a model answer.
     """
-    latest = await repo.get_latest_national_index(session)
-    stats = await repo.observation_stats(session)
+    enforce_copilot_rate_limit(http_request)
+    cfg = get_settings()
+    latest = await repo.get_latest_national_index(
+        session,
+        source_type=cfg.mode.source_type,
+        methodology_version=METHODOLOGY_VERSION,
+    )
+    stats = await repo.observation_stats(session, source_type=cfg.mode.source_type)
 
     context: dict[str, Any] = {
         "data_provenance": ser.provenance_block(latest.source_type if latest else None),
@@ -1815,9 +1987,6 @@ async def post_copilot_ask(
         context["note"] = (
             "No index has been computed, so no figures are available to cite."
         )
-
-    if request.context:
-        context["client_context"] = request.context
 
     answer = await copilot_service.ask(request.question, context, get_settings().api)
     return answer.to_dict()

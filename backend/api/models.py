@@ -10,9 +10,26 @@ validation, where rejecting bad input early genuinely matters.
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+import json
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
+
+from config import SUPPORTED_BOOKING_HORIZONS
+
+
+def _validated_horizons(value: Optional[list[int]]) -> Optional[list[int]]:
+    if value is None:
+        return None
+    if not value:
+        raise ValueError("booking horizons cannot be empty")
+    invalid = sorted(set(value) - set(SUPPORTED_BOOKING_HORIZONS))
+    if invalid:
+        raise ValueError(
+            f"booking horizons must be selected from "
+            f"{list(SUPPORTED_BOOKING_HORIZONS)}; got unsupported {invalid}"
+        )
+    return list(dict.fromkeys(value))
 
 
 class CollectionTriggerRequest(BaseModel):
@@ -37,6 +54,10 @@ class CollectionTriggerRequest(BaseModel):
             "collection_day + horizon."
         ),
     )
+    acquisition_method: Optional[str] = Field(
+        default=None,
+        description="WEB_SCRAPE | API | SIMULATED | OFFLINE_FIXTURE. Defaults according to mode/source.",
+    )
     compute_index: bool = Field(
         default=True, description="Recompute indices from stored data after collection."
     )
@@ -53,14 +74,22 @@ class CollectionTriggerRequest(BaseModel):
             )
         return upper
 
+    @field_validator("acquisition_method")
+    @classmethod
+    def _validate_acquisition_method(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        upper = value.strip().upper()
+        if upper not in {"WEB_SCRAPE", "API", "SIMULATED", "OFFLINE_FIXTURE"}:
+            raise ValueError(
+                f"acquisition_method must be WEB_SCRAPE, API, SIMULATED, or OFFLINE_FIXTURE; got {value!r}"
+            )
+        return upper
+
     @field_validator("horizons")
     @classmethod
     def _validate_horizons(cls, value: Optional[list[int]]) -> Optional[list[int]]:
-        if value is None:
-            return None
-        if any(h < 0 for h in value):
-            raise ValueError("booking horizons must be non-negative")
-        return value
+        return _validated_horizons(value)
 
 
 class AnomalyReviewRequest(BaseModel):
@@ -94,10 +123,33 @@ class CopilotRequest(BaseModel):
     Exists so the provider API key stays server-side. The frontend never holds a key.
     """
 
-    question: str = Field(min_length=1, max_length=4000)
-    context: Optional[dict] = Field(
-        default=None, description="Optional dashboard context to ground the answer."
+    question: str = Field(min_length=1, max_length=1200)
+    # Retained temporarily for client compatibility. The API deliberately ignores
+    # this untrusted browser-supplied material and grounds answers only on server-side
+    # persisted figures; validation merely prevents oversized requests in transit.
+    context: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Deprecated compatibility field. Server-side data is the sole grounding "
+            "source; client context is ignored."
+        ),
+        deprecated=True,
     )
+
+    @field_validator("context")
+    @classmethod
+    def _bound_context_size(
+        cls, value: Optional[dict[str, Any]]
+    ) -> Optional[dict[str, Any]]:
+        if value is None:
+            return None
+        try:
+            encoded = json.dumps(value, separators=(",", ":")).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("context must be JSON-serializable") from exc
+        if len(encoded) > 4096:
+            raise ValueError("context is limited to 4096 UTF-8 bytes")
+        return value
 
 
 class BackfillRequest(BaseModel):
@@ -112,6 +164,11 @@ class BackfillRequest(BaseModel):
     end_date: date
     routes: Optional[list[int]] = None
     horizons: Optional[list[int]] = None
+
+    @field_validator("horizons")
+    @classmethod
+    def _validate_horizons(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        return _validated_horizons(value)
 
     @field_validator("end_date")
     @classmethod
@@ -158,3 +215,7 @@ class RouteScrapeRequest(BaseModel):
             raise ValueError(f"mode must be LIVE, SIMULATED or OFFLINE; got {value!r}")
         return upper
 
+    @field_validator("horizons")
+    @classmethod
+    def _validate_horizons(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        return _validated_horizons(value)

@@ -29,6 +29,7 @@ from datetime import date, datetime
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from provenance import (
+    AcquisitionMethod,
     CollectionStatus,
     DataProvenance,
     SourceType,
@@ -101,6 +102,10 @@ class FareObservation:
                 "FareObservation.provenance is mandatory. An observation without "
                 "provenance cannot be distinguished from synthetic data."
             )
+        if getattr(self.provenance, "acquisition_method", None) is None:
+            raise ValueError(
+                "FareObservation.provenance.acquisition_method is mandatory."
+            )
         if self.fare_total is None or self.fare_total <= 0:
             raise ValueError(
                 f"FareObservation.fare_total must be positive, got {self.fare_total!r}"
@@ -129,6 +134,10 @@ class FareObservation:
         return self.provenance.source_type
 
     @property
+    def acquisition_method(self) -> AcquisitionMethod:
+        return self.provenance.acquisition_method
+
+    @property
     def collection_datetime(self) -> datetime:
         return self.provenance.collection_timestamp
 
@@ -146,13 +155,18 @@ class FareObservation:
         dimensions (cabin, fare family, stops, refundability, baggage) — omitting
         them is exactly how a product-quality change gets misread as inflation.
 
-        Departure date is included because a seat on a different date is a different
-        product; the booking horizon is what makes those comparable across periods.
+        Flight number is included to avoid collapsing different scheduled services
+        from the same carrier into one product. Departure date is deliberately not
+        included: at a fixed horizon each collection day targets a different travel
+        date, so including it would make every inter-period match impossible. The
+        resulting product is a repeatable service specification, not one physical
+        seat; that limitation is reported in the methodology.
         """
         parts = (
             self.origin_code,
             self.destination_code,
             self.airline_code,
+            self.flight_number or "FLIGHTUNKNOWN",
             self.cabin_class,
             self.fare_family or "UNSPECIFIED",
             str(self.stops),

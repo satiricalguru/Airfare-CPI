@@ -5,22 +5,35 @@
 # a browser automation stack no code referenced.
 
 # ── FastAPI & web ──
-fastapi==0.115.6
+# Current FastAPI permits the patched Starlette line below; the former 0.115.6 pin
+# constrained Starlette to 0.41.3, for which the dependency audit reports advisories.
+fastapi==0.141.1
 uvicorn[standard]==0.34.0
-pydantic==2.10.4
+# 2.12 introduced Python 3.14 support; the current stable pin has matching core
+# wheels, so local installs do not try to build an unsupported 2024 Rust binding.
+pydantic==2.13.5
+# Explicitly pin the ASGI framework FastAPI uses rather than inheriting an old
+# vulnerable transitive release.
+starlette==1.6.0
 
-# ── HTTP client ──
+# ── HTTP client & Scraper Parsing ──
 # scraper/sources/amadeus.py (live source), scraper/politeness.py (robots.txt),
 # api/copilot.py (server-side LLM proxy), and the API test suite.
 httpx==0.28.1
+beautifulsoup4==4.15.0
 
 # ── Persistence ──
 # db/models.py, db/engine.py, db/repository.py. PostgreSQL is the target store
 # (docker-compose provisions it); SQLite is supported so the project runs without a
 # database server. There is no in-memory mode: published figures must survive restart.
-sqlalchemy[asyncio]==2.0.36
+# 2.0.52 supports Python 3.14's typing runtime; 2.0.36 fails while mapping the
+# annotated ORM models on the current local interpreter.
+sqlalchemy[asyncio]==2.0.52
 asyncpg==0.30.0
 aiosqlite==0.20.0
+# Schema migrations. Docker and every shared deployment run `alembic upgrade head`
+# before the API process; metadata creation is test/throwaway-only.
+alembic==1.14.1
 
 # ── Statistical / numerical ──
 numpy==2.2.1
@@ -37,10 +50,8 @@ tzdata==2024.2
 loguru==0.7.3
 
 # ── Testing ──
-pytest==8.3.4
-pytest-asyncio==0.25.0
+pytest==9.0.3
 pytest-cov==6.0.0
 
 # ── Deferred: not imported yet, so not installed ──
-# alembic==1.14.1        # migrations; schema is currently created from metadata
 # weasyprint==63.1       # PDF bulletin export; only HTML is generated today

@@ -52,6 +52,7 @@ from engine.weights import RouteBasket, get_route_basket
 from provenance import (
     METHODOLOGY_VERSION,
     PROVENANCE_LABELS,
+    AcquisitionMethod,
     SourceType,
     utc_now,
 )
@@ -69,6 +70,7 @@ class IndexComputationResult:
     national_indices_written: int = 0
     base_period: Optional[BasePeriod] = None
     source_type: Optional[SourceType] = None
+    acquisition_method: Optional[AcquisitionMethod] = None
     skipped_dates: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,6 +81,7 @@ class IndexComputationResult:
             "national_indices_written": self.national_indices_written,
             "base_period": self.base_period.to_dict() if self.base_period else None,
             "source_type": self.source_type.value if self.source_type else None,
+            "acquisition_method": self.acquisition_method.value if self.acquisition_method else None,
             "provenance_label": (
                 PROVENANCE_LABELS[self.source_type] if self.source_type else None
             ),
@@ -110,6 +113,8 @@ class IndexService:
         session: AsyncSession,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        source_type: Optional[SourceType] = None,
+        acquisition_method: Optional[AcquisitionMethod] = None,
         reason: str = "scheduled recomputation",
     ) -> IndexComputationResult:
         """
@@ -119,7 +124,11 @@ class IndexService:
         stored values, and each write appends an ``index_revisions`` row so the second
         run is visible as a recomputation rather than silently overwriting.
         """
-        result = IndexComputationResult(base_period=self.base_period)
+        result = IndexComputationResult(
+            base_period=self.base_period,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
+        )
 
         # 1. Base prices: strictly query observations within the base period
         base_records = await repo.load_observations(
@@ -127,9 +136,17 @@ class IndexService:
             start_date=self.base_period.start,
             end_date=self.base_period.end,
             valid_only=True,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
         )
         if not base_records:
-            any_records = await repo.load_observations(session, valid_only=True, limit=1)
+            any_records = await repo.load_observations(
+                session,
+                valid_only=True,
+                source_type=source_type,
+                acquisition_method=acquisition_method,
+                limit=1,
+            )
             if not any_records:
                 logger.info("No stored observations; nothing to compute")
                 return result
@@ -138,19 +155,6 @@ class IndexService:
                 f"No observations fall inside the base period "
                 f"{self.base_period.label}; no index can be computed. Base prices are "
                 f"selected strictly by collection date, never by insertion order."
-            )
-            result.skipped_dates.append({
-                "date": None,
-                "reason": MissingDataReason.NO_BASE_PERIOD_DATA.value,
-                "detail": MissingDataReason.NO_BASE_PERIOD_DATA.description,
-            })
-            return result
-
-        base_observations = [repo.record_to_observation(r) for r in base_records]
-        base_sets = compute_base_prices(base_observations, self.base_period)
-        if not base_sets:
-            logger.warning(
-                f"No base prices derived for base period {self.base_period.label}."
             )
             result.skipped_dates.append({
                 "date": None,
@@ -168,6 +172,8 @@ class IndexService:
             start_date=target_start,
             end_date=target_end,
             valid_only=True,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
         )
         if not records:
             logger.info(
@@ -177,22 +183,73 @@ class IndexService:
             )
             return result
 
+        base_observations = [repo.record_to_observation(r) for r in base_records]
         observations = [repo.record_to_observation(r) for r in records]
-        all_sampled = observations + base_observations
-        source_types = {o.source_type for o in all_sampled}
+        source_types = {o.source_type for o in observations + base_observations}
 
-        # A mixed-provenance index would be uninterpretable: part measurement, part
-        # simulation, with no way to label the result honestly.
-        if len(source_types) > 1:
+        # A source type is part of the statistical series identity. Never construct a
+        # base across live and generated observations, and never choose a "dominant"
+        # source: that would hide the contamination instead of rejecting it.
+        if source_type is None:
+            if len(source_types) != 1:
+                found = sorted(t.value for t in source_types)
+                logger.error(
+                    f"Refusing index computation across provenance types {found}. "
+                    f"Select one source_type explicitly or use a clean database."
+                )
+                result.skipped_dates.append({
+                    "date": None,
+                    "reason": MissingDataReason.MIXED_PROVENANCE.value,
+                    "detail": MissingDataReason.MIXED_PROVENANCE.description,
+                    "source_types": found,
+                })
+                return result
+            selected_source = next(iter(source_types))
+        else:
+            selected_source = source_type
+
+        acq_methods = {o.acquisition_method for o in observations + base_observations}
+        if acquisition_method is None:
+            if len(acq_methods) > 1:
+                found_acq = sorted(m.value for m in acq_methods)
+                logger.error(
+                    f"Refusing index computation across acquisition methods {found_acq}. "
+                    f"Select one acquisition_method explicitly."
+                )
+                result.skipped_dates.append({
+                    "date": None,
+                    "reason": "MIXED_ACQUISITION_METHODS",
+                    "detail": f"Dataset contains multiple acquisition methods: {found_acq}",
+                    "acquisition_methods": found_acq,
+                })
+                return result
+            selected_method = next(iter(acq_methods)) if acq_methods else AcquisitionMethod.WEB_SCRAPE
+        else:
+            selected_method = acquisition_method
+
+        base_observations = [
+            o for o in base_observations
+            if o.source_type is selected_source and o.acquisition_method is selected_method
+        ]
+        observations = [
+            o for o in observations
+            if o.source_type is selected_source and o.acquisition_method is selected_method
+        ]
+        result.source_type = selected_source
+        result.acquisition_method = selected_method
+
+        base_sets = compute_base_prices(base_observations, self.base_period)
+        if not base_sets:
             logger.warning(
-                f"Stored observations span multiple provenance types "
-                f"{sorted(t.value for t in source_types)}. Computing per provenance "
-                f"type is not supported; the dominant type is used and the mixture is "
-                f"reported. Clear the database when switching modes."
+                f"No {selected_source.value} ({selected_method.value}) base prices derived for base period "
+                f"{self.base_period.label}."
             )
-        dominant = max(source_types, key=lambda t: sum(1 for o in all_sampled if o.source_type is t))
-        observations = [o for o in observations if o.source_type is dominant]
-        result.source_type = dominant
+            result.skipped_dates.append({
+                "date": None,
+                "reason": MissingDataReason.NO_BASE_PERIOD_DATA.value,
+                "detail": MissingDataReason.NO_BASE_PERIOD_DATA.description,
+            })
+            return result
 
         # Candidate index dates: every collection day after the base period ends.
         by_day: dict[date, list[FareObservation]] = {}
@@ -225,7 +282,8 @@ class IndexService:
                 index_date=index_date,
                 observations=day_observations,
                 base_sets=base_sets,
-                source_type=dominant,
+                source_type=selected_source,
+                acquisition_method=selected_method,
                 seen_keys=seen_keys,
                 reason=reason,
             )
@@ -266,6 +324,7 @@ class IndexService:
         observations: list[FareObservation],
         base_sets: dict[tuple[int, int], BasePriceSet],
         source_type: SourceType,
+        acquisition_method: AcquisitionMethod,
         seen_keys: set[str],
         reason: str,
     ) -> Optional[tuple[int, int, int]]:
@@ -317,7 +376,9 @@ class IndexService:
             horizon_uncertainty[(route_id, horizon)] = uncertainty
 
             horizon_rows.append(
-                self._horizon_row(jevons, uncertainty, source_type, now)
+                self._horizon_row(
+                    jevons, uncertainty, source_type, acquisition_method, now
+                )
             )
             horizon_results.setdefault(route_id, []).append(
                 HorizonIndexInput(
@@ -353,7 +414,12 @@ class IndexService:
 
             route_rows.append(
                 self._route_row(
-                    combined, index_date, route_uncertainty, source_type, now
+                    combined,
+                    index_date,
+                    route_uncertainty,
+                    source_type,
+                    acquisition_method,
+                    now,
                 )
             )
 
@@ -389,8 +455,18 @@ class IndexService:
             return written_horizons, written_routes, 0
 
         # ── national aggregate ──
-        previous = await repo.get_national_index_nearest_before(session, index_date)
-        previous_year = await self._find_previous_year_index(session, index_date)
+        previous = await self._find_previous_month_index(
+            session,
+            index_date,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
+        )
+        previous_year = await self._find_previous_year_index(
+            session,
+            index_date,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
+        )
 
         national = self.aggregator.aggregate(
             route_indices=route_inputs,
@@ -417,7 +493,13 @@ class IndexService:
 
         await repo.save_national_index(
             session,
-            self._national_row(national, national_uncertainty, source_type, now),
+            self._national_row(
+                national,
+                national_uncertainty,
+                source_type,
+                acquisition_method,
+                now,
+            ),
             revision_reason=reason,
         )
 
@@ -443,11 +525,19 @@ class IndexService:
             if not per_horizon_inputs:
                 continue
 
-            previous_h = await repo.get_national_index_nearest_before(
-                session, index_date, booking_horizon=horizon
+            previous_h = await self._find_previous_month_index(
+                session,
+                index_date,
+                booking_horizon=horizon,
+                source_type=source_type,
+                acquisition_method=acquisition_method,
             )
             previous_year_h = await self._find_previous_year_index(
-                session, index_date, booking_horizon=horizon
+                session,
+                index_date,
+                booking_horizon=horizon,
+                source_type=source_type,
+                acquisition_method=acquisition_method,
             )
 
             national_h = self.aggregator.aggregate(
@@ -476,7 +566,13 @@ class IndexService:
 
             await repo.save_national_index(
                 session,
-                self._national_row(national_h, uncertainty_h, source_type, now),
+                self._national_row(
+                    national_h,
+                    uncertainty_h,
+                    source_type,
+                    acquisition_method,
+                    now,
+                ),
                 revision_reason=f"{reason} (horizon T+{horizon})",
             )
             horizon_national += 1
@@ -523,6 +619,7 @@ class IndexService:
         jevons: MatchedJevonsResult,
         uncertainty: UncertaintyEstimate,
         source_type: SourceType,
+        acquisition_method: AcquisitionMethod,
         now,
     ) -> dict[str, Any]:
         return {
@@ -548,6 +645,7 @@ class IndexService:
             "confidence_interval_high": uncertainty.confidence_interval_high,
             "uncertainty_basis": uncertainty.basis,
             "source_type": source_type.value,
+            "acquisition_method": acquisition_method.value,
             "methodology_version": METHODOLOGY_VERSION,
             "computed_at": now,
             "matched_product_keys": list(jevons.matched_keys),
@@ -559,6 +657,7 @@ class IndexService:
         index_date: date,
         uncertainty: UncertaintyEstimate,
         source_type: SourceType,
+        acquisition_method: AcquisitionMethod,
         now,
     ) -> dict[str, Any]:
         return {
@@ -585,6 +684,7 @@ class IndexService:
             "is_publishable": combined.is_publishable,
             "suppression_reason": combined.suppression_reason,
             "source_type": source_type.value,
+            "acquisition_method": acquisition_method.value,
             "methodology_version": METHODOLOGY_VERSION,
             "computed_at": now,
         }
@@ -594,6 +694,7 @@ class IndexService:
         national,
         uncertainty: UncertaintyEstimate,
         source_type: SourceType,
+        acquisition_method: AcquisitionMethod,
         now,
     ) -> dict[str, Any]:
         return {
@@ -625,6 +726,7 @@ class IndexService:
             "weighting_method": national.weighting_method,
             "weighting_status": national.weighting_status,
             "source_type": source_type.value,
+            "acquisition_method": acquisition_method.value,
             "provenance_label": PROVENANCE_LABELS[source_type],
             "methodology_version": METHODOLOGY_VERSION,
             "validation_rules_version": repo.VALIDATION_RULES_VERSION,
@@ -634,13 +736,57 @@ class IndexService:
             "missing_routes": [m.to_dict() for m in national.missing_routes],
         }
 
-    # ── year-on-year lookup ──
+    # ── comparison-period lookups ──
+
+    async def _find_previous_month_index(
+        self,
+        session: AsyncSession,
+        index_date: date,
+        booking_horizon: Optional[int] = None,
+        source_type: Optional[SourceType] = None,
+        acquisition_method: Optional[AcquisitionMethod] = None,
+    ):
+        """Locate the same calendar day in the previous month, with bounded fallback."""
+        anchor = _previous_month_anchor(index_date)
+        exact = await repo.get_national_index_on(
+            session,
+            anchor,
+            booking_horizon=booking_horizon,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
+            methodology_version=METHODOLOGY_VERSION,
+        )
+        if exact is not None:
+            return exact
+
+        # A missing collection day may use the nearest observation, but it must stay
+        # inside the intended previous calendar month.
+        for offset in range(1, 8):
+            for candidate in (
+                anchor - timedelta(days=offset),
+                anchor + timedelta(days=offset),
+            ):
+                if candidate.month != anchor.month or candidate.year != anchor.year:
+                    continue
+                found = await repo.get_national_index_on(
+                    session,
+                    candidate,
+                    booking_horizon=booking_horizon,
+                    source_type=source_type,
+                    acquisition_method=acquisition_method,
+                    methodology_version=METHODOLOGY_VERSION,
+                )
+                if found is not None:
+                    return found
+        return None
 
     async def _find_previous_year_index(
         self,
         session: AsyncSession,
         index_date: date,
         booking_horizon: Optional[int] = None,
+        source_type: Optional[SourceType] = None,
+        acquisition_method: Optional[AcquisitionMethod] = None,
     ):
         """
         Locate the stored index 12 months before ``index_date``.
@@ -655,7 +801,12 @@ class IndexService:
             anchor = index_date.replace(year=index_date.year - 1, day=28)
 
         exact = await repo.get_national_index_on(
-            session, anchor, booking_horizon=booking_horizon
+            session,
+            anchor,
+            booking_horizon=booking_horizon,
+            source_type=source_type,
+            acquisition_method=acquisition_method,
+            methodology_version=METHODOLOGY_VERSION,
         )
         if exact is not None:
             return exact
@@ -667,8 +818,20 @@ class IndexService:
                 if candidate.month != anchor.month:
                     continue
                 found = await repo.get_national_index_on(
-                    session, candidate, booking_horizon=booking_horizon
+                    session,
+                    candidate,
+                    booking_horizon=booking_horizon,
+                    source_type=source_type,
+                    acquisition_method=acquisition_method,
+                    methodology_version=METHODOLOGY_VERSION,
                 )
                 if found is not None:
                     return found
         return None
+
+
+def _previous_month_anchor(value: date) -> date:
+    """Same day in the previous calendar month, clamped to that month's last day."""
+    first_of_month = value.replace(day=1)
+    previous_month_end = first_of_month - timedelta(days=1)
+    return previous_month_end.replace(day=min(value.day, previous_month_end.day))

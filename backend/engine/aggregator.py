@@ -323,7 +323,9 @@ class NationalAggregator:
                 f"recorded"
             )
 
-        mom_change, mom_status = _period_change(index_value, previous_index, "previous period")
+        mom_change, mom_status = _period_change(
+            index_value, previous_index, "same period in the previous calendar month"
+        )
         yoy_change, yoy_status = _period_change(
             index_value, previous_year_index, "same period one year earlier"
         )

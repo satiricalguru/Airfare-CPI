@@ -262,7 +262,7 @@ export const METHODOLOGY_STEPS = [
     n: 6,
     title: "Booking-horizon stratification",
     desc:
-      "T+0, T+3, T+7, T+15 and T+30 are indexed separately and combined with fixed " +
+      "T+1, T+7, T+15, T+30 and T+45 are indexed separately and combined with fixed " +
       "equal weights. Because the weights do not depend on how many observations each " +
       "horizon contributed, the route index cannot move merely because the sample " +
       "composition shifted.",

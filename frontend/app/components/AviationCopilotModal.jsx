@@ -19,12 +19,13 @@
  *
  * Grounding
  * ---------
- * Figures come from the live dashboard state passed in as `dashboardState`.
+ * The backend grounds provider requests in its own persisted series. Dashboard state
+ * is used only for the visible greeting and deterministic static-preview fallback.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, BookOpen, Bot, CheckCircle2, Cpu, Play, RefreshCw, Sparkles, User, X, Zap } from "lucide-react";
-import { API_BASE, DATA_MODE, NOT_AVAILABLE, askCopilot, triggerCollection } from "../lib/api";
+import { ArrowUp, CheckCircle2, X } from "lucide-react";
+import { DATA_MODE, NOT_AVAILABLE, askCopilot } from "../lib/api";
 import { fmtChange, fmtCount, fmtIndex } from "../lib/format";
 
 /** Icon used by the nav and trigger button matching the Copilot bot squircle with interactive cursor tracking eyes. */
@@ -101,93 +102,6 @@ export function CopilotSymbol({ size = 16, className = "" }) {
   );
 }
 
-/** Interactive Ingestion Action Card rendered when scraping action is triggered. */
-function ScraperActionCard() {
-  const [status, setStatus] = useState("idle"); // "idle" | "running" | "success" | "error"
-  const [result, setResult] = useState(null);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  const handleRun = async () => {
-    setStatus("running");
-    setErrorMsg("");
-    try {
-      const res = await triggerCollection({ mode: "LIVE" });
-      if (res.ok) {
-        setStatus("success");
-        setResult(res.data);
-      } else {
-        setStatus("error");
-        setErrorMsg(res.error || "Failed to trigger backend collection.");
-      }
-    } catch (e) {
-      setStatus("error");
-      setErrorMsg(e.message || "Network error occurred.");
-    }
-  };
-
-  return (
-    <div className="copilot-action-card" data-testid="copilot-scraper-action-card">
-      <div className="copilot-action-header">
-        <div className="copilot-action-title">
-          <Zap size={14} className="copilot-action-icon" />
-          <span>Live Ingestion Pipeline Controller</span>
-        </div>
-        <span className={`copilot-action-status copilot-action-status-${status}`}>
-          {status === "idle" && "Ready to Execute"}
-          {status === "running" && "Ingesting 25 Routes..."}
-          {status === "success" && "Ingestion Complete"}
-          {status === "error" && "Execution Failed"}
-        </span>
-      </div>
-
-      <div className="copilot-action-body">
-        <p className="copilot-action-desc">
-          Executes real-time fare scraping across all <strong>25 domestic corridors</strong> and <strong>5 booking horizons</strong> (<code>T+0 ... T+30</code>) with automatic Matched-Model Jevons price recalculation.
-        </p>
-
-        {status === "success" && result && (
-          <div className="copilot-action-result">
-            <CheckCircle2 size={14} className="copilot-result-icon" />
-            <span>
-              Collected <strong>{result.observations ? Number(result.observations).toLocaleString() : "1,035"}</strong> observations. Run ID: <code>{result.run_id ? String(result.run_id).slice(0, 8) : "live"}</code>. Index updated!
-            </span>
-          </div>
-        )}
-
-        {status === "error" && (
-          <div className="copilot-action-error">
-            <X size={14} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        <button
-          className="copilot-action-btn"
-          onClick={handleRun}
-          disabled={status === "running"}
-        >
-          {status === "running" ? (
-            <>
-              <span className="action-spinner" />
-              <span>Executing Ingestion Cycle...</span>
-            </>
-          ) : status === "success" ? (
-            <>
-              <RefreshCw size={13} />
-              <span>Run Collection Again</span>
-            </>
-          ) : (
-            <>
-              <Play size={13} />
-              <span>Launch Ingestion Pipeline</span>
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const PRESET_PROMPTS = [
   {
     label: "Start Scraping",
@@ -253,11 +167,6 @@ function renderMarkdown(text) {
       flushList();
       continue;
     }
-    if (line.includes("[ACTION:TRIGGER_SCRAPING]") || line.includes("[ACTION:TRIGGER_COLLECTION]")) {
-      flushList();
-      blocks.push(<ScraperActionCard key={`action-${blocks.length}`} />);
-      continue;
-    }
     if (line.startsWith("- ")) {
       listItems.push(line.slice(2));
       continue;
@@ -279,36 +188,16 @@ function renderMarkdown(text) {
   return blocks;
 }
 
-/** Build the grounding context from live dashboard state. No literals. */
-function buildContext(state) {
-  if (!state) return {};
-  return {
-    data_mode: state.mode,
-    headline_index: state.headlineIndex,
-    index_date: state.indexDate,
-    base_period: state.basePeriod,
-    mom_change_pct: state.momChangePct,
-    mom_status: state.momStatus,
-    yoy_change_pct: state.yoyChangePct,
-    yoy_status: state.yoyStatus,
-    sample_size: state.sampleSize,
-    matched_products: state.matchedProducts,
-    coverage_weight: state.coverageWeight,
-    is_publishable: state.isPublishable,
-    seasonal_adjustment: state.seasonalAdjustment,
-  };
-}
-
 /** Client-side RAG answer generator for GitHub Pages / static mode without backend server. */
 function generateClientSideRAGAnswer(question, state) {
   const q = String(question || "").toLowerCase();
-  const headline = state?.headlineIndex != null ? state.headlineIndex.toFixed(4) : "103.0783";
-  const date = state?.indexDate || "2026-08-31";
-  const base = state?.basePeriod || "2025-08-01 to 2025-08-07";
-  const mom = state?.momChangePct != null ? (state.momChangePct > 0 ? `+${state.momChangePct.toFixed(2)}%` : `${state.momChangePct.toFixed(2)}%`) : "-2.50%";
-  const yoy = state?.yoyChangePct != null ? (state.yoyChangePct > 0 ? `+${state.yoyChangePct.toFixed(2)}%` : `${state.yoyChangePct.toFixed(2)}%`) : "+1.72%";
-  const sample = state?.sampleSize ? Number(state.sampleSize).toLocaleString() : "2,140";
-  const mode = state?.mode || "LIVE DATA";
+  const headline = state?.headlineIndex != null ? state.headlineIndex.toFixed(4) : NOT_AVAILABLE;
+  const date = state?.indexDate || NOT_AVAILABLE;
+  const base = state?.basePeriod || NOT_AVAILABLE;
+  const mom = state?.momChangePct != null ? (state.momChangePct > 0 ? `+${state.momChangePct.toFixed(2)}%` : `${state.momChangePct.toFixed(2)}%`) : NOT_AVAILABLE;
+  const yoy = state?.yoyChangePct != null ? (state.yoyChangePct > 0 ? `+${state.yoyChangePct.toFixed(2)}%` : `${state.yoyChangePct.toFixed(2)}%`) : NOT_AVAILABLE;
+  const sample = state?.sampleSize ? Number(state.sampleSize).toLocaleString() : NOT_AVAILABLE;
+  const mode = state?.mode || DATA_MODE.DISCONNECTED;
 
   if (
     q.includes("start scrap") ||
@@ -321,9 +210,8 @@ function generateClientSideRAGAnswer(question, state) {
   ) {
     return (
       `### Live Data Ingestion Controller\n\n` +
-      `I have direct access to the backend collection pipeline. You can launch an on-demand data collection cycle across all **25 domestic corridors** and **5 booking horizons** (\`T+0 ... T+30\`).\n\n` +
-      `[ACTION:TRIGGER_SCRAPING]\n\n` +
-      `*Integrity Invariant:* All observations are validated through hard bounds (₹500-₹80k) and IQR outlier fences before index recalculation.`
+      `Collection is an explicit protected operation, not a chat action. An authorized operator can use the dashboard's collection controls to request a cycle across the configured corridors and booking horizons (\`T+1 ... T+45\`).\n\n` +
+      `*Integrity invariant:* observations are validated through hard bounds (₹500–₹80k) and IQR outlier fences before index recalculation.`
     );
   }
 
@@ -354,11 +242,11 @@ function generateClientSideRAGAnswer(question, state) {
     return (
       `### Booking Horizon Stratification\n\n` +
       `Airline dynamic pricing changes drastically depending on how early a ticket is bought. To ensure pricing curves are tracked without composition distortion, fares are partitioned into **5 fixed booking horizons**:\n\n` +
-      `- **T+0 (Same-day):** Weight = \`0.10\`\n` +
-      `- **T+3 (3 days advance):** Weight = \`0.20\`\n` +
-      `- **T+7 (1 week advance):** Weight = \`0.30\`\n` +
-      `- **T+15 (2 weeks advance):** Weight = \`0.25\`\n` +
-      `- **T+30 (1 month advance):** Weight = \`0.15\`\n\n` +
+      `- **T+1 (1 day advance):** Provisional equal weight = \`0.20\`\n` +
+      `- **T+7 (7 days advance):** Provisional equal weight = \`0.20\`\n` +
+      `- **T+15 (15 days advance):** Provisional equal weight = \`0.20\`\n` +
+      `- **T+30 (30 days advance):** Provisional equal weight = \`0.20\`\n` +
+      `- **T+45 (45 days advance):** Provisional equal weight = \`0.20\`\n\n` +
       `Each horizon is indexed separately, then combined with fixed policy weights so changes in passenger booking lead time do not falsify the price index.`
     );
   }
@@ -367,7 +255,7 @@ function generateClientSideRAGAnswer(question, state) {
     return (
       `### Data Provenance & Source Registry\n\n` +
       `• **Active Status:** \`${mode}\`\n` +
-      `• **Database Coverage:** **855,955** observations across 12 months.\n` +
+      `• **Database Coverage:** **${sample}** observations in the current computed index.\n` +
       `• **Tracked Airlines:** IndiGo (\`6E\`), Air India (\`AI\`), Vistara (\`UK\`), Akasa Air (\`QP\`), and SpiceJet (\`SG\`).\n` +
       `• **Corridors:** Top 25 domestic city pairs (DEL-BOM, BLR-DEL, BOM-BLR, DEL-HYD, etc.).\n\n` +
       `*Integrity Invariant:* Zero synthetic data substitution. Every observation is validated through IQR outlier fences and hard price boundaries (₹500 - ₹80,000).`
@@ -390,9 +278,9 @@ function generateClientSideRAGAnswer(question, state) {
       `I can explain:\n` +
       `- **Current Index:** Headline value (**${headline}**), MoM change (**${mom}**), and YoY inflation (**${yoy}**).\n` +
       `- **Statistical Methodology:** Matched-Model Jevons geometric mean calculations.\n` +
-      `- **Booking Horizons:** T+0 to T+30 advance purchase stratification.\n` +
+      `- **Booking Horizons:** T+1 to T+45 advance purchase stratification.\n` +
       `- **Corridors & Weights:** DGCA passenger volume weighting across 25 routes.\n` +
-      `- **Data Provenance:** Stored live dataset covering 855k observations.`
+      `- **Data Provenance:** ${mode}; no unavailable figure is replaced with a constant.`
     );
   }
 
@@ -401,7 +289,7 @@ function generateClientSideRAGAnswer(question, state) {
     `• **Headline CPI Index:** **${headline}** (as of \`${date}\`)\n` +
     `• **Base Period:** \`${base}\` (= 100.00)\n` +
     `• **Price Trend:** MoM **${mom}** · YoY **${yoy}**\n` +
-    `• **Methodology:** IMF-compliant Matched-Model Jevons formulation with fixed booking horizon weighting (\`T+0\` to \`T+30\`) and DGCA passenger volume weights across 25 corridors.\n\n` +
+    `• **Methodology:** Matched-Model Jevons formulation with provisional equal booking-horizon weights (\`T+1\` to \`T+45\`) and provisional passenger-volume route weights.\n\n` +
     `*Client-side RAG active. Ask about formulas, horizons, provenance, or specific routes.*`
   );
 }
@@ -421,9 +309,9 @@ export default function AviationCopilotModal({ isOpen, onClose, dashboardState }
     () => ({
       role: "assistant",
       tier: "local_fallback",
-      note: "Session initialized. Live grounding active.",
+      note: "Session initialized from the dashboard's currently loaded data.",
       content:
-        `I am the **Airfare CPI Analyst Copilot**, grounded in the official methodology and current database series.\n\n` +
+        `I am the **Airfare CPI Analyst Copilot**, grounded in the project methodology and current database series.\n\n` +
         `**Current Operational Mode:** \`${mode}\`\n\n` +
         (dashboardState?.headlineIndex != null
           ? `• **Headline Index:** **${fmtIndex(dashboardState.headlineIndex)}** (Base: ${dashboardState.basePeriod})\n` +
@@ -455,7 +343,7 @@ export default function AviationCopilotModal({ isOpen, onClose, dashboardState }
       setInput("");
       setBusy(true);
 
-      const result = await askCopilot(text, buildContext(dashboardState));
+      const result = await askCopilot(text);
 
       if (result.ok) {
         setMessages((prev) => [
@@ -611,4 +499,3 @@ export default function AviationCopilotModal({ isOpen, onClose, dashboardState }
     </div>
   );
 }
-

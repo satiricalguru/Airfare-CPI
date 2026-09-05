@@ -80,7 +80,7 @@ def make_route_input(route_id: int, index_value: float, obs_count: int = 20, mat
         index_value=index_value,
         matched_products=matched,
         observation_count=obs_count,
-        horizons_included=[0, 3, 7, 15, 30],
+        horizons_included=[1, 7, 15, 30, 45],
     )
 
 

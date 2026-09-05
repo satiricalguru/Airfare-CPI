@@ -32,7 +32,7 @@ from scraper.sources.simulator import SimulatorFareSource  # noqa: E402
 # current periods, across enough horizons to exercise stratification) rather than for
 # breadth. One trunk route, one mid-density, one thinner route.
 FIXTURE_ROUTE_IDS = [1, 4, 17]
-FIXTURE_HORIZONS = [0, 3, 7, 15, 30]
+FIXTURE_HORIZONS = [1, 7, 15, 30, 45]
 FIXTURE_START = date(2026, 8, 1)
 FIXTURE_DAYS = 10
 

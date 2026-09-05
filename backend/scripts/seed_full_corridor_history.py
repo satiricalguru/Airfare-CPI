@@ -63,7 +63,7 @@ async def main():
             start_date=today - timedelta(days=5),
             end_date=today,
             route_ids=list(range(1, 26)),
-            horizons=[0, 3, 7, 15, 30],
+            horizons=[1, 7, 15, 30, 45],
         )
         await session.commit()
 
@@ -80,7 +80,7 @@ async def main():
                 session=session,
                 mode=CollectionMode.SIMULATED,
                 custom_routes=custom_routes,
-                horizons=[0, 3, 7, 15, 30],
+                horizons=[1, 7, 15, 30, 45],
                 collection_day=d,
                 compute_index=False,
                 triggered_by="seed_interstate_365d",

@@ -13,7 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies first so the layer caches independently of app code.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Keep the bootstrap installer above the currently audited pip fixes, then install
+# the pinned application graph. This also prevents `pip install` itself from being
+# the only vulnerable package in an otherwise clean container audit.
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.2,<27" && \
+    python -m pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY . .

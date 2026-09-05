@@ -17,6 +17,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 
 from loguru import logger
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -96,13 +98,40 @@ class Database:
         """
         Create tables that do not exist yet.
 
-        Sufficient for a prototype. A production deployment should manage schema with
-        migrations (Alembic) so column changes are versioned; that is noted in
-        requirements.txt as deferred rather than claimed as done.
+        Used only by isolated tests and explicitly configured throwaway local stores.
+        Shared or production stores must be created/updated by Alembic, so that schema
+        state is versioned rather than inferred from the currently running code.
         """
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info(f"Schema ensured: {len(Base.metadata.tables)} table(s)")
+
+    async def require_migration_revision(self, expected_revision: str) -> None:
+        """Fail startup unless Alembic has applied the schema expected by this API.
+
+        This intentionally refuses an unversioned/legacy database. Treating a
+        pre-existing schema as compatible merely because some tables have familiar
+        names is what caused the former Docker bootstrap conflict.
+        """
+        try:
+            async with self.engine.connect() as conn:
+                result = await conn.execute(
+                    text("SELECT version_num FROM alembic_version")
+                )
+                revisions = [str(value) for value in result.scalars().all()]
+        except SQLAlchemyError as exc:
+            raise RuntimeError(
+                "Database schema is not Alembic-managed. Run `alembic upgrade head` "
+                "against a clean database; do not point this build at the legacy "
+                "database without a reviewed migration."
+            ) from exc
+
+        if revisions != [expected_revision]:
+            raise RuntimeError(
+                "Database schema revision does not match this API "
+                f"(found {revisions or 'none'}, expected {expected_revision!r}). "
+                "Run `alembic upgrade head` before starting the API."
+            )
 
     async def drop_schema(self) -> None:
         """Drop all tables. Used by tests only."""

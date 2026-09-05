@@ -6,8 +6,8 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const metadata = {
   title: "Airfare CPI — Real-Time Aviation Price Intelligence",
   description:
-    "Ministry of Statistics & Programme Implementation (MoSPI) Real-Time Airfare Price Index for India — Automated web scraping of airline and OTA portals for CPI augmentation.",
-  keywords: "Airfare CPI, price index, MoSPI, India, aviation, inflation, statistics, SIH26056",
+    "SIH26056 research prototype for collecting permitted online airfare observations and producing an experimental Airfare Price Index for India.",
+  keywords: "Airfare CPI, experimental price index, India, aviation, inflation, statistics, SIH26056",
   icons: {
     icon: `${basePath}/favicon.png?v=2`,
     shortcut: `${basePath}/favicon.ico?v=2`,

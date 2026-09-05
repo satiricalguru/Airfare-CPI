@@ -46,6 +46,7 @@ from loguru import logger
 from config import AmadeusSettings, ScraperSettings, get_settings
 from provenance import (
     COLLECTOR_VERSION,
+    AcquisitionMethod,
     CollectionStatus,
     DataProvenance,
     SourceType,
@@ -59,6 +60,7 @@ from scraper.base import (
     SourceCapability,
     SourceResult,
 )
+from scraper.web.artifact_store import ArtifactStore
 from scraper.normalizer import (
     CurrencyNotSupported,
     NormalizationError,
@@ -371,8 +373,24 @@ class AmadeusFareSource(BaseFareSource):
                 response_time_ms=response_time_ms,
             )
 
+        artifact_id = None
+        artifact_sha256 = None
+        try:
+            store = ArtifactStore()
+            stored = store.store_capture(
+                source_id=SOURCE_NAME,
+                url=source_url,
+                content=payload_text,
+                mime_type="application/json",
+            )
+            artifact_id = stored.artifact_id
+            artifact_sha256 = stored.sha256
+        except Exception as exc:
+            logger.warning(f"Could not persist Amadeus capture to ArtifactStore: {exc}")
+
         provenance = DataProvenance(
             source_type=SourceType.LIVE,
+            acquisition_method=AcquisitionMethod.API,
             source_name=SOURCE_NAME,
             collection_timestamp=datetime.now(timezone.utc),
             request_id=request_id,
@@ -382,6 +400,8 @@ class AmadeusFareSource(BaseFareSource):
             notes={
                 "amadeus_environment": self.amadeus.environment,
                 "offers_returned": len(offers),
+                "raw_artifact_id": artifact_id,
+                "raw_artifact_sha256": artifact_sha256,
             },
         )
 
@@ -547,6 +567,7 @@ class AmadeusFareSource(BaseFareSource):
         if fx_rate is not None:
             obs_provenance = DataProvenance(
                 source_type=provenance.source_type,
+                acquisition_method=provenance.acquisition_method,
                 source_name=provenance.source_name,
                 collection_timestamp=provenance.collection_timestamp,
                 request_id=provenance.request_id,

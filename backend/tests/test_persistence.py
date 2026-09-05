@@ -8,7 +8,7 @@ Tests that:
 """
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -27,6 +27,7 @@ from provenance import (
     DataProvenance,
     SourceType,
     new_request_id,
+    utc_now,
 )
 from scraper.base import CABIN_ECONOMY, FareObservation
 from scraper.pipeline import CollectionRunResult
@@ -72,6 +73,71 @@ def _obs(route_id: int = 1, horizon: int = 7, fare: float = 5200.0) -> FareObser
 
 class TestPersistence:
 
+    def test_unchanged_national_recomputation_does_not_create_false_revision(self, test_db):
+        """Only an actual published-value change belongs in the append-only log."""
+        async def _test():
+            row = {
+                "index_date": date(2026, 8, 15),
+                "booking_horizon": None,
+                "index_value": 100.0,
+                "routes_included": 3,
+                "routes_in_basket": 25,
+                "total_observations": 30,
+                "total_matched_products": 12,
+                "coverage_weight": 0.4,
+                "renormalization_applied": True,
+                "is_publishable": False,
+                "suppression_reason": "coverage below release threshold",
+                "mom_change_pct": None,
+                "mom_status": "insufficient_history",
+                "yoy_change_pct": None,
+                "yoy_status": "insufficient_history",
+                "standard_error": None,
+                "confidence_interval_low": None,
+                "confidence_interval_high": None,
+                "uncertainty_basis": "not estimable",
+                "seasonal_adjustment": "NOT IMPLEMENTED",
+                "base_period_start": date(2026, 8, 1),
+                "base_period_end": date(2026, 8, 7),
+                "base_period_label": "2026-08-01 to 2026-08-07",
+                "weight_basket_id": "test-basket",
+                "weight_basket_version": "test-v1",
+                "weighting_method": "passenger_volume_proxy",
+                "weighting_status": "PROVISIONAL",
+                "source_type": SourceType.SIMULATED.value,
+                "provenance_label": "SIMULATED DATA",
+                "methodology_version": "test-methodology",
+                "validation_rules_version": "test-validation",
+                "computed_at": utc_now(),
+                "contributing_run_ids": [],
+                "route_contributions": [],
+                "missing_routes": [],
+            }
+
+            async with test_db.session_scope() as session:
+                await repo.save_national_index(session, row, "initial computation")
+
+            # A fresh timestamp alone must not become a statistical revision.
+            unchanged = {**row, "computed_at": row["computed_at"] + timedelta(minutes=5)}
+            async with test_db.session_scope() as session:
+                await repo.save_national_index(session, unchanged, "no-op recomputation")
+
+            async with test_db.session() as session:
+                assert len(await repo.list_revisions(session, limit=10)) == 1
+
+            changed = {**unchanged, "index_value": 101.0}
+            async with test_db.session_scope() as session:
+                await repo.save_national_index(session, changed, "late verified data")
+
+            async with test_db.session() as session:
+                revisions = await repo.list_revisions(session, limit=10)
+                assert len(revisions) == 2
+                assert revisions[0].reason == "late verified data"
+                assert revisions[0].previous_value == pytest.approx(100.0)
+                assert revisions[0].new_value == pytest.approx(101.0)
+
+        asyncio.run(_test())
+
     def test_collection_run_and_observations_persist(self, test_db):
         """Observations and collection runs are saved and queryable."""
         async def _test():
@@ -99,6 +165,7 @@ class TestPersistence:
                     ValidationResult(action=ValidationAction.ACCEPTED, is_valid=True),
                 ],
             )
+            val_batch.evaluated = list(zip(val_batch.accepted, val_batch.results))
 
             async with test_db.session_scope() as session:
                 run_record = await repo.save_collection_run(
@@ -114,6 +181,12 @@ class TestPersistence:
                 stats = await repo.observation_stats(session)
                 assert stats["total_observations"] == 2
                 assert stats["valid_observations"] == 2
+                assert stats["mean_fare"] == pytest.approx(5500.0)
+                assert stats["min_fare"] == pytest.approx(5000.0)
+                assert stats["max_fare"] == pytest.approx(6000.0)
+                assert stats["routes_covered"] == 2
+                assert stats["median_fare"] is None
+                assert stats["median_status"] == "not_computed"
 
                 runs = await repo.list_collection_runs(session)
                 assert len(runs) == 1

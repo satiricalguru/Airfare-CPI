@@ -47,6 +47,10 @@ class CollectionScheduler:
         self._last_result: Optional[IngestResult] = None
         self._last_error: Optional[str] = None
         self._run_count = 0
+        self._last_success_at: Optional[datetime] = None
+        self._last_duration_seconds: Optional[float] = None
+        self._last_yield_count = 0
+        self._selector_drift_detected = False
 
     # ── lifecycle ──
 
@@ -166,15 +170,21 @@ class CollectionScheduler:
                 self._last_error = None
 
                 elapsed = (datetime.now() - started).total_seconds()
+                self._last_duration_seconds = round(elapsed, 2)
+                self._selector_drift_detected = any(
+                    getattr(a, "error_type", None) == "selector_drift" for a in result.run.attempts
+                )
+
                 if result.succeeded:
+                    self._last_success_at = datetime.now(timezone.utc)
+                    self._last_yield_count = result.observations_persisted
                     logger.info(
                         f"Scheduled cycle #{self._run_count} complete in {elapsed:.1f}s: "
                         f"{result.observations_persisted} observation(s) persisted, "
                         f"label={result.run.display_label}"
                     )
                 else:
-                    # Not an exception: a failed collection is a legitimate outcome that
-                    # must be recorded rather than retried into the ground.
+                    self._last_yield_count = 0
                     logger.warning(
                         f"Scheduled cycle #{self._run_count} produced no data in "
                         f"{elapsed:.1f}s: {result.run.error_message}. No data was "
@@ -203,13 +213,19 @@ class CollectionScheduler:
         """Scheduler state, surfaced on the collection status endpoint."""
         cfg = self.settings.scheduler
         return {
+            "heartbeat": datetime.now(timezone.utc).isoformat(),
             "enabled": cfg.enabled,
             "running": self.is_running,
+            "is_active_run": self._lock.locked(),
             "collection_hours": list(cfg.collection_hours),
             "timezone": cfg.timezone_name,
             "next_run": self.next_run_iso(),
             "max_cycle_seconds": cfg.max_cycle_seconds,
             "runs_completed": self._run_count,
+            "last_success_at": self._last_success_at.isoformat() if self._last_success_at else None,
+            "last_duration_seconds": self._last_duration_seconds,
+            "observation_yield": self._last_yield_count,
+            "selector_drift_status": "DRIFT_DETECTED" if self._selector_drift_detected else "HEALTHY",
             "last_error": self._last_error,
             "last_run": (
                 self._last_result.run.to_dict() if self._last_result else None

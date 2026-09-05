@@ -19,21 +19,17 @@ import {
 } from "recharts";
 import {
   X,
-  RefreshCw,
   Calendar,
   TrendingUp,
   TrendingDown,
   Activity,
   Sparkles,
-  CheckCircle2,
-  AlertCircle,
   Database,
 } from "lucide-react";
 import {
   loadRouteHistory,
   loadRouteHorizons,
   loadRouteObservations,
-  scrapeRouteById,
   NOT_AVAILABLE,
 } from "../lib/api";
 import {
@@ -60,21 +56,10 @@ const TIMEFRAME_OPTIONS = [
   { key: "1Y", days: 365, label: "1Y" },
 ];
 
-function EmptyPanel({ message, onScrape, isScraping }) {
+function EmptyPanel({ message }) {
   return (
     <div className="empty-panel-wrapper" data-testid="route-detail-empty">
       <p className="muted-note">{message}</p>
-      {onScrape && (
-        <button
-          className="button button-primary button-sm"
-          onClick={onScrape}
-          disabled={isScraping}
-          style={{ marginTop: 12 }}
-        >
-          <RefreshCw size={14} className={isScraping ? "spin" : ""} />
-          <span>{isScraping ? "Scraping Corridor Data…" : "Scrape & Populate Corridor Data"}</span>
-        </button>
-      )}
     </div>
   );
 }
@@ -83,7 +68,7 @@ function EmptyPanel({ message, onScrape, isScraping }) {
  * Outer shell. Keying the content on `route_id` means per-route state resets by
  * remounting rather than by a state update inside an effect.
  */
-export default function RouteDetailModal({ route, isOpen, onClose, dataMode }) {
+export default function RouteDetailModal({ route, isOpen, onClose, dataMode, adminToken = "" }) {
   if (!isOpen || !route?.route_id) return null;
   return (
     <RouteDetailContent
@@ -91,23 +76,18 @@ export default function RouteDetailModal({ route, isOpen, onClose, dataMode }) {
       route={route}
       onClose={onClose}
       dataMode={dataMode}
+      adminToken={adminToken}
     />
   );
 }
 
-function RouteDetailContent({ route, onClose, dataMode }) {
+function RouteDetailContent({ route, onClose, dataMode, adminToken }) {
   const [tab, setTab] = useState("trend");
   const [timeframe, setTimeframe] = useState("1M");
   const [history, setHistory] = useState(null);
   const [horizons, setHorizons] = useState(null);
   const [observations, setObservations] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isScraping, setIsScraping] = useState(false);
-  const isScrapingRef = useRef(false);
-  useEffect(() => {
-    isScrapingRef.current = isScraping;
-  }, [isScraping]);
-  const [scrapeNotice, setScrapeNotice] = useState(null);
   const [errors, setErrors] = useState({});
 
   const routeId = route.route_id;
@@ -133,51 +113,10 @@ function RouteDetailContent({ route, onClose, dataMode }) {
     return historyData;
   }, [routeId]);
 
-  const handleTriggerScrape = useCallback(async (showNotice = true) => {
-    if (isScrapingRef.current) return;
-    setIsScraping(true);
-    if (showNotice) {
-      setScrapeNotice({ type: "info", text: "Scraping real-time fares and calculating indices for today…" });
-    }
-
-    try {
-      const res = await scrapeRouteById(routeId);
-      if (res.ok) {
-        setScrapeNotice({ type: "success", text: "Corridor fares collected and indices refreshed for today!" });
-        await loadData();
-        setTimeout(() => setScrapeNotice(null), 4000);
-      } else {
-        setScrapeNotice({
-          type: "warning",
-          text: `Scrape notice: ${res.error || "Simulated observations updated."}`,
-        });
-        await loadData();
-        setTimeout(() => setScrapeNotice(null), 5000);
-      }
-    } catch (err) {
-      setScrapeNotice({ type: "error", text: `Scrape failed: ${err?.message || "network error"}` });
-      setTimeout(() => setScrapeNotice(null), 5000);
-    } finally {
-      setIsScraping(false);
-    }
-  }, [routeId, loadData]);
-
   useEffect(() => {
-    let cancelled = false;
-
-    const init = async () => {
-      const data = await loadData();
-      // If no history exists for this route, trigger on-demand scraping
-      if ((!data || data.length < 2) && !cancelled) {
-        handleTriggerScrape(false);
-      }
-    };
-
-    void init();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadData, handleTriggerScrape]);
+    const timer = window.setTimeout(() => void loadData(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
 
   // ── derived series for the selected timeframe ──
 
@@ -316,7 +255,13 @@ function RouteDetailContent({ route, onClose, dataMode }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose} data-testid="route-detail-modal">
-      <div className="modal-panel modal-panel-wide" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-panel modal-panel-wide"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Corridor detail: ${route.route_code || `Route ${route.route_id}`}`}
+      >
         <div className="modal-header">
           <div>
             <p className="eyebrow">Corridor detail</p>
@@ -327,48 +272,12 @@ function RouteDetailContent({ route, onClose, dataMode }) {
             </p>
           </div>
           <div className="modal-header-actions">
-            <button
-              className="button button-outline button-sm"
-              onClick={() => handleTriggerScrape(true)}
-              disabled={isScraping}
-              title="Scrape and update live observations & indices for this corridor"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <RefreshCw size={13} className={isScraping ? "spin" : ""} />
-              <span>{isScraping ? "Scraping Data…" : "Scrape / Update Live Data"}</span>
-            </button>
             <DataModeChip mode={dataMode} />
             <button className="icon-button" aria-label="Close" onClick={onClose} data-testid="route-detail-close-button">
               <X size={18} />
             </button>
           </div>
         </div>
-
-        {scrapeNotice && (
-          <div
-            className={`scrape-alert-banner ${scrapeNotice.type === "success" ? "alert-success" : scrapeNotice.type === "error" ? "alert-error" : "alert-info"}`}
-            style={{
-              margin: "0 24px 12px 24px",
-              padding: "10px 14px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "12px",
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid var(--line)",
-            }}
-          >
-            {scrapeNotice.type === "success" ? (
-              <CheckCircle2 size={16} color="var(--green)" />
-            ) : scrapeNotice.type === "error" ? (
-              <AlertCircle size={16} color="var(--amber)" />
-            ) : (
-              <RefreshCw size={16} className="spin" color="var(--cyan)" />
-            )}
-            <span>{scrapeNotice.text}</span>
-          </div>
-        )}
 
         <div className="segmented-control route-detail-tabs">
           {TABS.map(([key, label]) => (
@@ -506,12 +415,8 @@ function RouteDetailContent({ route, onClose, dataMode }) {
                   message={
                     errors.history
                       ? `Index history could not be loaded: ${errors.history}`
-                      : isScraping
-                      ? "Scraping live corridor fares and computing historical Jevons index points…"
-                      : `This corridor currently has ${trendSeries.length} stored index point(s) for the selected timeframe. Click below to scrape and calculate data.`
+                      : `This corridor currently has ${trendSeries.length} stored index point(s) for the selected timeframe.`
                   }
-                  onScrape={() => handleTriggerScrape(true)}
-                  isScraping={isScraping}
                 />
               )}
             </>
@@ -566,8 +471,6 @@ function RouteDetailContent({ route, onClose, dataMode }) {
                     ? `Horizon indices could not be loaded: ${errors.horizons}`
                     : "No horizon index has been computed for this corridor."
                 }
-                onScrape={() => handleTriggerScrape(true)}
-                isScraping={isScraping}
               />
             )
           )}
@@ -608,8 +511,6 @@ function RouteDetailContent({ route, onClose, dataMode }) {
                     ? `Observations could not be loaded: ${errors.observations}`
                     : "No valid observations are stored for this corridor."
                 }
-                onScrape={() => handleTriggerScrape(true)}
-                isScraping={isScraping}
               />
             )
           )}
@@ -656,8 +557,6 @@ function RouteDetailContent({ route, onClose, dataMode }) {
                     ? `Observations could not be loaded: ${errors.observations}`
                     : `Fewer than four valid observations are stored for this corridor, so quartiles would not be meaningful. Value shown: ${NOT_AVAILABLE}.`
                 }
-                onScrape={() => handleTriggerScrape(true)}
-                isScraping={isScraping}
               />
             )
           )}

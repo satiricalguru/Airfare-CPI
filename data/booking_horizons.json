@@ -13,24 +13,16 @@
     "They have been moved to backend/scraper/sources/simulator.py where they belong, and",
     "the weighting below is stated independently of them."
   ],
-  "policy_id": "horizon-stratification-v2",
-  "policy_version": "2.0.0",
+  "policy_id": "horizon-stratification-v2.1",
+  "policy_version": "2.1.0",
   "horizons": [
     {
-      "days": 0,
-      "label": "T+0",
-      "name": "Same-day / walk-up",
-      "description": "Purchased on the day of departure.",
+      "days": 1,
+      "label": "T+1",
+      "name": "One day advance",
+      "description": "Purchased one day before departure.",
       "advance_purchase_category": "last_minute",
-      "statistical_rationale": "Captures urgent and distressed travel demand. Price level here reflects willingness to pay under time constraint, which is a different consumer decision from planned travel and must not be pooled with it."
-    },
-    {
-      "days": 3,
-      "label": "T+3",
-      "name": "Short notice",
-      "description": "Three days before departure.",
-      "advance_purchase_category": "short_notice",
-      "statistical_rationale": "Brackets the short-notice business travel boundary used by airline revenue management systems."
+      "statistical_rationale": "Captures urgent short-notice demand while avoiding same-day operational edge cases and already-closed inventory."
     },
     {
       "days": 7,
@@ -55,6 +47,14 @@
       "description": "Thirty days before departure.",
       "advance_purchase_category": "advance_30",
       "statistical_rationale": "Planned discretionary leisure travel. Serves as the reference anchor for the advance-purchase curve."
+    },
+    {
+      "days": 45,
+      "label": "T+45",
+      "name": "Forty-five days advance",
+      "description": "Forty-five days before departure.",
+      "advance_purchase_category": "advance_45",
+      "statistical_rationale": "Captures early planned travel and provides a longer-lead reference point for lead-time elasticity."
     }
   ],
   "weighting": {
@@ -62,11 +62,11 @@
     "status": "PROVISIONAL",
     "formula": "alpha_h = 1 / H for each of the H horizons that has a computable index",
     "weights": {
-      "0": 0.2,
-      "3": 0.2,
+      "1": 0.2,
       "7": 0.2,
       "15": 0.2,
-      "30": 0.2
+      "30": 0.2,
+      "45": 0.2
     },
     "why_equal": [
       "Ideally alpha_h would be the share of tickets actually SOLD at each advance-purchase",
@@ -77,8 +77,8 @@
       "weights do not depend on how many observations each horizon happens to contribute,",
       "the combined route index cannot move merely because the sample composition shifted.",
       "Pooling observations across horizons (the previous behaviour) does not have this",
-      "property: it makes the index sensitive to the horizon mix, because T+0 fares sit at a",
-      "structurally higher level than T+30 fares."
+      "property: it makes the index sensitive to the horizon mix, because T+1 fares sit at a",
+      "structurally higher level than T+45 fares."
     ],
     "is_official_cpi_weight": false,
     "renormalization_policy": "If a horizon has no computable index for a period, the remaining horizons are renormalized to sum to 1.0 and the missing horizon is recorded on the index record. The index is only published when at least min_horizons_for_route_index horizons are present.",

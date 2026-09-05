@@ -135,21 +135,25 @@ class TestAPIContract:
 
         asyncio.run(_run())
 
-    def test_route_scrape_endpoint(self):
+    def test_route_scrape_endpoint(self, monkeypatch):
         """POST /api/v1/routes/scrape allows on-demand scraping for custom routes."""
+        monkeypatch.setenv("ADMIN_API_TOKEN", "test-route-scrape-token")
+        reload_settings()
+
         async def _run():
             async with app.router.lifespan_context(app):
                 transport = httpx.ASGITransport(app=app)
                 async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
                     res = await client.post(
                         "/api/v1/routes/scrape",
+                        headers={"X-Admin-Token": "test-route-scrape-token"},
                         json={
                             "origin": "PAT",
                             "destination": "BLR",
                             "origin_city": "Patna",
                             "destination_city": "Bengaluru",
                             "mode": "SIMULATED",
-                            "horizons": [0, 7],
+                            "horizons": [1, 7],
                         },
                     )
                     assert res.status_code == 200
@@ -160,6 +164,29 @@ class TestAPIContract:
                     assert data["observations_persisted"] > 0
                     assert len(data["sample_fares"]) > 0
 
-        asyncio.run(_run())
+        try:
+            asyncio.run(_run())
+        finally:
+            monkeypatch.delenv("ADMIN_API_TOKEN", raising=False)
+            reload_settings()
 
+    def test_dgca_backtest_endpoint_contract(self):
+        """Verifies that /api/v1/backtest/dgca returns valid back-testing statistical metrics."""
+        async def _run():
+            async with app.router.lifespan_context(app):
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    res = await client.get("/api/v1/backtest/dgca")
+                    assert res.status_code == 200
+                    data = res.json()
+                    assert data["status"] == "SUCCESS"
+                    assert "pearson_correlation" in data
+                    assert "mape_pct" in data
+                    assert "rmse_tracking_error" in data
+                    assert "time_series" in data
+                    assert "sector_comparisons" in data
+                    assert "horizon_elasticity" in data
+                    assert len(data["sector_comparisons"]) == 25
+
+        asyncio.run(_run())
 
