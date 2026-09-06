@@ -76,7 +76,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .site-header {
-  z-index: 20;
+  z-index: 100;
   border-bottom: 1px solid var(--line-light);
   background: color-mix(in srgb, var(--paper-bright) 88%, transparent);
   -webkit-backdrop-filter: blur(18px);
@@ -1984,7 +1984,7 @@ a.button-quiet:visited {
 }
 
 .modal-backdrop {
-  z-index: 50;
+  z-index: 200;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   background: #0e110ea6;
@@ -2374,7 +2374,7 @@ a.button-quiet:visited {
 }
 
 .toast {
-  z-index: 70;
+  z-index: 300;
   background: var(--ink);
   color: var(--paper);
   box-shadow: var(--shadow);
@@ -5425,6 +5425,7 @@ html.dark .copilot-send-btn {
   box-shadow: var(--shadow);
   overflow: hidden;
   transition: all 0.25s ease;
+  isolation: isolate;
 }
 
 .aerospace-space-map-root:hover {
@@ -5440,7 +5441,7 @@ html.dark .copilot-send-btn {
   padding: 12px 18px;
   background: color-mix(in srgb, var(--paper-bright) 92%, var(--paper));
   border-bottom: 1px solid var(--line);
-  z-index: 20;
+  z-index: 4;
   position: relative;
 }
 
