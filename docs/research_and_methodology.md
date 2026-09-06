@@ -87,7 +87,7 @@ $$\widehat{CPI}_{\text{Transport}, t+1} = \beta_0 + \beta_1 \cdot \overline{I}_{
 
 Airline headline prices displayed to consumers bundle multiple statutory fees. The ingestion adapter extracts and tracks each component individually:
 
-$$\text{Total Fare} = \text{Base Fare} + \text{GST (5%)} + \text{UDF / PSF} + \text{Convenience Fee}$$
+$$\text{Total Fare} = \text{Base Fare} + \text{GST (5\%)} + \text{UDF / PSF} + \text{Convenience Fee}$$
 
 1. **Base Fare:** Pure carrier price signal reflecting market supply and demand.
 2. **Goods and Services Tax (GST):** Statutory central/state tax (5% economy, 12% business).

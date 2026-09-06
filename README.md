@@ -30,7 +30,7 @@ Air passenger transport is one of the most volatile and mathematically challengi
 1. **Algorithmic Yield Management:** Airlines update seat prices hundreds of times per day based on real-time load factors, demand curves, and dynamic pricing algorithms.
 2. **Advance-Purchase Price Discrimination:** A walkup ticket bought 1 day before departure ($T+1$) can cost $200\%$ to $400\%$ more than the same seat booked 30 days prior ($T+30$), reflecting consumer urgency rather than monetary inflation.
 3. **Severe Decision & Publication Lag:**
-   $$\text{Official Decision Lag} = \text{Survey Cycle (30 Days)} + \text{NSO Compilation & Release Lag (12 Days)} = \mathbf{42\text{ Days}}$$
+   $$\text{Official Decision Lag} = \text{Survey Cycle (30 Days)} + \text{NSO Compilation and Release Lag (12 Days)} = \mathbf{42\text{ Days}}$$
    By the time official transport numbers are published on the 12th of each month, market pricing dynamics have already shifted.
 4. **Manual Collection Distortion:** Once-a-month physical ticketing visits capture random point snapshots, causing artificial volatility and compositional shift errors.
 
