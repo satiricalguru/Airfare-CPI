@@ -6322,20 +6322,33 @@ html.dark .minimal-timeframe-btn.is-active {
 }
 
 .fm-nav-segmented {
-  margin-bottom: 0;
-  flex-wrap: wrap;
+  margin-bottom: 4px;
+  display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+  gap: 8px;
+}
+
+.fm-nav-segmented::-webkit-scrollbar {
+  display: none;
 }
 
 .fm-nav-segmented button {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--muted);
-  padding: 8px 14px;
+  padding: 8px 16px;
   cursor: pointer;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.18s ease;
 }
 

@@ -39,7 +39,7 @@ export default function FestiveAndFlightMovers({ data, onSelectRoute }) {
   return (
     <div className="fm-wrapper" data-testid="festive-and-flight-movers">
       {/* Section Heading matching the Web App Design System */}
-      <div className="section-heading">
+      <div className="section-heading" style={{ marginBottom: "20px" }}>
         <div>
           <p className="eyebrow">Market Volatility &amp; Pricing Dynamics</p>
           <h2>Indian Festive Spikes &amp; Flight Movers</h2>
@@ -47,38 +47,38 @@ export default function FestiveAndFlightMovers({ data, onSelectRoute }) {
             Real-time volatility across major festival surges, top flight price swings, and carrier brand benchmarks.
           </p>
         </div>
+      </div>
 
-        {/* Tab Controls matching Web App Segmented Navigation */}
-        <div className="segmented-control fm-nav-segmented">
-          <button
-            onClick={() => setActiveTab("festivals")}
-            className={activeTab === "festivals" ? "is-active" : ""}
-            data-testid="fm-tab-festivals"
-          >
-            Festive Spikes ({festivals.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("surging")}
-            className={activeTab === "surging" ? "is-active" : ""}
-            data-testid="fm-tab-surging"
-          >
-            Highest Surges ({surgingFlights.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("dropping")}
-            className={activeTab === "dropping" ? "is-active" : ""}
-            data-testid="fm-tab-dropping"
-          >
-            Lowest Fares ({droppingFlights.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("brands")}
-            className={activeTab === "brands" ? "is-active" : ""}
-            data-testid="fm-tab-brands"
-          >
-            Brand Benchmark
-          </button>
-        </div>
+      {/* Tab Controls matching Web App Segmented Navigation */}
+      <div className="segmented-control fm-nav-segmented">
+        <button
+          onClick={() => setActiveTab("festivals")}
+          className={activeTab === "festivals" ? "is-active" : ""}
+          data-testid="fm-tab-festivals"
+        >
+          Festive Spikes ({festivals.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("surging")}
+          className={activeTab === "surging" ? "is-active" : ""}
+          data-testid="fm-tab-surging"
+        >
+          Highest Surges ({surgingFlights.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("dropping")}
+          className={activeTab === "dropping" ? "is-active" : ""}
+          data-testid="fm-tab-dropping"
+        >
+          Lowest Fares ({droppingFlights.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("brands")}
+          className={activeTab === "brands" ? "is-active" : ""}
+          data-testid="fm-tab-brands"
+        >
+          Brand Benchmark
+        </button>
       </div>
 
       {/* Tab 1: Festive Spikes */}
