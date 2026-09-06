@@ -6,6 +6,7 @@
   ### *Automated High-Frequency Price Intelligence & CPI Augmentation for MoSPI (SIH26056)*
 
   [![SIH26056](https://img.shields.io/badge/SIH-26056-blue.svg?style=for-the-badge&logo=target)](https://www.sih.gov.in/)
+  [![Live Deployment](https://img.shields.io/badge/Live%20Deployment-satiricalguru.github.io%2FAirfare--CPI-2563eb.svg?style=for-the-badge&logo=githubpages&logoColor=white)](https://satiricalguru.github.io/Airfare-CPI/)
   [![Base Year](https://img.shields.io/badge/Base%20Year-2024%3D100%20(Rebased)-green.svg?style=for-the-badge)](docs/research_and_methodology.md)
   [![MoSPI e-Sankhyiki](https://img.shields.io/badge/MoSPI-e--Sankhyiki%20COICOP%2007-orange.svg?style=for-the-badge&logo=government)](https://esankhyiki.mospi.gov.in)
   [![Lead Time](https://img.shields.io/badge/Decision%20Advantage-41%20Days%20Ahead-22c55e.svg?style=for-the-badge)](docs/research_and_methodology.md)
@@ -16,6 +17,10 @@
   [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 </div>
+
+> ### 🌐 Live Web Deployment (GitHub Pages)
+> **Direct Access:** **[https://satiricalguru.github.io/Airfare-CPI/](https://satiricalguru.github.io/Airfare-CPI/)**  
+> *Production build running with verified static snapshots, 30-day DGCA empirical backtesting, calibrated 16-hub satellite network radar map, single-line festive surge navigation, and grounded AI Copilot.*
 
 ---
 
@@ -34,7 +39,7 @@ Air passenger transport is one of the most volatile and mathematically challengi
    By the time official transport numbers are published on the 12th of each month, market pricing dynamics have already shifted.
 4. **Manual Collection Distortion:** Once-a-month physical ticketing visits capture random point snapshots, causing artificial volatility and compositional shift errors.
 
-**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **83 flight corridors (including the Top 25 DGCA Trunk Corridors)**, classifies observations across **4 departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI (Base 2024=100)** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
+**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 core DGCA trunk corridors (and 58 interstate feeder routes)** with **433,700+ validated fare observations**, classifies observations across **4 statutory departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI: 118.99 (Base 2024=100)** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
 
 ---
 
@@ -65,12 +70,13 @@ Air passenger transport is one of the most volatile and mathematically challengi
 * **Zero-Hallucination Fallback:** Client-side deterministic fallback engine ensuring 100% uptime even in offline or static environments.
 
 ### 5. 🗺️ Theme-Adaptive Space View India Network Map
-* **Satellite Visual Telemetry:** High-resolution space-view satellite basemap of India.
+* **Satellite Visual Telemetry:** High-resolution space-view satellite basemap of India with demarcated golden international boundaries, state lines, and accurately calibrated geo-coordinates for all **16 major Indian airport hubs** (`DEL`, `BOM`, `BLR`, `HYD`, `CCU`, `MAA`, `AMD`, `GOI`, `PNQ`, `COK`, `JAI`, `LKO`, `PAT`, `GAU`, `SXR`, `IXZ`).
 * **60FPS Flight Trajectories:** Canvas-rendered geodesic bezier arcs with traveling photon particles and pulsing airport radar rings.
 * **Golden Trunk Corridor Switcher:** Instant access to high-density arterial routes (`DEL ⇄ BOM`, `DEL ⇄ BLR`, `BOM ⇄ BLR`, `DEL ⇄ HYD`, etc.).
 
 ### 6. 🔥 Indian Festive Volatility & Flight Brand Movers
 * **Festival Surge Radar:** Monitors pricing shocks during major travel peaks (Diwali, Chhath Puja, Durga Puja, Eid, Christmas).
+* **4-in-1 Segmented Navigation:** Single-row seamless tab switching across **Festive Spikes (6)**, **Highest Surges (10)**, **Lowest Fares (10)**, and **Brand Benchmark** without line wrapping or layout shifts.
 * **Brand Pricing Benchmark:** Real-time fare distribution comparison across IndiGo (`6E`), Air India (`AI`), Vistara (`UK`), Akasa Air (`QP`), and SpiceJet (`SG`).
 
 ---
@@ -235,7 +241,13 @@ The 25 core corridors account for **~15.3 Million monthly passenger journeys**, 
 
 ## ⚡ Quick Start & Installation
 
-### 🚀 1-Click Launch (Recommended)
+### 🌐 1. Try the Live Deployment (Instant, Zero Setup)
+Experience the full research prototype immediately on GitHub Pages without cloning or running any commands:  
+👉 **[https://satiricalguru.github.io/Airfare-CPI/](https://satiricalguru.github.io/Airfare-CPI/)**
+
+---
+
+### 🚀 2. Local 1-Click Launch (Recommended)
 This script performs port checks on 8000 and 3000, executes Alembic migrations against `database/airfare_cpi_managed.db`, and starts both services:
 
 ```bash
@@ -247,7 +259,7 @@ cd Airfare-CPI
 ./start.sh
 ```
 
-### 🛠️ Manual Step-by-Step Setup
+### 🛠️ 3. Manual Step-by-Step Setup
 
 #### 1. Backend Service Setup
 ```bash
@@ -328,7 +340,7 @@ Airfare-CPI/
 │   ├── tests/                # 126 unit and integration tests
 │   └── config.py             # Central application configuration
 ├── database/                 # Centralized database storage & schemas
-│   ├── airfare_cpi_managed.db# Active Alembic-versioned SQLite database
+│   ├── airfare_cpi_managed.db# Active SQLite store (433,700+ fares, 9,800+ indices, Alembic: 20260903_0004)
 │   ├── airfare_cpi.db        # Historical baseline archive
 │   ├── schema.sql            # Master relational DDL
 │   ├── seed_routes.sql       # 25 core DGCA trunk corridors seed
