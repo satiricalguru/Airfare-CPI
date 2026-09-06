@@ -12,7 +12,7 @@ import {
   ArrowUpRight,
   Database,
   Clock,
-  Sparkles,
+  Sigma,
   Search,
   Activity,
   Zap,
@@ -1157,7 +1157,7 @@ export default function DGCABacktestPanel({ data }) {
               gap: "12px",
             }}
           >
-            <Sparkles size={18} style={{ color: "#6366f1", flexShrink: 0 }} />
+            <Sigma size={18} style={{ color: "#6366f1", flexShrink: 0 }} />
             <div style={{ fontSize: "12px", color: "var(--ink)", lineHeight: 1.5 }}>
               <strong>Econometric Specification:</strong> Dynamic price escalation follows the non-linear
               decay function <code style={{ fontFamily: "var(--mono)", background: "rgba(0,0,0,0.04)", padding: "1px 4px", borderRadius: "3px" }}>P(t) = P_base × (1 + α × e^(-β t))</code> where emergency corporate bookings at T+1 command a <strong>2.25x premium</strong>, transitioning to the baseline reference price at T+30.
@@ -1437,7 +1437,7 @@ export default function DGCABacktestPanel({ data }) {
                     gap: "6px",
                   }}
                 >
-                  <Sparkles size={14} /> Real-Time Nowcasting Model
+                  <Activity size={14} /> Real-Time Nowcasting Model
                 </span>
                 <span
                   style={{

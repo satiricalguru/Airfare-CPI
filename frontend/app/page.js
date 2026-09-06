@@ -66,7 +66,6 @@ import {
   Search,
   ShieldAlert,
   SlidersHorizontal,
-  Sparkles,
   Sun,
   TrendingUp,
   X,
@@ -1429,7 +1428,7 @@ export default function AirfareCPI() {
                       <span className="telemetry-pulse" />
                     </div>
                     <p className="telemetry-text">
-                      <Sparkles size={14} className="telemetry-spark" />{" "}
+                      <Activity size={14} className="telemetry-spark" />{" "}
                       {scrapingProgress || `Requesting permitted fare offers for ${originInfo?.city || routeOriginCode} ✈ ${destInfo?.city || routeDestCode}...`}
                     </p>
                   </div>

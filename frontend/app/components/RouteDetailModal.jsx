@@ -23,7 +23,6 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  Sparkles,
   Database,
 } from "lucide-react";
 import {
