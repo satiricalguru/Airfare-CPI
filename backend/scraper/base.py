@@ -46,6 +46,41 @@ CABIN_FIRST = "FIRST"
 VALID_CABINS = {CABIN_ECONOMY, CABIN_PREMIUM_ECONOMY, CABIN_BUSINESS, CABIN_FIRST}
 
 
+def classify_time_band(time_str: Optional[str]) -> str:
+    """
+    Classifies a departure time string (e.g. '08:15 AM', '14:30', '19:45') into one of
+    the four canonical SIH26056 / Implementation Plan departure time bands:
+      - 00:00-05:59: Early Morning / Red-eye
+      - 06:00-11:59: Morning
+      - 12:00-17:59: Afternoon
+      - 18:00-23:59: Evening / Night
+    """
+    if not time_str:
+        return "UNSPECIFIED"
+    import re
+    m = re.search(r"(\d{1,2}):(\d{2})\s*([AP]M)?", str(time_str).upper())
+    if not m:
+        return "UNSPECIFIED"
+    try:
+        hour = int(m.group(1))
+        ampm = m.group(3)
+        if ampm == "PM" and hour < 12:
+            hour += 12
+        elif ampm == "AM" and hour == 12:
+            hour = 0
+        
+        if 0 <= hour <= 5:
+            return "00:00-05:59"
+        elif 6 <= hour <= 11:
+            return "06:00-11:59"
+        elif 12 <= hour <= 17:
+            return "12:00-17:59"
+        else:
+            return "18:00-23:59"
+    except Exception:
+        return "UNSPECIFIED"
+
+
 @dataclass(frozen=True)
 class FareObservation:
     """
@@ -80,6 +115,10 @@ class FareObservation:
     baggage_kg: Optional[int] = None
     fare_base: Optional[float] = None
     fare_taxes: Optional[float] = None
+    fare_udf: Optional[float] = None
+    fare_convenience: Optional[float] = None
+    dep_time: Optional[str] = None
+    dep_time_band: Optional[str] = None
 
     # ── availability, where the source discloses it ──
     seats_available: Optional[int] = None
@@ -122,6 +161,8 @@ class FareObservation:
             )
         if self.stops < 0:
             raise ValueError(f"stops must be >= 0, got {self.stops}")
+        if self.dep_time and not self.dep_time_band:
+            object.__setattr__(self, "dep_time_band", classify_time_band(self.dep_time))
 
     # ── derived identity ──
 
@@ -152,8 +193,9 @@ class FareObservation:
         Two observations share a product key when they describe the same purchasable
         product, so that a price change between them is a genuine price change rather
         than a difference in what is being bought. Deliberately includes quality
-        dimensions (cabin, fare family, stops, refundability, baggage) — omitting
-        them is exactly how a product-quality change gets misread as inflation.
+        dimensions (cabin, fare family, stops, refundability, baggage, and departure
+        time band) — omitting them is exactly how a product-quality change gets misread
+        as inflation.
 
         Flight number is included to avoid collapsing different scheduled services
         from the same carrier into one product. Departure date is deliberately not
@@ -173,6 +215,7 @@ class FareObservation:
             "REF" if self.is_refundable else "NONREF" if self.is_refundable is False else "REFUNKNOWN",
             f"BAG{self.baggage_kg}" if self.baggage_kg is not None else "BAGUNKNOWN",
             f"H{self.booking_horizon_days}",
+            f"BAND_{self.dep_time_band}" if self.dep_time_band else "BAND_UNSPECIFIED",
         )
         return "|".join(parts)
 
@@ -224,6 +267,10 @@ class FareObservation:
             "fare_total": self.fare_total,
             "fare_base": self.fare_base,
             "fare_taxes": self.fare_taxes,
+            "fare_udf": self.fare_udf,
+            "fare_convenience": self.fare_convenience,
+            "dep_time": self.dep_time,
+            "dep_time_band": self.dep_time_band,
             "currency": self.currency,
             "stops": self.stops,
             "is_direct": self.stops == 0,

@@ -25,10 +25,12 @@ from provenance import CollectionMode
 BACKEND_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
+DATABASE_DIR = REPO_ROOT / "database"
+DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 FIXTURE_DIR = BACKEND_DIR / "fixtures"
 # Keep the historical, unversioned `airfare_cpi.db` read-only.  Fresh local runs
-# use an explicitly versioned store created by Alembic, just like deployments.
-DEFAULT_DB_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'airfare_cpi_managed.db'}"
+# use an explicitly versioned store created by Alembic in the dedicated database/ directory.
+DEFAULT_DB_URL = f"sqlite+aiosqlite:///{DATABASE_DIR / 'airfare_cpi_managed.db'}"
 SUPPORTED_BOOKING_HORIZONS = (1, 7, 15, 30, 45)
 
 load_dotenv(BACKEND_DIR / ".env")
@@ -428,7 +430,7 @@ def build_settings() -> Settings:
 
 def _warn_on_risky_configuration(settings: Settings) -> None:
     """Surface configuration that would be unsafe or misleading in a deployment."""
-    if settings.is_live and not settings.amadeus.is_configured:
+    if settings.is_live and "amadeus" in settings.scraper.enabled_sources and not settings.amadeus.is_configured and "live_portal" not in settings.scraper.enabled_sources:
         logger.warning(
             "COLLECTION_MODE=LIVE but no Amadeus credentials are configured. Live "
             "collection will report SOURCE UNAVAILABLE and produce zero observations. "

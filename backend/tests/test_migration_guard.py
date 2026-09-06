@@ -44,6 +44,6 @@ def test_clean_migration_persists_its_revision_marker(tmp_path, monkeypatch):
     try:
         with engine.connect() as connection:
             revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            assert revision == "20260903_0003"
+            assert revision == "20260903_0004"
     finally:
         engine.dispose()

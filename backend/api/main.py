@@ -76,7 +76,7 @@ from scraper.validator import missing_data_policy
 API_VERSION = "2.0.0"
 # Keep the process from silently opening an unversioned legacy schema. This must
 # match the head revision in backend/alembic/versions.
-REQUIRED_DATABASE_REVISION = "20260903_0003"
+REQUIRED_DATABASE_REVISION = "20260903_0004"
 
 _scheduler: Optional[CollectionScheduler] = None
 
@@ -1150,11 +1150,53 @@ async def get_booking_horizon_analysis(session: AsyncSession = Depends(get_sessi
             },
         })
 
+    from engine.elasticity import compute_lead_time_elasticity
+    elasticity_data = await compute_lead_time_elasticity(
+        session, source_type=cfg.mode.source_type
+    )
+
     return {
         "horizons": analysis,
         "weighting": policy.weighting.to_dict(),
+        "elasticity_model": elasticity_data,
         "methodology_version": METHODOLOGY_VERSION,
     }
+
+
+@app.get("/api/v1/analysis/elasticity")
+async def get_lead_time_elasticity(
+    route_id: Optional[int] = Query(default=None),
+    carrier: Optional[str] = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Lead-time elasticity econometric model.
+    ln(Fare) = beta_0 + beta_1 * lead + beta_2 * lead^2
+    Returns marginal price elasticities (% change per advance booking day),
+    goodness-of-fit R^2, and optimal horizon sweet spot.
+    """
+    from engine.elasticity import compute_lead_time_elasticity
+    cfg = get_settings()
+    res = await compute_lead_time_elasticity(
+        session,
+        source_type=cfg.mode.source_type,
+        route_id=route_id,
+        carrier=carrier,
+    )
+    if res is None:
+        return {
+            "status": "insufficient_data",
+            "message": "Fewer than 10 observations available to fit quadratic elasticity curve.",
+            "route_id": route_id,
+            "carrier": carrier,
+        }
+    return {
+        "status": "success",
+        "route_id": route_id,
+        "carrier": carrier,
+        "elasticity": res,
+    }
+
 
 
 @app.get("/api/v1/analysis/festive-and-movers")
@@ -1764,6 +1806,118 @@ async def get_health(session: AsyncSession = Depends(get_session)):
     }
 
 
+@app.get("/api/v1/quality")
+async def get_data_quality_report(session: AsyncSession = Depends(get_session)):
+    """
+    Unified Data Quality & System Integrity Report (SIH26056).
+    Reports:
+      - Scheduled vs observed elementary cell coverage (route x horizon x time_band)
+      - Missingness percentage and observation distribution by route
+      - Source health, latency, and status
+      - Data quarantine and anomaly triage counts
+    """
+    cfg = get_settings()
+    basket = get_route_basket(cfg.route_basket_path)
+    policy = get_horizon_policy(cfg.horizon_policy_path)
+
+    # Scheduled elementary cells: 50 routes * 5 horizons * 4 time bands = 1,000 cells
+    num_routes = len(basket.routes)
+    num_horizons = len(policy.horizons)
+    num_time_bands = 4
+    scheduled_cells = num_routes * num_horizons * num_time_bands
+
+    metrics = await repo.get_quality_metrics(session, source_type=cfg.mode.source_type)
+
+    route_quality = []
+    for r in basket.routes:
+        cov = metrics["route_coverage"].get(r.route_id, {"total": 0, "valid": 0})
+        total_obs = cov["total"]
+        valid_obs = cov["valid"]
+        route_quality.append({
+            "route_id": r.route_id,
+            "origin": r.origin_code,
+            "destination": r.destination_code,
+            "route_name": r.route_code,
+            "monthly_pax": r.monthly_pax,
+            "weight": r.weight,
+            "observations_collected": total_obs,
+            "valid_observations": valid_obs,
+            "quarantined_observations": total_obs - valid_obs,
+            "is_reporting": valid_obs > 0,
+        })
+
+    reporting_routes = sum(1 for rq in route_quality if rq["is_reporting"])
+    route_reporting_rate = (reporting_routes / num_routes * 100.0) if num_routes else 0.0
+
+    sources = await repo.list_sources(session)
+    sources_summary = [
+        {
+            "name": s.name,
+            "display_name": s.display_name,
+            "source_type": s.source_type,
+            "is_enabled": s.is_enabled,
+            "disabled_reason": s.disabled_reason,
+            "compliance_note": s.compliance_note,
+        }
+        for s in sources
+    ]
+
+    last_run = await repo.latest_collection_run(session, source_type=cfg.mode.source_type)
+
+    return {
+        "status": "healthy" if route_reporting_rate >= 50.0 else "degraded",
+        "methodology_version": METHODOLOGY_VERSION,
+        "collection_mode": cfg.mode.value,
+        "provenance_label": PROVENANCE_LABELS[cfg.mode.source_type],
+        "elementary_cell_coverage": {
+            "scheduled_cells": scheduled_cells,
+            "observed_cells": metrics["observed_elementary_cells"],
+            "coverage_pct": round(
+                (metrics["observed_elementary_cells"] / scheduled_cells * 100.0)
+                if scheduled_cells > 0
+                else 0.0,
+                2,
+            ),
+            "stratification_factors": {
+                "routes": num_routes,
+                "horizons": num_horizons,
+                "time_bands": num_time_bands,
+            },
+        },
+        "observation_totals": {
+            "total_collected": metrics["total_observations"],
+            "valid": metrics["valid_observations"],
+            "quarantined": metrics["quarantined_observations"],
+            "validity_rate_pct": round(
+                (metrics["valid_observations"] / metrics["total_observations"] * 100.0)
+                if metrics["total_observations"] > 0
+                else 0.0,
+                2,
+            ),
+        },
+        "routes": {
+            "total_basket_routes": num_routes,
+            "reporting_routes": reporting_routes,
+            "reporting_rate_pct": round(route_reporting_rate, 1),
+            "route_details": route_quality,
+        },
+        "anomalies": metrics["anomalies"],
+        "sources": sources_summary,
+        "last_collection_run": (
+            {
+                "run_id": last_run.run_id,
+                "status": last_run.status,
+                "display_label": last_run.display_label,
+                "finished_at": last_run.finished_at.isoformat() if last_run.finished_at else None,
+                "observations": last_run.observations_collected,
+            }
+            if last_run
+            else None
+        ),
+    }
+
+
+
 # ═══════════════════════════════════════════════════════════
 # REPORTS
 # ═══════════════════════════════════════════════════════════
@@ -1897,6 +2051,22 @@ async def get_dgca_backtest(session: AsyncSession = Depends(get_session)):
     engine = DGCABacktestEngine()
     result = await engine.evaluate_against_database(session)
     return result.to_dict()
+
+
+@app.get("/api/v1/backtest/mospi")
+async def get_mospi_backtest(session: AsyncSession = Depends(get_session)):
+    """
+    Evaluates calculated Airfare CPI against official MoSPI e-Sankhyiki National Data Portal
+    benchmarks (COICOP Division 07: Transport & All-India Combined CPI).
+    Reports Pearson correlation (r), tracking error, lead-time advantage, and nowcasting projections.
+    """
+    from engine.mospi_benchmark import compute_mospi_comparison
+    cfg = get_settings()
+    res = await compute_mospi_comparison(session, source_type=cfg.mode.source_type)
+    if res is None:
+        raise HTTPException(status_code=404, detail="MoSPI e-Sankhyiki benchmark dataset unavailable.")
+    return res
+
 
 
 @app.post("/api/v1/scraper/live-sweep")

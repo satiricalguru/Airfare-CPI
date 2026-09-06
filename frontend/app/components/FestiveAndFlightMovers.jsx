@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   Calendar,
   Plane,
-  Sparkles,
   TrendingDown,
   TrendingUp,
   Award,
@@ -12,6 +11,7 @@ import {
   ArrowDownRight,
   Clock,
 } from "lucide-react";
+import { CopilotSymbol } from "./AviationCopilotModal";
 
 export default function FestiveAndFlightMovers({ data, onSelectRoute }) {
   const [activeTab, setActiveTab] = useState("festivals"); // "festivals" | "surging" | "dropping" | "brands"
@@ -128,8 +128,10 @@ export default function FestiveAndFlightMovers({ data, onSelectRoute }) {
                 </div>
 
                 <div className="fm-advice-box">
-                  <Sparkles size={12} style={{ display: "inline", marginRight: "5px", verticalAlign: "-1px" }} />
-                  <strong>Booking Advice:</strong> {evt.booking_advice}
+                  <CopilotSymbol size={13} className="fm-advice-copilot-icon" />
+                  <div className="fm-advice-text">
+                    <strong>Booking Advice:</strong> {evt.booking_advice}
+                  </div>
                 </div>
               </div>
             );

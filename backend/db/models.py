@@ -215,11 +215,15 @@ class FareObservationRecord(Base):
     is_refundable: Mapped[bool | None] = mapped_column(Boolean)
     baggage_kg: Mapped[int | None] = mapped_column(Integer)
     seats_available: Mapped[int | None] = mapped_column(Integer)
+    dep_time: Mapped[str | None] = mapped_column(String(16))
+    dep_time_band: Mapped[str | None] = mapped_column(String(20))
 
     # ── price, canonical INR ──
     fare_total: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     fare_base: Mapped[float | None] = mapped_column(Numeric(12, 2))
     fare_taxes: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    fare_udf: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    fare_convenience: Mapped[float | None] = mapped_column(Numeric(12, 2))
     currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
 
     # ── price as the source gave it ──
@@ -281,6 +285,7 @@ class NormalizedFare(Base):
     collection_date: Mapped[date] = mapped_column(Date, nullable=False)
     product_key: Mapped[str] = mapped_column(String(300), nullable=False)
     product_key_hash: Mapped[str] = mapped_column(String(32), nullable=False)
+    dep_time_band: Mapped[str | None] = mapped_column(String(20))
     fare_inr: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
     acquisition_method: Mapped[str] = mapped_column(

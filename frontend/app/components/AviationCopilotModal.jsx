@@ -29,7 +29,7 @@ import { DATA_MODE, NOT_AVAILABLE, askCopilot } from "../lib/api";
 import { fmtChange, fmtCount, fmtIndex } from "../lib/format";
 
 /** Icon used by the nav and trigger button matching the Copilot bot squircle with interactive cursor tracking eyes. */
-export function CopilotSymbol({ size = 16, className = "" }) {
+export function CopilotSymbol({ size = 16, className = "", style = {} }) {
   const svgRef = useRef(null);
   const [eyePos, setEyePos] = useState({ x: 0, y: 0 });
   const rafRef = useRef(null);
@@ -85,7 +85,7 @@ export function CopilotSymbol({ size = 16, className = "" }) {
       xmlns="http://www.w3.org/2000/svg"
       className={`copilot-symbol-svg ${className}`}
       aria-hidden="true"
-      style={{ flexShrink: 0 }}
+      style={{ flexShrink: 0, ...style }}
     >
       <rect width="24" height="24" rx="7" className="copilot-symbol-bg" />
       <g

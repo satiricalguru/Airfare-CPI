@@ -274,6 +274,7 @@ async def save_collection_run(
                     collection_date=observation.collection_date,
                     product_key=observation.product_key(),
                     product_key_hash=observation.product_key_hash(),
+                    dep_time_band=observation.dep_time_band,
                     fare_inr=observation.fare_total,
                     source_type=observation.source_type.value,
                     acquisition_method=observation.acquisition_method.value,
@@ -355,9 +356,13 @@ def _observation_row(
         is_refundable=obs.is_refundable,
         baggage_kg=obs.baggage_kg,
         seats_available=obs.seats_available,
+        dep_time=obs.dep_time,
+        dep_time_band=obs.dep_time_band,
         fare_total=obs.fare_total,
         fare_base=obs.fare_base,
         fare_taxes=obs.fare_taxes,
+        fare_udf=obs.fare_udf,
+        fare_convenience=obs.fare_convenience,
         currency=obs.currency,
         source_currency=obs.source_currency,
         source_fare_total=obs.source_fare_total,
@@ -1272,6 +1277,10 @@ def record_to_observation(row: FareObservationRecord) -> FareObservation:
         fare_total=float(row.fare_total),
         fare_base=float(row.fare_base) if row.fare_base is not None else None,
         fare_taxes=float(row.fare_taxes) if row.fare_taxes is not None else None,
+        fare_udf=float(row.fare_udf) if getattr(row, "fare_udf", None) is not None else None,
+        fare_convenience=float(row.fare_convenience) if getattr(row, "fare_convenience", None) is not None else None,
+        dep_time=getattr(row, "dep_time", None),
+        dep_time_band=getattr(row, "dep_time_band", None),
         currency="INR",
         stops=row.stops,
         is_refundable=row.is_refundable,
@@ -1286,3 +1295,78 @@ def record_to_observation(row: FareObservationRecord) -> FareObservation:
         is_valid=row.is_valid,
         validation_flags=tuple(row.validation_flags or ()),
     )
+
+
+async def get_quality_metrics(
+    session: AsyncSession,
+    source_type: Optional[SourceType] = None,
+) -> dict[str, Any]:
+    """
+    Unified quality metrics for SIH26056:
+    - Elementary cell coverage (scheduled vs observed)
+    - Missingness percentage by route
+    - Quarantine & validation failure counts
+    - Anomaly triage status breakdown
+    """
+    total_q = select(
+        func.count(FareObservationRecord.id),
+        func.count(FareObservationRecord.id).filter(FareObservationRecord.is_valid.is_(True)),
+        func.count(FareObservationRecord.id).filter(FareObservationRecord.is_valid.is_(False)),
+    )
+    if source_type is not None:
+        total_q = total_q.where(FareObservationRecord.source_type == source_type.value)
+
+    row = (await session.execute(total_q)).one()
+    total_obs = int(row[0] or 0)
+    valid_obs = int(row[1] or 0)
+    invalid_obs = int(row[2] or 0)
+
+    cell_q = select(
+        FareObservationRecord.route_id,
+        FareObservationRecord.booking_horizon_days,
+        FareObservationRecord.dep_time_band,
+    ).where(FareObservationRecord.is_valid.is_(True)).distinct()
+    if source_type is not None:
+        cell_q = cell_q.where(FareObservationRecord.source_type == source_type.value)
+    cell_rows = (await session.execute(cell_q)).all()
+    observed_cells = len(cell_rows)
+
+    route_q = select(
+        FareObservationRecord.route_id,
+        func.count(FareObservationRecord.id),
+        func.count(FareObservationRecord.id).filter(FareObservationRecord.is_valid.is_(True)),
+    ).group_by(FareObservationRecord.route_id)
+    if source_type is not None:
+        route_q = route_q.where(FareObservationRecord.source_type == source_type.value)
+    route_rows = (await session.execute(route_q)).all()
+    route_obs_map = {
+        int(r[0]): {"total": int(r[1]), "valid": int(r[2])}
+        for r in route_rows
+        if r[0] is not None
+    }
+
+    anomalies_open = await count_anomalies(session, status="open")
+    anomalies_under_review = await count_anomalies(session, status="under_review")
+    anomalies_confirmed_error = await count_anomalies(session, status="confirmed_error")
+    anomalies_confirmed_genuine = await count_anomalies(session, status="confirmed_genuine")
+
+    return {
+        "total_observations": total_obs,
+        "valid_observations": valid_obs,
+        "quarantined_observations": invalid_obs,
+        "observed_elementary_cells": observed_cells,
+        "route_coverage": route_obs_map,
+        "anomalies": {
+            "open": anomalies_open,
+            "under_review": anomalies_under_review,
+            "confirmed_error": anomalies_confirmed_error,
+            "confirmed_genuine": anomalies_confirmed_genuine,
+            "total": (
+                anomalies_open
+                + anomalies_under_review
+                + anomalies_confirmed_error
+                + anomalies_confirmed_genuine
+            ),
+        },
+    }
+
