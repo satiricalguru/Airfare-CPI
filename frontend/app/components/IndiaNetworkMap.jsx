@@ -7,48 +7,49 @@ import { getAssetPath } from "../utils/assetPath";
 import { NOT_AVAILABLE } from "../lib/api";
 import { fmtCount, fmtIndex, fmtPctFromFraction } from "../lib/format";
 
-// ── Exact Calibrated Coordinates for High-Definition Space View with Marked Borders (896 × 1200) ──
+// ── Exact Calibrated Coordinates for High-Definition Space View with Marked Borders (1024 × 935) ──
 const HUBS_CONFIG = [
-  { code: "DEL", city: "New Delhi", state: "Delhi", x: 345, y: 350, labelOffset: { x: 14, y: -10 } },
-  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 230, y: 600, labelOffset: { x: -38, y: 4 } },
-  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 258, y: 620, labelOffset: { x: 14, y: 8 } },
-  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 330, y: 775, labelOffset: { x: -38, y: 4 } },
-  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 375, y: 635, labelOffset: { x: 14, y: 4 } },
-  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 560, y: 495, labelOffset: { x: 14, y: 4 } },
-  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 400, y: 775, labelOffset: { x: 14, y: 4 } },
-  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 215, y: 485, labelOffset: { x: -38, y: 0 } },
-  { code: "GOI", city: "Goa", state: "Goa", x: 250, y: 690, labelOffset: { x: -34, y: 4 } },
-  { code: "COK", city: "Kochi", state: "Kerala", x: 310, y: 865, labelOffset: { x: -34, y: 4 } },
-  { code: "JAI", city: "Jaipur", state: "Rajasthan", x: 300, y: 385, labelOffset: { x: -34, y: 4 } },
-  { code: "LKO", city: "Lucknow", state: "Uttar Pradesh", x: 430, y: 395, labelOffset: { x: 12, y: -8 } },
-  { code: "PAT", city: "Patna", state: "Bihar", x: 520, y: 425, labelOffset: { x: 12, y: -8 } },
-  { code: "GAU", city: "Guwahati", state: "Assam", x: 720, y: 415, labelOffset: { x: 12, y: -8 } },
-  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 360, y: 195, labelOffset: { x: -34, y: -8 } },
-  { code: "IXZ", city: "Port Blair", state: "Andaman & Nicobar", x: 825, y: 810, labelOffset: { x: 14, y: 4 } },
+  { code: "DEL", city: "New Delhi", state: "Delhi", x: 356, y: 262, labelOffset: { x: 14, y: -8 } },
+  { code: "BOM", city: "Mumbai", state: "Maharashtra", x: 224, y: 512, labelOffset: { x: -38, y: 4 } },
+  { code: "PNQ", city: "Pune", state: "Maharashtra", x: 248, y: 534, labelOffset: { x: 14, y: 8 } },
+  { code: "BLR", city: "Bengaluru", state: "Karnataka", x: 352, y: 692, labelOffset: { x: -38, y: 4 } },
+  { code: "HYD", city: "Hyderabad", state: "Telangana", x: 405, y: 562, labelOffset: { x: 14, y: 4 } },
+  { code: "CCU", city: "Kolkata", state: "West Bengal", x: 645, y: 428, labelOffset: { x: 14, y: 4 } },
+  { code: "MAA", city: "Chennai", state: "Tamil Nadu", x: 432, y: 678, labelOffset: { x: 14, y: 4 } },
+  { code: "AMD", city: "Ahmedabad", state: "Gujarat", x: 232, y: 412, labelOffset: { x: -38, y: 0 } },
+  { code: "GOI", city: "Goa", state: "Goa", x: 242, y: 622, labelOffset: { x: -34, y: 4 } },
+  { code: "COK", city: "Kochi", state: "Kerala", x: 316, y: 768, labelOffset: { x: -34, y: 4 } },
+  { code: "JAI", city: "Jaipur", state: "Rajasthan", x: 324, y: 308, labelOffset: { x: -34, y: 4 } },
+  { code: "LKO", city: "Lucknow", state: "Uttar Pradesh", x: 465, y: 318, labelOffset: { x: 12, y: -8 } },
+  { code: "PAT", city: "Patna", state: "Bihar", x: 580, y: 345, labelOffset: { x: 12, y: -8 } },
+  { code: "GAU", city: "Guwahati", state: "Assam", x: 725, y: 342, labelOffset: { x: 12, y: -8 } },
+  { code: "SXR", city: "Srinagar", state: "Jammu & Kashmir", x: 320, y: 135, labelOffset: { x: -34, y: -8 } },
+  { code: "IXZ", city: "Port Blair", state: "Andaman & Nicobar", x: 750, y: 742, labelOffset: { x: 14, y: 4 } },
 ];
 
 const HUB_MAP = Object.fromEntries(HUBS_CONFIG.map((h) => [h.code, h]));
 
 // ── Clearly Marked State Name Badges on Space View ──
 const STATE_LABELS = [
-  { name: "JAMMU & KASHMIR", x: 375, y: 155 },
-  { name: "PUNJAB", x: 290, y: 275 },
-  { name: "HARYANA", x: 305, y: 320 },
-  { name: "RAJASTHAN", x: 235, y: 375 },
-  { name: "UTTAR PRADESH", x: 440, y: 355 },
-  { name: "GUJARAT", x: 165, y: 470 },
-  { name: "MADHYA PRADESH", x: 335, y: 495 },
-  { name: "BIHAR", x: 545, y: 395 },
-  { name: "WEST BENGAL", x: 595, y: 475 },
-  { name: "MAHARASHTRA", x: 260, y: 550 },
-  { name: "CHHATTISGARH", x: 435, y: 535 },
-  { name: "ODISHA", x: 495, y: 585 },
-  { name: "TELANGANA", x: 360, y: 595 },
-  { name: "ANDHRA PRADESH", x: 395, y: 710 },
-  { name: "KARNATAKA", x: 285, y: 745 },
-  { name: "TAMIL NADU", x: 375, y: 840 },
-  { name: "KERALA", x: 280, y: 855 },
-  { name: "ASSAM", x: 760, y: 385 },
+  { name: "JAMMU & KASHMIR", x: 330, y: 110 },
+  { name: "LADAKH", x: 385, y: 85 },
+  { name: "PUNJAB", x: 305, y: 195 },
+  { name: "HARYANA", x: 338, y: 235 },
+  { name: "RAJASTHAN", x: 270, y: 305 },
+  { name: "UTTAR PRADESH", x: 470, y: 295 },
+  { name: "GUJARAT", x: 195, y: 410 },
+  { name: "MADHYA PRADESH", x: 390, y: 415 },
+  { name: "BIHAR", x: 585, y: 325 },
+  { name: "WEST BENGAL", x: 650, y: 405 },
+  { name: "MAHARASHTRA", x: 315, y: 505 },
+  { name: "CHHATTISGARH", x: 485, y: 465 },
+  { name: "ODISHA", x: 545, y: 480 },
+  { name: "TELANGANA", x: 410, y: 540 },
+  { name: "ANDHRA PRADESH", x: 445, y: 635 },
+  { name: "KARNATAKA", x: 315, y: 640 },
+  { name: "TAMIL NADU", x: 380, y: 745 },
+  { name: "KERALA", x: 310, y: 750 },
+  { name: "ASSAM", x: 750, y: 325 },
 ];
 
 // ── Complete 25 Domestic Aviation Corridors in MoSPI Representative Basket ──
@@ -172,8 +173,8 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
     const ctx = canvas.getContext("2d");
 
     let animId;
-    const VB_W = 896;
-    const VB_H = 1200;
+    const VB_W = 1024;
+    const VB_H = 935;
 
     const setupCanvas = () => {
       const rect = canvas.getBoundingClientRect();
@@ -384,7 +385,7 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
 
         {/* Layer 2: Demarcated State Labels & All 16 Airport Hub Markers */}
         <svg
-          viewBox="0 0 896 1200"
+          viewBox="0 0 1024 935"
           preserveAspectRatio="none"
           style={{
             position: "absolute",
@@ -505,8 +506,8 @@ export default function IndiaNetworkMap({ isDarkMode: propDarkMode, routes = [] 
           <div
             style={{
               position: "absolute",
-              left: `${(hoveredHub.x / 896) * 100}%`,
-              top: `${(hoveredHub.y / 1200) * 100}%`,
+              left: `${(hoveredHub.x / 1024) * 100}%`,
+              top: `${(hoveredHub.y / 935) * 100}%`,
               transform: "translate(-50%, -130%)",
               background: "var(--paper-bright)",
               color: "var(--ink)",

@@ -5489,7 +5489,7 @@ html.dark .copilot-send-btn {
 .aerospace-map-viewport {
   position: relative;
   width: 100%;
-  aspect-ratio: 896 / 1200;
+  aspect-ratio: 1024 / 935;
   max-height: 840px;
   margin: 0 auto;
   overflow: hidden;
