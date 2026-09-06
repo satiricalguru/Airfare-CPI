@@ -43,8 +43,8 @@ export default function DGCABacktestPanel({ data }) {
   const mape = backtest?.mape_pct ?? 4.92;
   const rmse = backtest?.rmse_tracking_error ?? 6.497;
   const meetsThreshold = backtest?.meets_statistical_threshold ?? (pearsonR >= 0.85 && mape <= 5.0);
-  const timeSeries = data?.dgcaBacktest?.time_series;
-  const sectors = data?.dgcaBacktest?.sector_comparisons;
+  const timeSeries = useMemo(() => data?.dgcaBacktest?.time_series || [], [data?.dgcaBacktest?.time_series]);
+  const sectors = useMemo(() => data?.dgcaBacktest?.sector_comparisons || [], [data?.dgcaBacktest?.sector_comparisons]);
   const elasticity = backtest?.horizon_elasticity || {
     "T+1": { lead_days: 1, demand_share_pct: 10.5, price_multiplier: 2.25, rationale: "Emergency, corporate & distress travel" },
     "T+7": { lead_days: 7, demand_share_pct: 21.0, price_multiplier: 1.48, rationale: "Short-lead discretionary travel" },
@@ -257,7 +257,7 @@ export default function DGCABacktestPanel({ data }) {
             }}
           >
             <Activity size={13} />
-            30-Day Series ({timeSeries.length || 31}D)
+            30-Day Series ({(timeSeries?.length || chartData?.length) || 31}D)
           </button>
 
           <button
