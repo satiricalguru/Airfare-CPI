@@ -41,6 +41,14 @@ from scraper.base import (
     classify_time_band,
 )
 
+from scraper.tariff_orders import unbundle_statutory_tariff
+from scraper.web.browser_collector import BrowserCollector
+from scraper.web.errors import (
+    AcquisitionTimeoutError,
+    CaptchaChallengeError,
+    PolicyBlockError,
+)
+
 SOURCE_NAME = "live_portal"
 
 AIRLINE_IATA_MAP: dict[str, tuple[str, str]] = {
@@ -87,7 +95,7 @@ def describe() -> SourceCapability:
 class LivePortalFareSource(BaseFareSource):
     """
     Live web scraper adapter capable of automated scheduled extraction
-    from domestic flight portals via Playwright.
+    from domestic flight portals via Playwright and BrowserCollector.
     """
 
     def __init__(
@@ -96,12 +104,17 @@ class LivePortalFareSource(BaseFareSource):
         timeout_seconds: float = 35.0,
         user_agent: str = (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         ),
+        collector: Optional[BrowserCollector] = None,
     ):
         super().__init__(capability or describe())
         self.timeout_seconds = timeout_seconds
         self.user_agent = user_agent
+        self.collector = collector or BrowserCollector(
+            timeout_seconds=timeout_seconds,
+            browser_user_agent=user_agent,
+        )
 
     async def _search(
         self,
@@ -119,7 +132,7 @@ class LivePortalFareSource(BaseFareSource):
         started_at = time.time()
         req_id = new_request_id()
 
-        # Public search URL
+        # Public search URL conforming to registered pattern
         search_url = (
             f"https://www.google.com/travel/flights?q=Flights%20to%20{destination_code}"
             f"%20from%20{origin_code}%20on%20{departure_date.isoformat()}%20oneway"
@@ -130,52 +143,23 @@ class LivePortalFareSource(BaseFareSource):
         )
 
         try:
-            from playwright.async_api import async_playwright
+            acq_res, raw_text_rows = await self.collector.fetch_page_and_cards(
+                source_id=SOURCE_NAME,
+                url=search_url,
+                card_selectors=("div.yR1fYc", "li.pIavfa"),
+                wait_selector="div.yR1fYc, li.pIavfa",
+                settle_ms=3500,
+            )
 
-            raw_text_rows: list[str] = []
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                ctx = await browser.new_context(
-                    locale="en-IN",
-                    viewport={"width": 1280, "height": 800},
-                    user_agent=self.user_agent,
-                )
-                page = await ctx.new_page()
-
-                try:
-                    resp = await page.goto(
-                        search_url,
-                        wait_until="domcontentloaded",
-                        timeout=int(self.timeout_seconds * 1000),
-                    )
-                    await page.wait_for_timeout(3500)
-                    title = await page.title()
-                    html = await page.content()
-                    status = resp.status if resp else None
-
-                    if detect_block(title, html, status):
-                        logger.warning(
-                            f"Live scraper challenged: status={status}, title={title[:60]}"
-                        )
-                        await browser.close()
-                        return SourceResult.failed(
-                            source_name=SOURCE_NAME,
-                            reason=f"Access challenged by portal (status={status}, title={title[:40]})",
-                            error_type="access_challenged",
-                            http_status=status,
-                            response_time_ms=int((time.time() - started_at) * 1000),
-                        )
-
-                    card_locators = await page.locator("div.yR1fYc, li.pIavfa").all()
-                    for card in card_locators:
-                        try:
-                            txt = (await card.inner_text()).strip()
-                            if txt and "₹" in txt:
-                                raw_text_rows.append(txt)
-                        except Exception:
-                            pass
-                finally:
-                    await browser.close()
+            # Fallback parsing from sanitized HTML if card text locator was empty
+            if not raw_text_rows and acq_res.html_content:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(acq_res.html_content, "html.parser")
+                cards = soup.select("div.yR1fYc, li.pIavfa")
+                for c in cards:
+                    txt = c.get_text(separator="\n", strip=True)
+                    if txt and "₹" in txt:
+                        raw_text_rows.append(txt)
 
             observations = self._parse_and_build_observations(
                 raw_text_rows=raw_text_rows,
@@ -187,6 +171,8 @@ class LivePortalFareSource(BaseFareSource):
                 search_url=search_url,
                 request_id=req_id,
                 cabin=cabin,
+                artifact_id=acq_res.stored_artifact.artifact_id,
+                artifact_sha256=acq_res.stored_artifact.sha256,
             )
 
             latency_ms = int((time.time() - started_at) * 1000)
@@ -205,6 +191,33 @@ class LivePortalFareSource(BaseFareSource):
                 response_time_ms=latency_ms,
             )
 
+        except CaptchaChallengeError as exc:
+            latency_ms = int((time.time() - started_at) * 1000)
+            logger.warning(f"Live scraper challenged on {search_url}: {exc}")
+            return SourceResult.failed(
+                source_name=SOURCE_NAME,
+                reason=f"Bot challenge rendered on {SOURCE_NAME}: {exc}",
+                error_type="captcha_challenge",
+                response_time_ms=latency_ms,
+            )
+        except PolicyBlockError as exc:
+            latency_ms = int((time.time() - started_at) * 1000)
+            logger.warning(f"Governance policy blocked {search_url}: {exc}")
+            return SourceResult.failed(
+                source_name=SOURCE_NAME,
+                reason=f"Governance policy blocked: {exc}",
+                error_type="policy_block",
+                response_time_ms=latency_ms,
+            )
+        except AcquisitionTimeoutError as exc:
+            latency_ms = int((time.time() - started_at) * 1000)
+            logger.warning(f"Live scraper timeout for {origin_code}->{destination_code}: {exc}")
+            return SourceResult.failed(
+                source_name=SOURCE_NAME,
+                reason=f"Portal navigation timed out: {exc}",
+                error_type="timeout",
+                response_time_ms=latency_ms,
+            )
         except Exception as exc:
             latency_ms = int((time.time() - started_at) * 1000)
             logger.error(
@@ -228,6 +241,8 @@ class LivePortalFareSource(BaseFareSource):
         search_url: str,
         request_id: str,
         cabin: str,
+        artifact_id: Optional[str] = None,
+        artifact_sha256: Optional[str] = None,
     ) -> list[FareObservation]:
         observations: list[FareObservation] = []
         seen_keys: set[str] = set()
@@ -273,22 +288,12 @@ class LivePortalFareSource(BaseFareSource):
                 continue
             seen_keys.add(dedupe_key)
 
-            # 6. Decompose statutory civil aviation fees with exact arithmetic reconciliation:
-            # Base Fare + Taxes (GST 5% + ASF ₹236) + UDF (~₹320) + Convenience (~₹300) = Total Fare
-            if total_fare > 2000.0:
-                asf = 236.0
-                udf = 320.0
-                conv = 300.0
-                base_fare = round((total_fare - asf - udf - conv) / 1.05, 2)
-                gst = round(base_fare * 0.05, 2)
-                taxes = round(gst + asf, 2)
-                # Remainder balances exact sum
-                convenience = round(total_fare - base_fare - taxes - udf, 2)
-            else:
-                base_fare = round(total_fare * 0.75, 2)
-                taxes = round(total_fare * 0.15, 2)
-                udf = round(total_fare * 0.05, 2)
-                convenience = round(total_fare - base_fare - taxes - udf, 2)
+            # 6. Decompose statutory civil aviation fees using AERA Tariff Orders
+            decomp = unbundle_statutory_tariff(
+                total_fare=total_fare,
+                origin_code=origin_code,
+                convenience_fee=300.0,
+            )
 
             raw_rep = f"{flight_no}|{carrier_code}|{total_fare}|{dep_time}|{stops}"
             prov = DataProvenance.for_web_scrape(
@@ -303,6 +308,12 @@ class LivePortalFareSource(BaseFareSource):
                     "dep_time": dep_time,
                     "arr_time": arr_time,
                     "time_band": dep_time_band,
+                    "artifact_id": artifact_id,
+                    "artifact_sha256": artifact_sha256,
+                    "decomposition_method": decomp["decomposition_method"],
+                    "is_estimated": decomp["is_estimated"],
+                    "udf_airport": decomp["udf_airport"],
+                    "is_surrogate": True,
                 },
             )
 
@@ -319,16 +330,16 @@ class LivePortalFareSource(BaseFareSource):
                 fare_family="SAVER",
                 stops=stops,
                 is_refundable=False,
-                baggage_kg=15,
-                fare_base=base_fare,
-                fare_taxes=taxes,
-                fare_udf=udf,
-                fare_convenience=convenience,
+                baggage_kg=None,  # Summary cards do not expose check-in allowance
+                fare_base=decomp["base_fare"],
+                fare_taxes=decomp["taxes"],
+                fare_udf=decomp["udf"],
+                fare_convenience=decomp["convenience"],
                 fare_total=total_fare,
                 currency="INR",
                 source_currency="INR",
                 source_fare_total=total_fare,
-                seats_available=7,
+                seats_available=None,  # Summary cards do not expose seat count
                 dep_time=dep_time,
                 dep_time_band=dep_time_band,
                 provenance=prov,

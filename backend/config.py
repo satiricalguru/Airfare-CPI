@@ -150,7 +150,7 @@ class ScraperSettings:
 
     # Which sources may be attempted, in priority order. A name listed here that is
     # not registered, or is registered as disabled, is skipped with a logged reason.
-    enabled_sources: list[str] = field(default_factory=lambda: ["amadeus"])
+    enabled_sources: list[str] = field(default_factory=lambda: ["live_portal", "easemytrip"])
     booking_horizons: list[int] = field(default_factory=lambda: [1, 7, 15, 30, 45])
     passengers: int = 1
     cabin: str = "ECONOMY"
@@ -166,6 +166,7 @@ class ScraperSettings:
     # robots.txt is honoured for any source fetched over plain HTTP(S) from a web
     # host. Disabling this is not offered as a switch.
     respect_robots_txt: bool = True
+    allow_research_scraping: bool = True
     user_agent: str = (
         "AirfareCPI-Research/2.0 (SIH26056 academic price-index prototype; "
         "contact: repository maintainer)"
@@ -300,6 +301,7 @@ class Settings:
             "amadeus_configured": self.amadeus.is_configured,
             "copilot_proxy_enabled": self.api.copilot_enabled,
             "respect_robots_txt": self.scraper.respect_robots_txt,
+            "allow_research_scraping": self.scraper.allow_research_scraping,
         }
 
 
@@ -327,8 +329,11 @@ def build_settings() -> Settings:
         allow_paid_overage=allow_paid_overage,
     )
 
+    default_sources = (
+        "live_portal,easemytrip,amadeus" if amadeus.is_configured else "live_portal,easemytrip"
+    )
     scraper = ScraperSettings(
-        enabled_sources=_env_str_list("ENABLED_SOURCES", "amadeus"),
+        enabled_sources=_env_str_list("ENABLED_SOURCES", default_sources),
         booking_horizons=_env_int_list("BOOKING_HORIZONS", "1,7,15,30,45"),
         passengers=_env_int("COLLECTION_PASSENGERS", 1),
         cabin=_env_str("COLLECTION_CABIN", "ECONOMY").upper(),
@@ -338,6 +343,7 @@ def build_settings() -> Settings:
         request_timeout_seconds=_env_float("SCRAPER_TIMEOUT_SECONDS", 20.0),
         per_host_min_interval_seconds=_env_float("SCRAPER_MIN_REQUEST_INTERVAL", 1.0),
         max_concurrent_requests=_env_int("SCRAPER_MAX_CONCURRENCY", 4),
+        allow_research_scraping=_env_bool("ALLOW_RESEARCH_SCRAPING", True),
         user_agent=_env_str(
             "SCRAPER_USER_AGENT",
             "AirfareCPI-Research/2.0 (SIH26056 academic price-index prototype; "

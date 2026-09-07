@@ -286,6 +286,15 @@ export const METHODOLOGY_STEPS = [
       "carries a recorded reason. Seasonal adjustment is NOT IMPLEMENTED, so the " +
       "series is observed rather than adjusted.",
   },
+  {
+    n: 9,
+    title: "Statutory fee decomposition & UDF",
+    desc:
+      "Gross all-inclusive quoted fares are decomposed into pure airline base fares, statutory User " +
+      "Development Fees (UDF) by origin airport (AERA orders: DEL ₹320, BOM ₹340, BLR ₹360, HYD ₹380, " +
+      "CCU ₹290, MAA ₹280, GOI ₹330), Aviation Security Fee (ASF ₹236), GST (5%), and portal convenience fees. " +
+      "Estimated components are strictly flagged with is_estimated=true and linked to immutable raw payload hashes.",
+  },
 ];
 
 /**

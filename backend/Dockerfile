@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 # Don't buffer stdout/stderr, don't write .pyc files.
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
@@ -17,7 +18,8 @@ COPY requirements.txt .
 # the pinned application graph. This also prevents `pip install` itself from being
 # the only vulnerable package in an otherwise clean container audit.
 RUN python -m pip install --no-cache-dir --upgrade "pip>=26.2,<27" && \
-    python -m pip install --no-cache-dir -r requirements.txt
+    python -m pip install --no-cache-dir -r requirements.txt && \
+    playwright install --with-deps chromium
 
 # Copy application
 COPY . .
@@ -25,7 +27,8 @@ COPY . .
 # Run as an unprivileged user. Previously this image ran as root, so a container
 # escape or a code-execution bug would have had root in the container.
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 appuser && \
-    chown -R appuser:appuser /app
+    mkdir -p /ms-playwright && \
+    chown -R appuser:appuser /ms-playwright /app
 USER appuser
 
 EXPOSE 8000

@@ -29,6 +29,7 @@ class SourcePolicyEnforcer:
         user_agent: str = "AirfareCPI-Research/2.0",
         respect_robots_txt: bool = True,
         robots_txt_content: Optional[str] = None,
+        allow_research_scraping: Optional[bool] = None,
     ) -> SourceAccessRecord:
         """
         Validate all gates for target_url. Returns SourceAccessRecord if allowed.
@@ -46,7 +47,11 @@ class SourcePolicyEnforcer:
         path = parsed.path
 
         # 1. 8-Gate check
-        gate_res = GovernanceValidator.evaluate_gates(record, url_path=path)
+        gate_res = GovernanceValidator.evaluate_gates(
+            record,
+            url_path=path,
+            allow_research_scraping=allow_research_scraping,
+        )
         if not gate_res.is_permitted:
             raise PolicyBlockError(f"Policy gate check failed: {gate_res.reason}")
 

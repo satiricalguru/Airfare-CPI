@@ -67,3 +67,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Scraper raw DOM captures (immutable local artifacts)
+data/artifacts/raw_captures/

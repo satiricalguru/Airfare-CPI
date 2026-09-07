@@ -239,6 +239,23 @@ def fare_observation(row: FareObservationRecord) -> dict[str, Any]:
     Provenance is included on every record, so a consumer inspecting raw data can see
     per-row whether it was collected, simulated, or replayed.
     """
+    notes = getattr(row, "provenance_notes", None)
+    if isinstance(notes, str):
+        try:
+            import json
+            notes = json.loads(notes)
+        except Exception:
+            notes = {}
+    elif not isinstance(notes, dict):
+        notes = {}
+
+    is_estimated = bool(notes.get("is_estimated", False))
+    is_surrogate = bool(notes.get("is_surrogate", False))
+    decomposition_method = notes.get("decomposition_method")
+    artifact_id = notes.get("artifact_id")
+    artifact_sha256 = notes.get("artifact_sha256")
+    udf_airport = notes.get("udf_airport")
+
     return {
         "observation_id": row.id,
         "route_id": row.route_id,
@@ -259,6 +276,12 @@ def fare_observation(row: FareObservationRecord) -> dict[str, Any]:
         "fare_taxes": _round(float(row.fare_taxes), 2) if row.fare_taxes is not None else None,
         "fare_udf": _round(float(row.fare_udf), 2) if getattr(row, "fare_udf", None) is not None else None,
         "fare_convenience": _round(float(row.fare_convenience), 2) if getattr(row, "fare_convenience", None) is not None else None,
+        "is_estimated": is_estimated,
+        "is_surrogate": is_surrogate,
+        "decomposition_method": decomposition_method,
+        "artifact_id": artifact_id,
+        "artifact_sha256": artifact_sha256,
+        "udf_airport": udf_airport,
         "dep_time": getattr(row, "dep_time", None),
         "dep_time_band": getattr(row, "dep_time_band", None),
         "currency": row.currency,
@@ -275,6 +298,13 @@ def fare_observation(row: FareObservationRecord) -> dict[str, Any]:
             "collector_version": row.collector_version,
             "source_url": row.source_url,
             "raw_payload_hash": row.raw_payload_hash,
+            "artifact_id": artifact_id,
+            "artifact_sha256": artifact_sha256,
+            "is_estimated": is_estimated,
+            "is_surrogate": is_surrogate,
+            "decomposition_method": decomposition_method,
+            "udf_airport": udf_airport,
+            "provenance_notes": notes,
             "source_currency": row.source_currency,
             "source_fare_total": (
                 _round(float(row.source_fare_total), 2)
@@ -341,12 +371,20 @@ def source(row: Source) -> dict[str, Any]:
     from scraper.source_registry import get_source_registry
 
     gov = get_source_registry().get(row.name)
+    permission_status = (
+        gov.permission_status
+        if gov
+        else ("APPROVED" if row.is_enabled else "PROHIBITED_WITHOUT_PERMISSION")
+    )
+    is_permitted = gov.is_permitted_for_network_collection if gov else row.is_enabled
     return {
         "name": row.name,
         "display_name": row.display_name,
         "source_type": row.source_type,
         "provenance_label": PROVENANCE_LABELS[SourceType(row.source_type)],
         "enabled": row.is_enabled,
+        "is_permitted": is_permitted,
+        "permission_status": permission_status,
         "disabled_reason": row.disabled_reason,
         "requires_credentials": row.requires_credentials,
         "homepage": row.homepage,

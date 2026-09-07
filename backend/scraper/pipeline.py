@@ -238,7 +238,10 @@ class CollectionPipeline:
         if mode is CollectionMode.LIVE:
             permitted: list[FareSource] = []
             for src in sources:
-                gate = check_source_permitted(src.capability.name)
+                gate = check_source_permitted(
+                    src.capability.name,
+                    allow_research_scraping=self.settings.scraper.allow_research_scraping,
+                )
                 if not gate.is_permitted:
                     logger.warning(
                         f"Source '{src.capability.name}' blocked by source governance: {gate.reason}"

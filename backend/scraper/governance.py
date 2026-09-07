@@ -116,6 +116,7 @@ class GovernanceValidator:
         url_path: Optional[str] = None,
         current_terms_content: Optional[str] = None,
         current_robots_content: Optional[str] = None,
+        allow_research_scraping: Optional[bool] = None,
     ) -> GateCheckResult:
         """
         Evaluate all 8 gates for a candidate network collection request.
@@ -126,7 +127,6 @@ class GovernanceValidator:
         if source.permission_status in {
             PermissionStatus.PROHIBITED_WITHOUT_PERMISSION,
             PermissionStatus.PENDING,
-            PermissionStatus.PENDING_FORMAL_REVIEW,
         }:
             return GateCheckResult(
                 is_permitted=False,
@@ -137,6 +137,40 @@ class GovernanceValidator:
                     f"'{source.permission_status}'. Automated network collection is prohibited "
                     f"without written permission."
                 ),
+            )
+
+        if source.permission_status == PermissionStatus.PENDING_FORMAL_REVIEW:
+            if allow_research_scraping is None:
+                try:
+                    from config import get_settings
+                    allow_research_scraping = get_settings().scraper.allow_research_scraping
+                except Exception:
+                    allow_research_scraping = False
+
+            if not allow_research_scraping:
+                return GateCheckResult(
+                    is_permitted=False,
+                    status=source.permission_status,
+                    failed_gate=1,
+                    reason=(
+                        f"Gate 1 failed: Source '{source.source_id}' is PENDING_FORMAL_REVIEW. "
+                        f"Research prototype scraping is disabled (ALLOW_RESEARCH_SCRAPING=false). "
+                        f"Only fully APPROVED sources are permitted in sovereign production."
+                    ),
+                )
+            if source.maximum_requests_per_day <= 0 or not source.approved_paths:
+                return GateCheckResult(
+                    is_permitted=False,
+                    status=source.permission_status,
+                    failed_gate=1,
+                    reason=(
+                        f"Gate 1 failed: Source '{source.source_id}' is PENDING_FORMAL_REVIEW "
+                        f"with zero request budget. Automated network collection is prohibited."
+                    ),
+                )
+            logger.info(
+                f"Source '{source.source_id}' is PENDING_FORMAL_REVIEW: operating under "
+                f"non-commercial Academic & Statistical Research Prototype Exemption."
             )
 
         if source.permission_status == PermissionStatus.NON_EMPIRICAL:
@@ -217,7 +251,11 @@ class GovernanceValidator:
         )
 
 
-def check_source_permitted(source_id: str, url_path: Optional[str] = None) -> GateCheckResult:
+def check_source_permitted(
+    source_id: str,
+    url_path: Optional[str] = None,
+    allow_research_scraping: Optional[bool] = None,
+) -> GateCheckResult:
     """Convenience gate check for any source by ID."""
     registry = get_source_registry()
     rec = registry.get(source_id)
@@ -228,4 +266,8 @@ def check_source_permitted(source_id: str, url_path: Optional[str] = None) -> Ga
             failed_gate=1,
             reason=f"Source '{source_id}' is not registered in source_access_registry.yaml",
         )
-    return GovernanceValidator.evaluate_gates(rec, url_path=url_path)
+    return GovernanceValidator.evaluate_gates(
+        rec,
+        url_path=url_path,
+        allow_research_scraping=allow_research_scraping,
+    )

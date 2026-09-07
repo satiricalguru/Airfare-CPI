@@ -337,6 +337,7 @@ def test_live_collection_cannot_backdate_observations():
 def test_unconfigured_live_source_never_falls_back_to_simulator(monkeypatch):
     monkeypatch.delenv("AMADEUS_CLIENT_ID", raising=False)
     monkeypatch.delenv("AMADEUS_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("ENABLED_SOURCES", "amadeus")
     cfg = reload_settings()
     route = get_route_basket().routes[0]
 

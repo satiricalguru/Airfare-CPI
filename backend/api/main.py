@@ -72,6 +72,12 @@ from scraper.registry import get_registry
 from scraper.source_registry import get_source_registry
 from scraper.scheduler import CollectionScheduler
 from scraper.validator import missing_data_policy
+from scraper.tariff_orders import (
+    AERA_DOMESTIC_UDF_MAP,
+    DEFAULT_TIER2_UDF_INR,
+    STATUTORY_ASF_INR,
+    STATUTORY_ECONOMY_GST_RATE,
+)
 
 API_VERSION = "2.0.0"
 # Keep the process from silently opening an unversioned legacy schema. This must
@@ -517,6 +523,29 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
                 "weight_change", "base_period_change", "methodology_change", "late_data",
             ],
         },
+        "fee_decomposition_and_udf": {
+            "statutory_authority": "Airports Economic Regulatory Authority of India (AERA) & MoCA statutory orders",
+            "statutory_basis": (
+                "Indian domestic airfares are quoted all-inclusive to consumers. When scraping portals where "
+                "itemized tax receipts are unavailable prior to checkout, pure airfare must be decomposed "
+                "from gross fares to prevent airport infrastructure charges from distorting airline price inflation."
+            ),
+            "formula": "fare_base = (fare_total - statutory_asf - udf_airport - convenience_fee) / (1 + gst_rate)",
+            "statutory_rates": {
+                "aviation_security_fee_inr": STATUTORY_ASF_INR,
+                "gst_rate_economy": STATUTORY_ECONOMY_GST_RATE,
+                "udf_by_airport_inr": {
+                    **AERA_DOMESTIC_UDF_MAP,
+                    "DEFAULT": DEFAULT_TIER2_UDF_INR,
+                },
+                "estimated_convenience_fee_inr": 300.0,
+            },
+            "transparency": (
+                "All decomposed portal fares are explicitly tagged with is_estimated=True, record "
+                "decomposition_method='AERA_STATUTORY_TARIFF_ESTIMATOR', and preserve the immutable raw payload "
+                "hash for tamper-evident audit."
+            ),
+        },
         "known_limitations": [
             "Seasonal adjustment is NOT IMPLEMENTED; the series is observed (NSA).",
             "Route weights are provisional passenger-volume proxies, not CPI "
@@ -526,6 +555,8 @@ async def get_methodology(session: AsyncSession = Depends(get_session)):
             "probability sample of the domestic market.",
             "Most airline and OTA portals are not collected; see /api/v1/sources for "
             "the per-source reason.",
+            "Portal fare decomposition uses statutory AERA UDF schedules and standard ASF rates "
+            "where direct checkout receipts are absent; these rows are explicitly marked is_estimated=True.",
         ],
     }
 
@@ -1570,8 +1601,24 @@ async def get_sources(session: AsyncSession = Depends(get_session)):
     if not rows:
         # Before the first startup write, fall back to the live registry.
         capabilities = get_registry().capabilities()
+        caps = []
+        for c in capabilities:
+            d = c.to_dict()
+            gov = governance_registry.get(c.name)
+            d["permission_status"] = (
+                gov.get("permission_status")
+                if gov
+                else ("APPROVED" if c.enabled else "PROHIBITED_WITHOUT_PERMISSION")
+            )
+            d["is_permitted"] = (
+                gov.get("is_permitted_for_network_collection", False)
+                if gov
+                else c.enabled
+            )
+            d["governance"] = gov
+            caps.append(d)
         return {
-            "sources": [c.to_dict() for c in capabilities],
+            "sources": caps,
             "count": len(capabilities),
             "enabled_count": sum(1 for c in capabilities if c.enabled),
             "governance_registry": governance_registry,

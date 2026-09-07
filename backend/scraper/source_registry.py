@@ -55,12 +55,27 @@ class SourceAccessRecord:
 
     @property
     def is_permitted_for_network_collection(self) -> bool:
-        """True only if formally approved and review has not expired."""
-        if self.permission_status == PermissionStatus.APPROVED:
-            if self.review_expires_at and self.review_expires_at < datetime.now(timezone.utc):
-                return False
+        """True only if approved or conditionally permitted under research prototype review."""
+        now = datetime.now(timezone.utc)
+        if self.review_expires_at and self.review_expires_at < now:
+            return False
+        if self.permission_status in (
+            PermissionStatus.APPROVED,
+            PermissionStatus.AVAILABLE_AFTER_FREE_REGISTRATION,
+        ):
             return True
-        if self.permission_status == PermissionStatus.AVAILABLE_AFTER_FREE_REGISTRATION:
+        if (
+            self.permission_status == PermissionStatus.PENDING_FORMAL_REVIEW
+            and self.maximum_requests_per_day > 0
+            and self.contact
+            and len(self.approved_paths) > 0
+        ):
+            try:
+                from config import get_settings
+                if not get_settings().scraper.allow_research_scraping:
+                    return False
+            except Exception:
+                return False
             return True
         return False
 

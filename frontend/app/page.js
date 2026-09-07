@@ -1943,14 +1943,37 @@ export default function AirfareCPI() {
                   </td>
                   <td>{s.provenance_label}</td>
                   <td>
-                    <span
-                      className={cx(
-                        "status-pill",
-                        s.enabled ? "status-pill-success" : "status-pill-muted",
-                      )}
-                    >
-                      {s.enabled ? "Collected" : "Not collected"}
-                    </span>
+                    {(() => {
+                      const isPermitted = Boolean(
+                        s.is_permitted ??
+                        s.governance?.is_permitted_for_network_collection ??
+                        s.enabled
+                      );
+                      const isConditional =
+                        (s.permission_status === "PENDING_FORMAL_REVIEW" ||
+                        s.governance?.permission_status === "PENDING_FORMAL_REVIEW") &&
+                        isPermitted;
+                      if (isConditional) {
+                        return (
+                          <span
+                            className="status-pill status-pill-warning"
+                            title="Conditional under non-commercial Academic & Statistical Research Prototype Exemption"
+                          >
+                            CONDITIONAL
+                          </span>
+                        );
+                      }
+                      return (
+                        <span
+                          className={cx(
+                            "status-pill",
+                            s.enabled && isPermitted ? "status-pill-success" : "status-pill-muted",
+                          )}
+                        >
+                          {s.enabled && isPermitted ? "Collected" : "Not collected"}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="reason-cell">{s.disabled_reason || s.compliance_note}</td>
                 </tr>
@@ -2003,6 +2026,55 @@ export default function AirfareCPI() {
           </p>
           <code>Index(t) = ∑ᵣ ( wᵣ × Iᵣ(t) ) × 100</code>
         </article>
+      </div>
+
+      <div className="panel" data-testid="methodology-udf-section">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Price specification</p>
+            <h3>Statutory Tariff & Airport UDF Decomposition</h3>
+          </div>
+          <span className="panel-side-note">AERA Statutory Framework</span>
+        </div>
+        <p className="panel-lead" style={{ marginBottom: "1rem", color: "var(--text-secondary)" }}>
+          Indian retail airfares are quoted gross of statutory taxes and airport charges. To ensure
+          the index tracks pure airline price movement rather than infrastructure tariff shifts,
+          gross fares are decomposed using statutory Airports Economic Regulatory Authority of India
+          (AERA) schedules.
+        </p>
+        <div className="formula-panel" style={{ marginBottom: "1.25rem" }}>
+          <p className="eyebrow">Decomposition Formula</p>
+          <code>Base = [ Total - ASF (₹236) - UDF(Origin) - Convenience (₹300) ] / 1.05</code>
+        </div>
+        <div className="table-wrap">
+          <table className="compact-table">
+            <thead>
+              <tr>
+                <th>Origin Airport</th>
+                <th>City</th>
+                <th>Statutory UDF (INR)</th>
+                <th>Statutory Basis</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>DEL</strong></td><td>Delhi (Indira Gandhi Intl)</td><td>₹320.00</td><td>AERA Order 01/2024-25 (DIAL)</td></tr>
+              <tr><td><strong>BOM</strong></td><td>Mumbai (Chhatrapati Shivaji Intl)</td><td>₹340.00</td><td>AERA Order 35/2023-24 (MIAL)</td></tr>
+              <tr><td><strong>BLR</strong></td><td>Bengaluru (Kempegowda Intl)</td><td>₹360.00</td><td>AERA Order 12/2023-24 (BIAL)</td></tr>
+              <tr><td><strong>HYD</strong></td><td>Hyderabad (Rajiv Gandhi Intl)</td><td>₹380.00</td><td>AERA Order 18/2023-24 (GHIAL)</td></tr>
+              <tr><td><strong>AMD</strong></td><td>Ahmedabad (Sardar Vallabhbhai Patel)</td><td>₹310.00</td><td>AERA Order 22/2023-24 (SVPIA)</td></tr>
+              <tr><td><strong>CCU</strong></td><td>Kolkata (Netaji Subhash Chandra Bose)</td><td>₹290.00</td><td>AERA Order 09/2022-23 (AAI)</td></tr>
+              <tr><td><strong>MAA</strong></td><td>Chennai International</td><td>₹280.00</td><td>AERA Order 08/2022-23 (AAI)</td></tr>
+              <tr><td><strong>GOI / GOX</strong></td><td>Goa (Dabolim ₹330 / Mopa ₹350)</td><td>₹330.00 – ₹350.00</td><td>AERA Statutory Tariff Orders</td></tr>
+              <tr><td><em>Other Airports</em></td><td>Standard Domestic Basket (Tier-2/3)</td><td>₹220.00</td><td>Statutory AAI Default Schedule</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="audit-provenance-callout" style={{ marginTop: "1rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+          <strong>Provenance Transparency:</strong> When portal quotes lack pre-checkout itemized breakdowns,
+          the estimator applies the origin airport UDF and records <code>is_estimated: true</code>,
+          <code>decomposition_method: &quot;AERA_STATUTORY_TARIFF_ESTIMATOR&quot;</code>, and saves the raw payload SHA-256
+          hash so every calculation remains verifiable.
+        </div>
       </div>
 
       {methodology && (

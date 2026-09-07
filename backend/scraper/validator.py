@@ -125,8 +125,9 @@ class ValidationResult:
     flags: tuple[str, ...] = ()
     anomaly_type: Optional[str] = None
     severity: Optional[str] = None
-    # Populated for exclusions and flags: the numbers that triggered the decision, so
-    # a review can reproduce the judgement.
+    # Diagnostic numbers that triggered the decision (exclusions/flags), plus
+    # informational reconciliation for estimated statutory decompositions
+    # (accepted rows carry component_sum_estimated so the estimator stays auditable).
     detail: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -327,13 +328,23 @@ class FareValidator:
             )
 
         # ── component consistency ──
+        is_estimated = bool(
+            obs.provenance and obs.provenance.notes and obs.provenance.notes.get("is_estimated")
+        )
         if obs.fare_base is not None and obs.fare_taxes is not None:
-            expected = obs.fare_base + obs.fare_taxes
+            fee_udf = obs.fare_udf or 0.0
+            fee_conv = obs.fare_convenience or 0.0
+            expected = obs.fare_base + obs.fare_taxes + fee_udf + fee_conv
             if abs(fare - expected) > 1.0:  # allow INR 1 of rounding
-                flags.append("fare_component_mismatch")
-                detail["component_sum"] = round(expected, 2)
+                if is_estimated:
+                    detail["component_sum_info"] = round(expected, 2)
+                else:
+                    flags.append("fare_component_mismatch")
+                    detail["component_sum"] = round(expected, 2)
+            elif is_estimated:
+                detail["component_sum_estimated"] = round(expected, 2)
 
-        if obs.fare_taxes is not None and fare > 0:
+        if obs.fare_taxes is not None and fare > 0 and not is_estimated:
             tax_share = obs.fare_taxes / fare
             if tax_share > 0.50:
                 flags.append("high_tax_ratio")
@@ -402,7 +413,7 @@ class FareValidator:
                 detail=detail,
             )
 
-        return ValidationResult(is_valid=True, action=ValidationAction.ACCEPTED)
+        return ValidationResult(is_valid=True, action=ValidationAction.ACCEPTED, detail=detail)
 
     # ── batch ──
 

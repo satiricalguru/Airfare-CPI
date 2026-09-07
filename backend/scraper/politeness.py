@@ -161,6 +161,26 @@ class RobotsPolicy:
 
 # ── rate limiting ──
 
+def extract_domain_root(host_or_url: str) -> str:
+    """
+    Extract registrable root domain / eTLD+1 from a URL or hostname.
+    Examples:
+        'https://travel.google.com/flights' -> 'google.com'
+        'www.google.com' -> 'google.com'
+        'flight.easemytrip.com' -> 'easemytrip.com'
+        'booking.airindia.co.in' -> 'airindia.co.in'
+    """
+    netloc = urlparse(host_or_url).netloc or host_or_url
+    host = netloc.split(":")[0].lower().strip()
+    parts = host.split(".")
+    if len(parts) <= 2 or all(p.isdigit() for p in parts):
+        return host
+    two_part_tlds = {"co.in", "com.in", "gov.in", "org.in", "net.in", "co.uk", "org.uk", "ac.in"}
+    if len(parts) >= 3 and f"{parts[-2]}.{parts[-1]}" in two_part_tlds:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
 class HostRateLimiter:
     """
     Per-host minimum interval between requests.
@@ -170,43 +190,77 @@ class HostRateLimiter:
     into a burst at each interval boundary.
     """
 
-    def __init__(self, min_interval_seconds: float, jitter_seconds: float = 0.25):
+    def __init__(
+        self,
+        min_interval_seconds: float,
+        jitter_seconds: float = 0.25,
+        host_intervals: Optional[dict[str, float]] = None,
+    ):
         self.min_interval_seconds = max(0.0, min_interval_seconds)
         self.jitter_seconds = max(0.0, jitter_seconds)
+        self.host_intervals: dict[str, float] = {
+            extract_domain_root(k): v for k, v in (host_intervals or {}).items()
+        }
         self._last_request: dict[str, float] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, host: str) -> asyncio.Lock:
-        if host not in self._locks:
-            self._locks[host] = asyncio.Lock()
-        return self._locks[host]
+        root = extract_domain_root(host)
+        if root not in self._locks:
+            self._locks[root] = asyncio.Lock()
+        return self._locks[root]
+
+    def set_host_interval(self, host: str, interval: float) -> None:
+        """Set or update host-specific minimum interval in seconds."""
+        root = extract_domain_root(host)
+        self.host_intervals[root] = max(0.0, interval)
+
+    def get_host_interval(self, host: str) -> float:
+        """Get host-specific interval, with domain-suffix fallback or default min_interval."""
+        root = extract_domain_root(host)
+        if root in self.host_intervals:
+            return self.host_intervals[root]
+        for key, val in self.host_intervals.items():
+            if root.endswith(key):
+                return val
+        return self.min_interval_seconds
 
     async def acquire(self, url_or_host: str) -> float:
         """Wait until the host may be contacted. Returns seconds actually waited."""
-        host = urlparse(url_or_host).netloc or url_or_host
+        root = extract_domain_root(url_or_host)
         waited = 0.0
-        async with self._lock(host):
-            last = self._last_request.get(host)
+        async with self._lock(root):
+            last = self._last_request.get(root)
             now = time.monotonic()
             if last is not None:
-                target = last + self.min_interval_seconds
+                interval = self.get_host_interval(root)
+                target = last + interval
                 if self.jitter_seconds:
                     target += random.uniform(0, self.jitter_seconds)
                 delay = target - now
                 if delay > 0:
                     waited = delay
                     await asyncio.sleep(delay)
-            self._last_request[host] = time.monotonic()
+            self._last_request[root] = time.monotonic()
         return waited
 
-    def override_min_interval(self, seconds: float) -> None:
+    def override_min_interval(self, seconds: float, host: Optional[str] = None) -> None:
         """
         Raise the interval, e.g. to honour a robots.txt Crawl-delay.
 
         Only ever increases it — a site's declared delay cannot be shortened by
         local configuration.
         """
-        if seconds > self.min_interval_seconds:
+        if host:
+            root = extract_domain_root(host)
+            current = self.get_host_interval(root)
+            if seconds > current:
+                logger.info(
+                    f"Rate limit for {root} raised from {current}s to {seconds}s "
+                    f"to honour a declared crawl delay"
+                )
+                self.host_intervals[root] = seconds
+        elif seconds > self.min_interval_seconds:
             logger.info(
                 f"Rate limit raised from {self.min_interval_seconds}s to {seconds}s "
                 f"to honour a declared crawl delay"

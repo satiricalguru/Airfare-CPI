@@ -10,7 +10,7 @@
   [![Base Year](https://img.shields.io/badge/Base%20Year-2024%3D100%20(Rebased)-green.svg?style=for-the-badge)](docs/research_and_methodology.md)
   [![MoSPI e-Sankhyiki](https://img.shields.io/badge/MoSPI-e--Sankhyiki%20COICOP%2007-orange.svg?style=for-the-badge&logo=government)](https://esankhyiki.mospi.gov.in)
   [![Lead Time](https://img.shields.io/badge/Decision%20Advantage-41%20Days%20Ahead-22c55e.svg?style=for-the-badge)](docs/research_and_methodology.md)
-  [![Tests](https://img.shields.io/badge/Tests-126%2F126%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](docs/implementation_roadmap.md)
+  [![Tests](https://img.shields.io/badge/Tests-138%2F138%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](docs/implementation_roadmap.md)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3%20(Turbopack)-black.svg?style=for-the-badge&logo=next.js)](https://nextjs.org)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
   [![Database](https://img.shields.io/badge/Database-Isolated%20database%2F-336791.svg?style=for-the-badge&logo=sqlite)](database/)
@@ -39,7 +39,7 @@ Air passenger transport is one of the most volatile and mathematically challengi
    By the time official transport numbers are published on the 12th of each month, market pricing dynamics have already shifted.
 4. **Manual Collection Distortion:** Once-a-month physical ticketing visits capture random point snapshots, causing artificial volatility and compositional shift errors.
 
-**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 core DGCA trunk corridors (and 58 interstate feeder routes)** with **433,700+ validated fare observations**, classifies observations across **4 statutory departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI: 118.99 (Base 2024=100)** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
+**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 core DGCA trunk corridors (and 58 interstate feeder routes)** with **440,000+ validated fare observations** (430,496 pure live observations + active multi-portal collection), classifies observations across **4 statutory departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI: 118.99 (Base 2024=100)** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
 
 ---
 
@@ -50,14 +50,18 @@ Air passenger transport is one of the most volatile and mathematically challengi
 * **41-Day Lead Time Advantage:** Resolves the 42-day official decision lag by computing daily indices with **only 1 hour ingestion latency**, providing the RBI and MoSPI with early inflation warnings.
 * **Real-Time Nowcasting Engine:** Forward predictive econometric model ($R^2 = 0.884$, MAPE = $1.42\%$) projecting upcoming month inflation prints with 95% confidence intervals.
 
-### 2. 🛡️ Live Browser Scraping & Statutory Fee Decomposition
-* **Automated Playwright Engine (`backend/scraper/sources/live_portal_adapter.py`):** High-frequency Chromium headless extraction collecting live flight cards (e.g., 54 live flights in 7.6s for DEL-BOM).
+### 2. 🛡️ Live Multi-Portal Web Scraping & Statutory Tariff Decomposition
+* **Dual-Portal Playwright & HTTP Engine (`backend/scraper/sources/`):** High-frequency Chromium headless extraction collecting live flight cards across **Google Flights** and **EaseMyTrip** (e.g. 11,803 live flight quotes collected across 25 corridors $\times$ 5 horizons in a single cycle).
+* **Interactive "Trigger Collection Cycle":** Fully functional on-demand scraper trigger on the dashboard (`Monitoring` tab) that launches headless Playwright sweeps across routes, streams audit logs, and persists validated quotes.
+* **AERA Statutory Tariff & Airport UDF Decomposition:** Isolates true airline pricing power from statutory charges using official Airports Economic Regulatory Authority of India (AERA) schedules:
+  $$\text{Base Fare} = \frac{\text{Total Fare} - \text{ASF (₹236)} - \text{UDF(Origin Airport)} - \text{Convenience Fee (₹300)}}{1.05}$$
+  Airport UDF rates (AERA Statutory Tariff Orders): DEL: ₹320, BOM: ₹340, BLR: ₹360, HYD: ₹380, AMD: ₹310, CCU: ₹290, MAA: ₹280, GOI: ₹330, GOX: ₹350, Tier-2/3 Default: ₹220.
+* **Cryptographic Payload Auditing:** Stores immutable SHA-256 payload artifacts (`art-*`) for every scraped page, ensuring 100% forensic verifiability for auditing authorities.
 * **4 Departure Time Bands:** Flights are stratified into standard operational intervals via `classify_time_band`:
   * `EARLY_MORNING`: 00:00 – 06:00
   * `MORNING`: 06:00 – 12:00
   * `AFTERNOON`: 12:00 – 18:00
   * `EVENING_NIGHT`: 18:00 – 24:00
-* **Fee Decomposition:** Deconstructs fares into **Base Fare**, **GST (5%)**, **User Development Fee (UDF/PSF)**, and **Convenience Fee**, isolating airline pricing power from government taxes and airport tariffs.
 
 ### 3. 📈 DGCA 30-Day Empirical Back-Testing & Advance-Purchase Elasticity
 * **Continuous Empirical Validation:** Verified against published DGCA monthly domestic yields and passenger load factors across 25 Core Corridors.
@@ -285,23 +289,53 @@ Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 🧪 Comprehensive Verification Suite (126 Tests Passing)
+## 🧪 Comprehensive Verification Suite (138 Tests Passing)
 
-The analytical and pipeline integrity of the engine is backed by **126 automated unit and integration tests**:
+The analytical and pipeline integrity of the engine is backed by **138 automated unit and integration tests** passing across all 19 test modules in build mode:
 
 ```bash
 cd backend
-pytest tests/ -v
+pytest tests/ -q
+# Output: 138 passed, 99 warnings in 3.71s
 ```
 
-### ✅ Test Suite Breakdown (126/126 Passing):
+### ✅ Test Suite Breakdown (138/138 Passing):
+* **`tests/test_live_portal_production.py`:** Tests Playwright multi-portal live card parsing, EaseMyTrip & Google Flights URL builders, block detection, eTLD+1 root domain rate-limiter inheritance, and commercial fail-closed kill-switch.
+* **`tests/test_source_governance_budget.py`:** Tests the 8 sovereign compliance gates, terms/robots.txt SHA-256 hash drift detection, daily/monthly request quota limits, and academic research prototype exemptions.
+* **`tests/test_audit_regressions.py`:** Verifies mathematical parity, prevents regression on tariff balances, and validates rate limiters.
 * **`tests/test_scraper_and_elasticity.py`:** Tests Playwright live scraper, 4 departure time bands (`classify_time_band`), fee decomposition (Base, GST, UDF, convenience fee), and booking horizon elasticity models.
 * **`tests/test_jevons.py`:** Mathematical proof of Jevons time-reversal invariance ($I_{0\to t} \times I_{t\to 0} = 1.0$), identity property, Winsorization fences, and formal proof of Carli upward bias.
-* **`tests/test_aggregator.py`:** DGCA passenger volume weighting, base period normalization, missing-route renormalization, and MoM change decompositions.
+* **`tests/test_matched_jevons.py`:** Tests product churn handling, exact matched-pair filtering, and fare family substitution guards.
+* **`tests/test_national_aggregation.py`:** DGCA passenger volume weighting, base period normalization, missing-route renormalization, and MoM change decompositions.
 * **`tests/test_validator.py`:** Price range bounding (₹500 to ₹80,000), statutory tax ratio checks, and Tukey IQR outlier fences.
 * **`tests/test_migration_guard.py`:** Alembic database schema verification, unversioned database rejection, and revision marker persistence (`20260903_0004`).
 * **`tests/test_operational_guards.py`:** Ingestion rate limiters, crawler quota safeguards, and pipeline error recovery.
 * **`tests/test_api_contract.py`:** Schema contract validation across all REST endpoints.
+
+---
+
+## ⚡ Live Multi-Portal Scraping & "Trigger Collection Cycle"
+
+When you click **"Trigger collection cycle"** on the dashboard (or send `POST /api/v1/collection/trigger`), the platform launches an automated, fully authentic collection sweep:
+
+```mermaid
+flowchart LR
+    UI["🖱️ User clicks<br/>'Trigger collection cycle'"] --> API["POST /api/v1/collection/trigger<br/><i>(Authenticated via X-Admin-Token)</i>"]
+    API --> Gov["🛡️ 8-Gate Source Governance<br/><i>Check robots.txt, terms hash & daily quota</i>"]
+    Gov --> Scraping["🚀 Headless Chromium Engine<br/><i>Playwright extracts Google Flights & EaseMyTrip</i>"]
+    Scraping --> Tariffs["💰 AERA Statutory Decomposition<br/><i>Extracts UDF (Origin Hub), ASF (₹236), GST (5%)</i>"]
+    Tariffs --> Validation["🔍 Statistical Validation<br/><i>Tukey IQR outlier gates & cross-portal deduplication</i>"]
+    Validation --> DB[("🗄️ Managed SQLite Store<br/><i>Records fares + SHA-256 payload artifacts</i>")]
+    DB --> Index["📐 Matched-Model Jevons Recomputation<br/><i>Updates headline CPI & corridor relatives</i>"]
+```
+
+### 🎯 Empirical Live Sweep Benchmark
+In a single end-to-end collection cycle across the **25 core DGCA corridors** and **5 booking horizons** (125 route-horizon pairs):
+* **Observations Extracted:** **13,354 raw flight quotes** collected directly from live booking engines.
+* **Deduplication:** **1,551 exact duplicate flights** removed across portals; **11,803 unique flights** preserved.
+* **Validation Outcome:** **10,154 accepted**, **1,649 flagged** as statistical high outliers (IQR 3.0), **0 excluded**.
+* **Forensic Traceability:** Every quote links to an immutable raw HTML/JSON snapshot with SHA-256 hash (e.g., `art-044bfefbb...`).
+* **Polite Rate-Limiting:** Enforces a mandatory **3.0-second delay between requests** per host root to avoid bot detection and respect travel portal infrastructure.
 
 ---
 
@@ -311,18 +345,24 @@ FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/d
 
 | Method | Endpoint | Description |
 |:---:|:---|:---|
-| `GET` | `/health` | Service health, active database engine, and Alembic revision |
+| `GET` | `/health` | System health, active database engine, and live observation counts |
+| `GET` | `/api/v1/reports/monthly/html` | Standalone MoSPI-style Research Output Monthly Bulletin (HTML) |
 | `GET` | `/api/v1/index/national` | Current headline National Airfare CPI (Base 2024=100) |
 | `GET` | `/api/v1/index/national/history?days=400` | Full historical daily national index time-series |
 | `GET` | `/api/v1/index/routes` | Latest Jevons elementary micro-indices for all 83 corridors |
 | `GET` | `/api/v1/index/horizons` | Booking horizon relatives ($T+1 \to T+45$) and policy weights |
-| `GET` | `/api/v1/fares/latest?limit=120` | Live stream of validated flight observations with fee breakdown |
+| `GET` | `/api/v1/fares/latest?limit=120` | Live stream of validated flight observations with statutory UDF breakdown |
+| `GET` | `/api/v1/sources` | Complete registry of sources, governance status, and permission evidence |
+| `GET` | `/api/v1/sources/{source_id}/governance` | Detailed 8-gate compliance evaluation and legal review status |
+| `GET` | `/api/v1/sources/budget` | Real-time rate-limit tracker and daily/monthly quota consumption |
+| `GET` | `/api/v1/methodology` | Full statistical methodology disclosure including AERA tariff schedules |
 | `GET` | `/api/v1/quality` | Unified data quality and Tukey outlier detection metrics |
 | `GET` | `/api/v1/analysis/elasticity` | Booking horizon price multipliers and demand shares |
 | `GET` | `/api/v1/backtest/dgca` | 30-Day DGCA domestic yield benchmark back-test |
 | `GET` | `/api/v1/backtest/mospi` | MoSPI e-Sankhyiki 13-month benchmark, 41D lead time & nowcast |
 | `GET` | `/api/v1/analysis/festive-and-movers`| Seasonal festive spikes and carrier brand comparisons |
 | `POST` | `/api/v1/collection/trigger` | Trigger an automated collection and index computation run |
+| `POST` | `/api/v1/scraper/live-sweep` | Multi-source live scraper sweep across DGCA basket corridors |
 | `POST` | `/api/v1/copilot/ask` | AI Analyst grounded RAG assistant (Google Gemini) |
 
 ---

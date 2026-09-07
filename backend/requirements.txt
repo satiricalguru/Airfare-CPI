@@ -21,6 +21,7 @@ starlette==1.6.0
 # api/copilot.py (server-side LLM proxy), and the API test suite.
 httpx==0.28.1
 beautifulsoup4==4.15.0
+playwright==1.49.1
 
 # ── Persistence ──
 # db/models.py, db/engine.py, db/repository.py. PostgreSQL is the target store
