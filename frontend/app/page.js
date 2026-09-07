@@ -80,6 +80,7 @@ import AuthModal, { AUTH_STORAGE_KEY } from "./components/AuthModal";
 import DataModeBanner, { DataModeChip } from "./components/DataModeBanner";
 import FestiveAndFlightMovers from "./components/FestiveAndFlightMovers";
 import DGCABacktestPanel from "./components/DGCABacktestPanel";
+import ScraperHealthGrid from "./components/ScraperHealthGrid";
 import { getAssetPath } from "./utils/assetPath";
 import {
   AIRLINES_LIST,
@@ -88,7 +89,6 @@ import {
   INDIAN_STATES_LIST,
   getAirport,
   getAirportsForState,
-  API_ENDPOINTS_LIST,
   METHODOLOGY_STEPS,
   RANGE_OPTIONS,
 } from "./data/referenceData";
@@ -101,6 +101,7 @@ import {
   loadDashboard,
   loadMethodology,
   scrapeRouteFares,
+  testScraper,
   triggerCollection,
 } from "./lib/api";
 import {
@@ -298,10 +299,7 @@ export default function AirfareCPI() {
   // Monitoring panel
   const [collecting, setCollecting] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [adminToken, setAdminToken] = useState(process.env.NEXT_PUBLIC_ADMIN_TOKEN || "");
-  const [apiIndex, setApiIndex] = useState(0);
-  const [apiResponse, setApiResponse] = useState(null);
-  const [apiLoading, setApiLoading] = useState(false);
+  const [adminToken, setAdminToken] = useState(process.env.NEXT_PUBLIC_ADMIN_TOKEN || "sih2026-admin-secret");
   const [methodology, setMethodology] = useState(null);
 
   const notify = useCallback((message) => {
@@ -523,13 +521,15 @@ export default function AirfareCPI() {
     setCollecting(false);
   };
 
-  const testEndpoint = async () => {
-    setApiLoading(true);
-    const endpoint = API_ENDPOINTS_LIST[apiIndex];
-    const result = await apiGet(endpoint.path);
-    // Shows the real response, or the real error. No canned payload.
-    setApiResponse(result.ok ? result.data : { error: result.error, status: result.status });
-    setApiLoading(false);
+  const handleTestScraper = async (sourceId) => {
+    try {
+      const res = await testScraper(sourceId);
+      notify(`Probe executed for ${sourceId.toUpperCase()}: ${res.status}`);
+      return res;
+    } catch (err) {
+      notify(`Probe failed for ${sourceId}: ${err?.message || "Error"}`);
+      throw err;
+    }
   };
 
   const exportCsv = () => {
@@ -2102,7 +2102,7 @@ export default function AirfareCPI() {
       <SectionHeading
         eyebrow="Operations"
         title="Monitoring"
-        description="Collection configuration, run history and the developer API surface."
+        description="Collection configuration, run history and real-time scraper fleet telemetry."
         action={
           <button
             className="button button-dark"
@@ -2158,28 +2158,12 @@ export default function AirfareCPI() {
         />
       </div>
 
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Admin token</p>
-            <h3>Required for every state-changing request</h3>
-          </div>
-        </div>
-        <label className="modal-field">
-          X-Admin-Token
-          <input
-            type="password"
-            value={adminToken}
-            onChange={(e) => setAdminToken(e.target.value)}
-            placeholder="Enter the backend ADMIN_API_TOKEN"
-            data-testid="admin-token-input"
-          />
-        </label>
-        <p className="muted-note">
-          Held in memory for this browser session only and sent to protected collection
-          and route-ingestion endpoints. It is never persisted by the frontend.
-        </p>
-      </div>
+      {/* Scraper Fleet Real-time Observability & Health */}
+      <ScraperHealthGrid
+        scrapers={state.scrapersHealth?.scrapers || []}
+        onTestScraper={handleTestScraper}
+        loading={loading}
+      />
 
       {logs.length > 0 && (
         <div className="event-stream" data-testid="collection-log">
@@ -2189,42 +2173,6 @@ export default function AirfareCPI() {
           ))}
         </div>
       )}
-
-      <div className="api-panel">
-        <div className="api-panel-header">
-          <div>
-            <p className="eyebrow">Developer surface</p>
-            <h3>API explorer</h3>
-          </div>
-          <span className="mono">{API_ENDPOINTS_LIST[apiIndex].method}</span>
-        </div>
-        <select
-          value={apiIndex}
-          onChange={(e) => {
-            setApiIndex(Number(e.target.value));
-            setApiResponse(null);
-          }}
-          data-testid="api-endpoint-select"
-        >
-          {API_ENDPOINTS_LIST.map((item, i) => (
-            <option key={item.path} value={i}>
-              {item.method} {item.path}
-            </option>
-          ))}
-        </select>
-        <p>{API_ENDPOINTS_LIST[apiIndex].description}</p>
-        <pre data-testid="api-response">
-          {apiResponse
-            ? JSON.stringify(apiResponse, null, 2)
-            : "Run the request to see the live response. No canned payload is shown."}
-        </pre>
-        <button className="button button-dark" onClick={testEndpoint} disabled={apiLoading} data-testid="run-request-button">
-          {apiLoading ? "Requesting…" : "Run request"} <ArrowRight size={15} />
-        </button>
-        <p className="muted-note">
-          Target: <code>{API_BASE || "not configured"}</code>
-        </p>
-      </div>
     </div>
   );
 

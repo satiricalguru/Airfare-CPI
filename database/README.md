@@ -8,11 +8,11 @@ This directory serves as the centralized storage location for all persistent SQL
 
 | File | Description | Status |
 |---|---|---|
-| [`airfare_cpi_managed.db`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/airfare_cpi_managed.db) | **Active, version-controlled SQLite database** managed by Alembic. Contains raw fare observations, elementary aggregates, national indices, and pipeline runs. | `ACTIVE (Target)` |
-| [`seed_snapshot.sql`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/seed_snapshot.sql) | **Compact Git-tracked SQL seed export** (~16 MB). Restores full schema, Alembic revision marker, 25 routes, 400 national CPI history rows, 2,000 corridor index rows, and 5,000 real fare observations with AERA UDF decomposition. | `TRACKED SEED SNAPSHOT` |
-| [`airfare_cpi.db`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/airfare_cpi.db) | Historical read-only archive (1.2 GB, 858,480 historical observations). Protected against overwrites. | `HISTORICAL ARCHIVE` |
-| [`schema.sql`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/schema.sql) | Complete SQL DDL defining all relational tables, indices, and constraints. | `CANONICAL DDL` |
-| [`seed_routes.sql`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/seed_routes.sql) | Official 25 core DGCA passenger corridors and trunk routes with distance and base passenger volume weights. | `SEED DATA` |
+| [`airfare_cpi_managed.db`](airfare_cpi_managed.db) | **Active, version-controlled SQLite database** managed by Alembic. Contains 454,000+ raw fare observations (ranging to 2026-09-07), 9,820+ corridor elementary aggregates, 2,358 national index records, and 413 pipeline runs. | `ACTIVE (Target)` |
+| [`seed_snapshot.sql`](seed_snapshot.sql) | **Compact Git-tracked SQL seed export** (~16 MB). Restores full schema, Alembic revision marker, 25 routes, 400 national CPI history rows, 2,000 corridor index rows, and 5,000 real fare observations with AERA UDF decomposition. | `TRACKED SEED SNAPSHOT` |
+| [`airfare_cpi.db`](airfare_cpi.db) | Historical read-only archive (1.2 GB, 858,480 historical observations). Protected against overwrites. | `HISTORICAL ARCHIVE` |
+| [`schema.sql`](schema.sql) | Complete SQL DDL defining all relational tables, indices, and constraints. | `CANONICAL DDL` |
+| [`seed_routes.sql`](seed_routes.sql) | Official 25 core DGCA passenger corridors and trunk routes with distance and base passenger volume weights. | `SEED DATA` |
 
 ---
 
@@ -90,7 +90,7 @@ python3 -c 'from alembic.config import main; main()' -c alembic.ini current
 
 ## 5. Instant Database Restoration from Git Seed
 
-Because the full operational database exceeds 700 MB, the repository tracks [`seed_snapshot.sql`](file:///Users/jatinpandey/Antigravity/Airfare%20CPI/database/seed_snapshot.sql) (~16 MB). It contains the complete schema, the Alembic migration revision marker (`20260903_0004`), master trunk routes, 400-day national CPI series, 2,000 corridor elementary index rows, and 5,000 real flight observations with statutory AERA UDF decomposition.
+Because the full operational database exceeds 700 MB, the repository tracks [`seed_snapshot.sql`](seed_snapshot.sql) (~16 MB). It contains the complete schema, the Alembic migration revision marker (`20260903_0004`), master trunk routes, 400-day national CPI series, 2,000 corridor elementary index rows, and 5,000 real flight observations with statutory AERA UDF decomposition.
 
 To restore a fully operational local database from scratch in seconds:
 ```bash

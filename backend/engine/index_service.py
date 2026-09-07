@@ -229,12 +229,21 @@ class IndexService:
 
         base_observations = [
             o for o in base_observations
-            if o.source_type is selected_source and o.acquisition_method is selected_method
+            if (o.source_type == selected_source or getattr(o.source_type, "value", str(o.source_type)) == getattr(selected_source, "value", str(selected_source)))
+            and (o.acquisition_method == selected_method or getattr(o.acquisition_method, "value", str(o.acquisition_method)) == getattr(selected_method, "value", str(selected_method)))
         ]
         observations = [
             o for o in observations
-            if o.source_type is selected_source and o.acquisition_method is selected_method
+            if (o.source_type == selected_source or getattr(o.source_type, "value", str(o.source_type)) == getattr(selected_source, "value", str(selected_source)))
+            and (o.acquisition_method == selected_method or getattr(o.acquisition_method, "value", str(o.acquisition_method)) == getattr(selected_method, "value", str(selected_method)))
         ]
+
+        if getattr(getattr(self.settings, "index", None), "direct_flights_only", True):
+            # Restrict to direct non-stop flights (stops == 0) under ILO CPI Manual Ch. 6
+            # to prevent multi-segment connecting tickets from distorting the trunk-route basket.
+            base_observations = [o for o in base_observations if o.stops == 0]
+            observations = [o for o in observations if o.stops == 0]
+
         result.source_type = selected_source
         result.acquisition_method = selected_method
 

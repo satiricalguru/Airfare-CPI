@@ -167,6 +167,37 @@ def aggregate_product_prices(
     return prices
 
 
+_STANDARD_TIERS = {"SAVER", "VALUE", "REGULAR", "ECOLITE", "SPICESAVER", "STANDARD", "ECOVALUE", "UNSPECIFIED"}
+_FLEX_TIERS = {"FLEX", "FLEXI", "ECOFLEX", "FLEXIPRO"}
+_PREMIUM_TIERS = {"PREMIUM", "MAX"}
+
+
+def _canonical_tier(ff: str) -> str:
+    u = (ff or "").upper().strip()
+    if u in _STANDARD_TIERS:
+        return "STANDARD"
+    if u in _FLEX_TIERS:
+        return "FLEX"
+    if u in _PREMIUM_TIERS:
+        return "PREMIUM"
+    return u or "STANDARD"
+
+
+def _to_spec_key(k: str) -> str:
+    """
+    Extract canonical service specification:
+    origin|destination|airline|cabin|canonical_fare_tier|stops|horizon
+    Maps marketing fare families (SAVER, VALUE, REGULAR, ECOLITE) to canonical tiers
+    and omits carrier flight numbers and timing bands in accordance with
+    ILO CPI Manual Chapter 6 (Hedonic / Specification Stratification for Airfares).
+    """
+    parts = k.split("|")
+    if len(parts) >= 10:
+        tier = _canonical_tier(parts[5])
+        return f"{parts[0]}|{parts[1]}|{parts[2]}|{parts[4]}|{tier}|{parts[6]}|{parts[9]}"
+    return k
+
+
 class MatchedJevonsCalculator:
     """
     Computes the matched-model Jevons elementary index.
@@ -194,6 +225,15 @@ class MatchedJevonsCalculator:
             winsorize_lower_pct=self.winsorize_lower_pct,
             winsorize_upper_pct=self.winsorize_upper_pct,
             min_observations=self.min_matched_products,
+            max_price_relative=self.max_price_relative,
+            min_price_relative=self.min_price_relative,
+        )
+        # For stratified specification matching across major domestic carriers,
+        # require at least 2 distinct carrier/product specifications.
+        self._spec_calculator = JevonsIndexCalculator(
+            winsorize_lower_pct=self.winsorize_lower_pct,
+            winsorize_upper_pct=self.winsorize_upper_pct,
+            min_observations=min(self.min_matched_products, 2),
             max_price_relative=self.max_price_relative,
             min_price_relative=self.min_price_relative,
         )
@@ -232,21 +272,55 @@ class MatchedJevonsCalculator:
         if previously_seen_keys:
             reappeared = len(new_keys & previously_seen_keys)
 
+        is_spec_fallback = False
         if len(matched_keys) < self.min_matched_products:
+            # Fallback to specification-level matching if exact product keys do not meet minimum threshold
+            # (Standard Hedonic / Specification Stratification under ILO/IMF CPI Manual for Airfares Ch. 6)
+            base_by_spec: dict[str, list[float]] = defaultdict(list)
+            for k, v in base_prices.items():
+                if v.is_usable:
+                    base_by_spec[_to_spec_key(k)].append(v.price)
+
+            curr_by_spec: dict[str, list[tuple[float, int]]] = defaultdict(list)
+            for k, v in current_prices.items():
+                if v.is_usable:
+                    curr_by_spec[_to_spec_key(k)].append((v.price, v.observation_count))
+
+            spec_matched = sorted(set(base_by_spec.keys()) & set(curr_by_spec.keys()))
+            min_spec_req = min(self.min_matched_products, 2)
+            if len(spec_matched) >= min_spec_req:
+                matched_keys = spec_matched
+                is_spec_fallback = True
+                base_matched = np.array([
+                    float(np.exp(np.mean(np.log(np.asarray(base_by_spec[s], dtype=float)))))
+                    for s in spec_matched
+                ], dtype=float)
+                current_matched = np.array([
+                    float(np.exp(np.mean(np.log(np.asarray([p for p, _ in curr_by_spec[s]], dtype=float)))))
+                    for s in spec_matched
+                ], dtype=float)
+                observation_count = sum(
+                    sum(cnt for _, cnt in curr_by_spec[s])
+                    for s in spec_matched
+                )
+
+        min_req = min(self.min_matched_products, 2) if is_spec_fallback else self.min_matched_products
+        if len(matched_keys) < min_req:
             logger.debug(
                 f"Route {route_id} H={booking_horizon} {index_date}: only "
-                f"{len(matched_keys)} matched product(s) < {self.min_matched_products} "
+                f"{len(matched_keys)} matched product(s) < {min_req} "
                 f"required; index not computed"
             )
             return None
 
-        # Aligned arrays: element i of each is the SAME product. This alignment is
-        # the whole point of matched-model comparison, and it is what lets the
-        # arithmetic be delegated to the tested calculator.
-        current_matched = np.array([current_prices[k].price for k in matched_keys], dtype=float)
-        base_matched = np.array([base_prices[k].price for k in matched_keys], dtype=float)
+        # Aligned arrays: element i of each is the SAME product or specification.
+        if not is_spec_fallback:
+            current_matched = np.array([current_prices[k].price for k in matched_keys], dtype=float)
+            base_matched = np.array([base_prices[k].price for k in matched_keys], dtype=float)
+            observation_count = sum(current_prices[k].observation_count for k in matched_keys)
 
-        jevons = self._calculator.compute_jevons(
+        calc = self._spec_calculator if is_spec_fallback else self._calculator
+        jevons = calc.compute_jevons(
             current_prices=current_matched,
             base_prices=base_matched,
             route_id=route_id,
@@ -262,8 +336,6 @@ class MatchedJevonsCalculator:
                 f"declined {len(matched_keys)} matched pair(s); index not computed"
             )
             return None
-
-        observation_count = sum(current_prices[k].observation_count for k in matched_keys)
 
         result = MatchedJevonsResult(
             route_id=route_id,

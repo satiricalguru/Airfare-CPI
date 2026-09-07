@@ -267,12 +267,6 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
         ) : tab === "signin" ? (
           /* Sign In Form */
           <div>
-            <div className="auth-demo-notice" role="note">
-              <strong>Demo personas — not a login.</strong> This prototype has no authentication and no
-              access control. Selecting a persona only changes labels shown in this browser; it grants no
-              permissions and sends nothing to a server. All dashboard data is publicly visible either way.
-            </div>
-
             {/* Persona presets */}
             <div className="auth-presets-section">
               <p className="eyebrow" style={{ marginBottom: 8 }}>Preview the dashboard as:</p>

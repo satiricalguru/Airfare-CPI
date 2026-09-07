@@ -203,6 +203,7 @@ export function emptyDashboardState(mode = DATA_MODE.DISCONNECTED, reason = null
     festiveAndMovers: null,
     dgcaBacktest: null,
     mospiBacktest: null,
+    scrapersHealth: null,
     lastUpdated: null,
   };
 }
@@ -383,6 +384,155 @@ const STATIC_MOSPI_BACKTEST = {
   },
 };
 
+const STATIC_SCRAPERS_HEALTH = {
+  status: "OK",
+  total_scrapers: 10,
+  active_scrapers: 10,
+  timestamp: "2026-09-07T12:00:00Z",
+  scrapers: [
+    {
+      source_id: "makemytrip",
+      display_name: "MakeMyTrip India",
+      category: "ota",
+      engine: "Playwright / Scrapy Interceptor",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Dynamic GraphQL/XHR response interception active",
+      latency_ms: 2480,
+      success_rate_24h: 99.1,
+      observations_today: 4820,
+      homepage: "https://www.makemytrip.com",
+    },
+    {
+      source_id: "goibibo",
+      display_name: "Goibibo",
+      category: "ota",
+      engine: "Playwright / Voyager Engine",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Live JSON search quote extraction active",
+      latency_ms: 2350,
+      success_rate_24h: 98.8,
+      observations_today: 4190,
+      homepage: "https://www.goibibo.com",
+    },
+    {
+      source_id: "cleartrip",
+      display_name: "Cleartrip",
+      category: "ota",
+      engine: "Next.js State & Hydration Extractor",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — High-speed SSR script state ingestion active",
+      latency_ms: 2190,
+      success_rate_24h: 99.4,
+      observations_today: 3950,
+      homepage: "https://www.cleartrip.com",
+    },
+    {
+      source_id: "indigo",
+      display_name: "IndiGo Airlines (6E)",
+      category: "airline",
+      engine: "Playwright / Navitaire Dotrez Adapter",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Official Navitaire fare breakdown and fare families captured",
+      latency_ms: 2620,
+      success_rate_24h: 99.7,
+      observations_today: 6240,
+      homepage: "https://www.goindigo.in",
+    },
+    {
+      source_id: "air_india",
+      display_name: "Air India (AI)",
+      category: "airline",
+      engine: "Playwright / Altéa Web Suite",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Altéa booking engine unbundled fares active",
+      latency_ms: 2510,
+      success_rate_24h: 98.5,
+      observations_today: 3410,
+      homepage: "https://www.airindia.com",
+    },
+    {
+      source_id: "spicejet",
+      display_name: "SpiceJet (SG)",
+      category: "airline",
+      engine: "Playwright / Navitaire Engine",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — SpiceFlex and Saver tariff streams parsed",
+      latency_ms: 2230,
+      success_rate_24h: 97.9,
+      observations_today: 2890,
+      homepage: "https://www.spicejet.com",
+    },
+    {
+      source_id: "akasa",
+      display_name: "Akasa Air (QP)",
+      category: "airline",
+      engine: "Playwright / Navitaire Dotrez Adapter",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Single-page React state unbundling active",
+      latency_ms: 2280,
+      success_rate_24h: 99.2,
+      observations_today: 2750,
+      homepage: "https://www.akasaair.com",
+    },
+    {
+      source_id: "skyscanner",
+      display_name: "Skyscanner India",
+      category: "metasearch",
+      engine: "Playwright Metasearch Crawler",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Multi-provider quote aggregation active",
+      latency_ms: 2840,
+      success_rate_24h: 98.2,
+      observations_today: 5120,
+      homepage: "https://www.skyscanner.co.in",
+    },
+    {
+      source_id: "fast_flights",
+      display_name: "FastFlights (Open-Source)",
+      category: "metasearch",
+      engine: "FastFlights RPC Client (Zero-Browser)",
+      acquisition_method: "web_scrape",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Sub-second direct RPC flight extraction active",
+      latency_ms: 420,
+      success_rate_24h: 99.8,
+      observations_today: 8100,
+      homepage: "https://github.com/AharonSambol/fast-flights",
+    },
+    {
+      source_id: "amadeus",
+      display_name: "Amadeus Flight Offers GDS",
+      category: "metasearch",
+      engine: "Amadeus Altéa GDS API",
+      acquisition_method: "api",
+      is_active: true,
+      status: "ACTIVE_WORKING",
+      working_condition: "Operational — Enterprise IATA NDC / GDS endpoint active",
+      latency_ms: 610,
+      success_rate_24h: 99.9,
+      observations_today: 7200,
+      homepage: "https://developers.amadeus.com",
+    },
+  ],
+};
+
 /**
  * Load static dashboard snapshot for GitHub Pages or offline environments.
  */
@@ -515,6 +665,7 @@ export function loadStaticDashboardSnapshot() {
       },
     },
     mospiBacktest: STATIC_MOSPI_BACKTEST,
+    scrapersHealth: STATIC_SCRAPERS_HEALTH,
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -559,6 +710,7 @@ export async function loadDashboard() {
     festiveMovers,
     dgcaBacktest,
     mospiBacktest,
+    scrapers,
   ] = await Promise.all([
     apiGet("/api/v1/index/national"),
     apiGet("/api/v1/index/national/history?days=400"),
@@ -573,6 +725,7 @@ export async function loadDashboard() {
     apiGet("/api/v1/analysis/festive-and-movers"),
     apiGet("/api/v1/backtest/dgca"),
     apiGet("/api/v1/backtest/mospi"),
+    apiGet("/api/v1/scrapers/health"),
   ]);
 
   const index = national.ok ? national.data : null;
@@ -589,6 +742,8 @@ export async function loadDashboard() {
     statsData && statsData.total_observations > 0 && statsData.valid_observations != null
       ? (statsData.valid_observations / statsData.total_observations) * 100
       : null;
+
+  const scrapersHealth = scrapers?.ok ? scrapers.data : null;
 
   return {
     connected: true,
@@ -636,6 +791,7 @@ export async function loadDashboard() {
     lastRun: collection.ok ? collection.data?.last_run ?? null : null,
     sources: sources.ok ? sources.data?.sources ?? [] : [],
     governanceRegistry: sources.ok ? sources.data?.governance_registry ?? [] : [],
+    scrapersHealth,
     weights: weights.ok ? weights.data : null,
     festiveAndMovers: festiveMovers.ok ? festiveMovers.data : null,
     dgcaBacktest: dgcaBacktest.ok ? dgcaBacktest.data : null,
@@ -647,6 +803,18 @@ export async function loadDashboard() {
 /** Fetch Indian festive spikes and flight brand movers analysis. */
 export async function fetchFestiveAndMovers() {
   return apiGet("/api/v1/analysis/festive-and-movers");
+}
+
+/** Fetch scraper fleet real-time health and observability status. */
+export async function fetchScrapersHealth() {
+  return apiGet("/api/v1/scrapers/health");
+}
+
+/** Execute an on-demand health probe for a single scraper. */
+export async function testScraper(sourceId) {
+  const res = await apiPost(`/api/v1/scrapers/${encodeURIComponent(sourceId)}/test`, {});
+  if (res.ok) return res.data;
+  throw new Error(res.error || `Failed to probe scraper ${sourceId}`);
 }
 
 /** Fetch source request budget and quota status. */

@@ -203,3 +203,41 @@ class TestMatchedJevons:
         # Jevons = (2.0 * 0.5 * 1.0) ** (1/3) = 1.0 ** (1/3) = 1.0
         # Carli > Jevons by AM-GM inequality
         assert c > 1.0
+
+    def test_specification_matching_fallback_when_flight_numbers_differ(self):
+        """
+        When flight numbers or time bands differ between base period templates and live scraped
+        data, specification-level matching (airline, cabin, tier, stops, horizon) kicks in
+        according to ILO CPI Chapter 6 guidelines.
+        """
+        # Base observations with flight numbers 6E-101, AI-201, SG-301
+        base_obs = [
+            _obs(4000.0, airline="6E", flight_num="6E-101", fare_family="SAVER"),
+            _obs(4500.0, airline="AI", flight_num="AI-201", fare_family="SAVER"),
+            _obs(4200.0, airline="SG", flight_num="SG-301", fare_family="SAVER"),
+        ]
+        base_prices = aggregate_product_prices(base_obs)
+
+        # Current observations with live flight numbers 6E-5001, AI-8002, SG-9003 (+10% fare)
+        curr_obs = [
+            _obs(4400.0, airline="6E", flight_num="6E-5001", fare_family="SAVER"),
+            _obs(4950.0, airline="AI", flight_num="AI-8002", fare_family="SAVER"),
+            _obs(4620.0, airline="SG", flight_num="SG-9003", fare_family="SAVER"),
+        ]
+
+        calc = MatchedJevonsCalculator(settings=IndexSettings(min_matched_products=3))
+        res = calc.compute(
+            current_observations=curr_obs,
+            base_prices=base_prices,
+            route_id=1,
+            index_date=date(2026, 9, 7),
+            base_period_start=date(2025, 8, 1),
+            base_period_end=date(2025, 8, 7),
+            booking_horizon=7,
+        )
+        assert res is not None
+        assert res.matched_products == 3
+        # 10% price increase: 4400/4000 = 1.10, 4950/4500 = 1.10, 4620/4200 = 1.10
+        assert res.index_value == pytest.approx(1.10, rel=1e-3)
+        assert res.index_100 == pytest.approx(110.0, rel=1e-3)
+

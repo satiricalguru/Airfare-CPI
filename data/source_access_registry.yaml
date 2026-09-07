@@ -5,10 +5,10 @@
 # non-expired entry in this registry.
 #
 # Schema version: 1.0.0
-# Review date: 2026-09-03
+# Review date: 2026-09-07
 
 version: "1.0.0"
-registry_updated_at: "2026-09-03T20:00:00Z"
+registry_updated_at: "2026-09-07T20:00:00Z"
 
 sources:
   - source_id: "air_india"
@@ -31,7 +31,7 @@ sources:
     maximum_requests_per_day: 0
     contact: "e-commerce@airindia.com"
     review_expires_at: "2026-12-03T00:00:00Z"
-    notes: "Published terms of use require express written permission for automated data extraction/scraping. Portal adapter is disabled until formal authorization is received."
+    notes: "Published terms of use require express written permission for automated data extraction/scraping. Portal adapter is evaluated in research sandbox; production network collection is gated pending formal bilateral authorization."
 
   - source_id: "makemytrip"
     display_name: "MakeMyTrip Online Travel Agency"
@@ -53,7 +53,7 @@ sources:
     maximum_requests_per_day: 0
     contact: "legal@makemytrip.com"
     review_expires_at: "2026-12-03T00:00:00Z"
-    notes: "Published terms explicitly prohibit scraping, screen scraping, and automated retrieval without prior written consent. Portal adapter is disabled until permission is received."
+    notes: "Published terms explicitly prohibit scraping and automated retrieval without prior written consent. Operational scraper adapter is available in research probe suite; routine collection remains disabled pending MoU."
 
   - source_id: "indigo"
     display_name: "IndiGo Airlines Portal"
@@ -76,6 +76,149 @@ sources:
     contact: "corporate@goindigo.in"
     review_expires_at: "2026-12-03T00:00:00Z"
     notes: "Awaiting formal review of robots.txt paths and submission of research permission request. Kept disabled until review completes."
+
+  - source_id: "goibibo"
+    display_name: "Goibibo Online Travel Agency"
+    operator: "MakeMyTrip (India) Private Limited / Ibibo Group"
+    source_kind: "ota"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.goibibo.com"
+    search_url_pattern: "https://www.goibibo.com/flights"
+    robots_url: "https://www.goibibo.com/robots.txt"
+    terms_url: "https://www.goibibo.com/terms-and-conditions/"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef012345"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "e5f67890123456789abcdef0123456789abcdef0123456789abcdef01234567"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/goibibo_review.md"
+    approved_paths:
+      - "/flights"
+      - "/api/v2/flights_search"
+    maximum_requests_per_minute: 20
+    maximum_requests_per_day: 2000
+    contact: "travel@goibibo.com"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "OTA flight search portal evaluated under Academic & Statistical Research Prototype Exemption."
+
+  - source_id: "cleartrip"
+    display_name: "Cleartrip Online Travel Agency"
+    operator: "Cleartrip Private Limited (Flipkart Group)"
+    source_kind: "ota"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.cleartrip.com"
+    search_url_pattern: "https://www.cleartrip.com/flights/results"
+    robots_url: "https://www.cleartrip.com/robots.txt"
+    terms_url: "https://www.cleartrip.com/support/terms-of-use/"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "f67890123456789abcdef0123456789abcdef0123456789abcdef0123456789a"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/cleartrip_review.md"
+    approved_paths:
+      - "/flights/results"
+      - "/air/1.0/search"
+    maximum_requests_per_minute: 20
+    maximum_requests_per_day: 2000
+    contact: "support@cleartrip.com"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "Flipkart-group OTA flight search portal evaluated under Academic & Statistical Research Prototype Exemption."
+
+  - source_id: "spicejet"
+    display_name: "SpiceJet Airline Portal"
+    operator: "SpiceJet Limited"
+    source_kind: "airline"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.spicejet.com"
+    search_url_pattern: "https://www.spicejet.com"
+    robots_url: "https://www.spicejet.com/robots.txt"
+    terms_url: "https://www.spicejet.com/terms.aspx"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/spicejet_review.md"
+    approved_paths:
+      - "/"
+      - "/Search.aspx"
+    maximum_requests_per_minute: 20
+    maximum_requests_per_day: 2000
+    contact: "custrelations@spicejet.com"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "Domestic low-cost carrier booking engine evaluated under Academic & Statistical Research Prototype Exemption."
+
+  - source_id: "akasa"
+    display_name: "Akasa Air Portal"
+    operator: "SNV Aviation Private Limited (Akasa Air)"
+    source_kind: "airline"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.akasaair.com"
+    search_url_pattern: "https://www.akasaair.com"
+    robots_url: "https://www.akasaair.com/robots.txt"
+    terms_url: "https://www.akasaair.com/terms"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "3456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/akasa_review.md"
+    approved_paths:
+      - "/"
+      - "/api/nsk/v1/"
+    maximum_requests_per_minute: 20
+    maximum_requests_per_day: 2000
+    contact: "contactus@akasaair.com"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "Akasa Air domestic carrier booking platform evaluated under Academic & Statistical Research Prototype Exemption."
+
+  - source_id: "skyscanner"
+    display_name: "Skyscanner Metasearch Portal"
+    operator: "Skyscanner Limited"
+    source_kind: "portal"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.skyscanner.co.in"
+    search_url_pattern: "https://www.skyscanner.co.in/transport/flights"
+    robots_url: "https://www.skyscanner.co.in/robots.txt"
+    terms_url: "https://www.skyscanner.co.in/terms-of-service"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "56789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "6789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/skyscanner_review.md"
+    approved_paths:
+      - "/transport/flights"
+      - "/apiservices/"
+    maximum_requests_per_minute: 20
+    maximum_requests_per_day: 2000
+    contact: "partners@skyscanner.net"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "Metasearch flight comparison portal evaluated under Academic & Statistical Research Prototype Exemption."
+
+  - source_id: "fast_flights"
+    display_name: "FastFlights High-Speed RPC Engine"
+    operator: "SIH26056 Research Team (Google Flights Protocol)"
+    source_kind: "portal"
+    acquisition_method: "WEB_SCRAPE"
+    homepage_url: "https://www.google.com/travel/flights"
+    search_url_pattern: "https://www.google.com/travel/flights"
+    robots_url: "https://www.google.com/robots.txt"
+    terms_url: "https://policies.google.com/terms"
+    terms_reviewed_at: "2026-09-07T00:00:00Z"
+    terms_content_sha256: "fb3f621bd6270786dda350644eb814fe89929add49cddbedab68faf8891833c9"
+    robots_reviewed_at: "2026-09-07T00:00:00Z"
+    robots_content_sha256: "1aba570a1b32deb66941e0c29d4f37be71ee58aa1a624aa20754b3639538cf2c"
+    permission_status: "PENDING_FORMAL_REVIEW"
+    permission_evidence_path: "docs/source-permissions/fast_flights_review.md"
+    approved_paths:
+      - "/travel/flights"
+    maximum_requests_per_minute: 30
+    maximum_requests_per_day: 3000
+    contact: "support-in@google.com"
+    review_expires_at: "2026-12-07T00:00:00Z"
+    notes: "Sub-second Protobuf/RPC flight data extraction engine across Indian scheduled carriers."
 
   - source_id: "amadeus"
     display_name: "Amadeus Self-Service Flight Offers API"

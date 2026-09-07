@@ -199,6 +199,7 @@ class IndexSettings:
     max_price_relative: float = 10.0
     winsorize_lower_pct: float = 1.0
     winsorize_upper_pct: float = 99.0
+    direct_flights_only: bool = True
 
     @property
     def base_period_end(self) -> date:
@@ -373,6 +374,7 @@ def build_settings() -> Settings:
         base_period_start=_env_date("INDEX_BASE_PERIOD_START", "2026-09-03"),
         base_period_days=max(1, _env_int("INDEX_BASE_PERIOD_DAYS", 7)),
         min_matched_products=_env_int("INDEX_MIN_MATCHED_PRODUCTS", 3),
+        direct_flights_only=_env_bool("INDEX_DIRECT_FLIGHTS_ONLY", True),
     )
 
     validation = ValidationSettings(

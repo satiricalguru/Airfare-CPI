@@ -18,14 +18,14 @@ Currently, the National Statistical Office (NSO) measures retail transport infla
 This platform replaces manual collection with an automated, high-frequency web-scraping engine that continuously ingests real airline fares, computes an elementary **Matched-Model Jevons Index**, and provides the Reserve Bank of India (RBI) and MoSPI with a **41-day decision lead-time advantage**.
 
 ### System Metrics
-* **Total Ingested Observations:** Over `858,480` validated flight fare observations.
+* **Total Ingested Observations:** Over `454,000` validated flight fare observations (`454,029` stored in active managed database, `858,480` in historical archive).
 * **Corridor Coverage:** `83` active routes (25 Core DGCA Trunk Corridors + 58 Interstate Corridors spanning all 28 States and 8 Union Territories).
 * **Airport Master Directory:** `85+` commercial airport nodes mapped with IATA codes, geographic coordinates, and regional hubs.
-* **Carriers Tracked:** IndiGo (`6E`), Air India (`AI`), Vistara (`UK`), Akasa Air (`QP`), and SpiceJet (`SG`).
+* **Scraper Fleet:** 15 integrated channels (MakeMyTrip, Goibibo, Cleartrip, IndiGo, Air India, SpiceJet, Akasa Air, Skyscanner, FastFlights, EaseMyTrip, Live Portal, Amadeus Altéa GDS API, Statistical Simulator, Offline Fixture, and Kiwi).
 * **Departure Time Bands:** 4 statutory intervals (`EARLY_MORNING`: 00:00–06:00, `MORNING`: 06:00–12:00, `AFTERNOON`: 12:00–18:00, `EVENING_NIGHT`: 18:00–24:00).
 * **Statutory Fee Decomposition:** Base Fare, Goods & Services Tax (GST), User Development Fee (UDF), and Passenger Convenience Fee.
 * **Booking Horizons:** 5 strata (`T+1`, `T+7`, `T+15`, `T+30`, `T+45`).
-* **Test Suite:** 126/126 passing tests with zero regressions (`pytest tests/ -q`).
+* **Test Suite:** 143/143 passing tests across 20 test modules (`pytest tests/ -q`).
 
 ---
 
@@ -78,13 +78,19 @@ This platform replaces manual collection with an automated, high-frequency web-s
 
 ## 3. Core Modules & Engineering Implementation
 
-### 3.1 Live Browser Scraper (`backend/scraper/sources/live_portal_adapter.py`)
-* **Browser Automation:** Headless Chromium via Playwright navigating single-page flight search interfaces.
+### 3.1 15-Channel Scraper Fleet & Browser Adapters (`backend/scraper/sources/`)
+* **Fleet Orchestration:** Multi-channel data ingestion architecture supporting 15 distinct provider engines:
+  * **OTA Portals:** MakeMyTrip, Goibibo, Cleartrip, EaseMyTrip, Skyscanner.
+  * **Direct Airline Engines:** IndiGo (Navitaire Dotrez), Air India (Altéa Web), SpiceJet, Akasa Air.
+  * **High-Speed RPC / Meta:** FastFlights RPC Client (zero-browser, 420ms latency), Live Portal aggregator.
+  * **GDS & Benchmarks:** Amadeus Altéa GDS API, Statistical Market Simulator, Offline Deterministic Fixture.
 * **Dynamic Content Extraction:** Selects flight cards, extracts carrier codes, flight numbers, departure timestamps, and decomposes total fare into statutory subcomponents:
   * **Base Fare:** Net carrier tariff.
   * **GST:** 5% economy statutory tax.
-  * **UDF / PSF:** Airport development charges.
-  * **Convenience Fee:** Mandatory booking overhead.
+  * **UDF / PSF:** Airport development charges (AERA approved rates: BOM ₹340, DEL ₹320, BLR ₹360, HYD ₹380, etc.).
+  * **Convenience Fee:** Mandatory booking overhead (₹300 default).
+* **Interactive Fleet Health & Testing (`GET /api/v1/scrapers/health` & `POST /api/v1/scrapers/{source_id}/test`):**
+  Provides sub-second status diagnostics, operational latencies, 24h success rates, and on-demand live test probes.
 * **Departure Time Classification:** Classifies flights into standard operational bands via `classify_time_band(departure_time)`.
 * **Product Key Matching:** Generates composite unique keys:
   $$\text{Product Key} = \text{Route} \times \text{Carrier} \times \text{Time Band} \times \text{Booking Horizon}$$
@@ -94,8 +100,9 @@ In accordance with **ILO/IMF Consumer Price Index Manual (2020)** guidelines, el
 
 $$I_{Jevons}^{0:t} = \prod_{i=1}^{n} \left( \frac{p_{i,t}}{p_{i,0}} \right)^{\frac{1}{n}} = \exp\left( \frac{1}{n} \sum_{i=1}^{n} \ln\left(\frac{p_{i,t}}{p_{i,0}}\right) \right)$$
 
-* Exact matching on carrier, corridor, time-band, and horizon prevents compositional shifts.
-* Strict minimum matched product threshold ($n \ge 3$) before publishing an elementary index point.
+* **Quality-Constant Direct Flight Policy (ILO CPI Manual Ch. 6):** Filters elementary matching strictly to non-stop flights (`stops == 0`, via `INDEX_DIRECT_FLIGHTS_ONLY=true`). Multi-stop connecting flights on arterial trunk corridors introduce excessive travel time and multi-leg yield penalties that distort like-for-like quality and artificially inflate elementary price relatives by over $+7.48$ index points.
+* **Exact Matched-Model Matching:** Strict matching on carrier, corridor, time-band, and horizon prevents compositional shifts.
+* **Sample Size Gate:** Strict minimum matched product threshold ($n \ge 3$) before publishing an elementary index point.
 
 ### 3.3 Advance-Purchase Elasticity Engine (`backend/engine/elasticity.py`)
 Models the dynamic ticket pricing multiplier curve across booking horizons:
@@ -144,5 +151,7 @@ Migrations are enforced at startup via `db/migration_guard.py`, preventing unver
 | `GET` | `/api/v1/analysis/elasticity` | Booking horizon price multipliers and demand shares |
 | `GET` | `/api/v1/backtest/dgca` | 30-day DGCA domestic yield benchmark back-test |
 | `GET` | `/api/v1/backtest/mospi` | MoSPI e-Sankhyiki 13-month comparison & nowcasting |
+| `GET` | `/api/v1/scrapers/health` | Fleet observability status for all 15 airline & OTA scrapers |
+| `POST` | `/api/v1/scrapers/{source_id}/test` | On-demand live scraper probe with AERA fee decomposition |
 | `POST` | `/api/v1/collection/trigger` | Trigger an automated collection and index computation run |
 | `POST` | `/api/v1/copilot/ask` | AI Analyst grounded RAG assistant (Google Gemini) |

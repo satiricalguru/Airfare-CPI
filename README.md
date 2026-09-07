@@ -10,7 +10,7 @@
   [![Base Year](https://img.shields.io/badge/Base%20Year-2024%3D100%20(Rebased)-green.svg?style=for-the-badge)](docs/research_and_methodology.md)
   [![MoSPI e-Sankhyiki](https://img.shields.io/badge/MoSPI-e--Sankhyiki%20COICOP%2007-orange.svg?style=for-the-badge&logo=government)](https://esankhyiki.mospi.gov.in)
   [![Lead Time](https://img.shields.io/badge/Decision%20Advantage-41%20Days%20Ahead-22c55e.svg?style=for-the-badge)](docs/research_and_methodology.md)
-  [![Tests](https://img.shields.io/badge/Tests-138%2F138%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](docs/implementation_roadmap.md)
+  [![Tests](https://img.shields.io/badge/Tests-143%2F143%20Passing%20(100%25)-success.svg?style=for-the-badge&logo=pytest)](docs/implementation_roadmap.md)
   [![Next.js 16](https://img.shields.io/badge/Next.js-16.3%20(Turbopack)-black.svg?style=for-the-badge&logo=next.js)](https://nextjs.org)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
   [![Database](https://img.shields.io/badge/Database-Isolated%20database%2F-336791.svg?style=for-the-badge&logo=sqlite)](database/)
@@ -39,7 +39,7 @@ Air passenger transport is one of the most volatile and mathematically challengi
    By the time official transport numbers are published on the 12th of each month, market pricing dynamics have already shifted.
 4. **Manual Collection Distortion:** Once-a-month physical ticketing visits capture random point snapshots, causing artificial volatility and compositional shift errors.
 
-**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 core DGCA trunk corridors (and 58 interstate feeder routes)** with **440,000+ validated fare observations** (430,496 pure live observations + active multi-portal collection), classifies observations across **4 statutory departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI: 118.99 (Base 2024=100)** weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
+**Our Solution:** An enterprise-grade, statistically defensible, automated intelligence platform that continuously samples domestic airfares across **25 core DGCA trunk corridors (and 58 interstate feeder routes)** with **454,000+ validated fare observations** (454,029 pure live observations across multi-portal collection), classifies observations across **4 statutory departure time bands**, decomposes total prices into **statutory fee components**, computes elementary price relatives using the **Matched-Model Jevons Geometric Mean formula**, and aggregates them into a headline **National Airfare CPI: 122.78 (Base 2024=100)** as of `2026-09-07`, weighted by **Directorate General of Civil Aviation (DGCA) passenger traffic**.
 
 ---
 
@@ -51,7 +51,8 @@ Air passenger transport is one of the most volatile and mathematically challengi
 * **Real-Time Nowcasting Engine:** Forward predictive econometric model ($R^2 = 0.884$, MAPE = $1.42\%$) projecting upcoming month inflation prints with 95% confidence intervals.
 
 ### 2. 🛡️ Live Multi-Portal Web Scraping & Statutory Tariff Decomposition
-* **Dual-Portal Playwright & HTTP Engine (`backend/scraper/sources/`):** High-frequency Chromium headless extraction collecting live flight cards across **Google Flights** and **EaseMyTrip** (e.g. 11,803 live flight quotes collected across 25 corridors $\times$ 5 horizons in a single cycle).
+* **15-Channel Multi-Portal Scraper Fleet (`backend/scraper/sources/`):** High-frequency Chromium headless extraction and API pipelines collecting live flight cards across **MakeMyTrip, Goibibo, Cleartrip, IndiGo, Air India, SpiceJet, Akasa Air, Skyscanner, FastFlights, EaseMyTrip, Live Portal, and Amadeus Altéa GDS** (e.g. 20,329 quotes collected in a single cycle).
+* **Interactive Fleet Observability & Testing:** Dedicated health diagnostics dashboard (`Monitoring` tab) backed by `GET /api/v1/scrapers/health` and on-demand interactive verification probes (`POST /api/v1/scrapers/{source_id}/test`) with instant live quote auditing and AERA fee breakdown.
 * **Interactive "Trigger Collection Cycle":** Fully functional on-demand scraper trigger on the dashboard (`Monitoring` tab) that launches headless Playwright sweeps across routes, streams audit logs, and persists validated quotes.
 * **AERA Statutory Tariff & Airport UDF Decomposition:** Isolates true airline pricing power from statutory charges using official Airports Economic Regulatory Authority of India (AERA) schedules:
   $$\text{Base Fare} = \frac{\text{Total Fare} - \text{ASF (₹236)} - \text{UDF(Origin Airport)} - \text{Convenience Fee (₹300)}}{1.05}$$
@@ -140,7 +141,7 @@ flowchart TD
     UserQuery["💬 User Query<br/><i>'What is the current Airfare CPI and how does it compare with MoSPI Transport Division 07?'</i>"]
     
     subgraph RAG_Engine["🔍 1. REAL-TIME DOMAIN CONTEXT RETRIEVAL (4 STORES)"]
-        Store1["📊 <b>Live National & Corridor Telemetry</b><br/>• Headline CPI: 118.99 (Base 2024=100)<br/>• Trailing 30-day index trend & corridor Jevons index<br/>• 25 Core DGCA trunk routes & passenger volume shares"]
+        Store1["📊 <b>Live National & Corridor Telemetry</b><br/>• Headline CPI: 122.78 (Base 2024=100)<br/>• Trailing 30-day index trend & corridor Jevons index<br/>• 25 Core DGCA trunk routes & passenger volume shares"]
         Store2["⏱️ <b>Booking Horizon Elasticity Multipliers</b><br/>• T+1 walkup: 2.25x surge (10.5% share)<br/>• T+7: 1.48x · T+15: 1.18x · T+30: 1.00x baseline anchor"]
         Store3["🏛️ <b>MoSPI e-Sankhyiki Official Data Store</b><br/>• COICOP Division 07 Transport Index (104.25)<br/>• Airfare item weight: 0.07722% · Transport weight: 8.59%<br/>• 41-Day decision lead time advantage over NSO survey"]
         Store4["🛫 <b>Carrier Pricing & Fee Decomposition</b><br/>• Base fare, 5% GST, UDF, convenience fee breakdown<br/>• IndiGo, Air India, Vistara, Akasa, SpiceJet spread"]
@@ -204,6 +205,11 @@ Route-level elementary indices are aggregated into the headline **National Airfa
 $$\text{CPI}(t) = \sum_{r=1}^{R} W_r \cdot I(r,t) \times 100, \quad W_r = \frac{\text{DGCA Passenger Volume}_r}{\sum_{k \in \mathcal{R}_{\text{active}}} \text{DGCA Passenger Volume}_k}$$
 
 If any corridor experiences temporary data suppression, weights are dynamically renormalized across active corridors $\mathcal{R}_{\text{active}}$.
+
+### 4. Quality Adjustment: Non-Stop Direct Flight Filtering (ILO CPI Manual Ch. 6)
+To satisfy the strict product homogeneity and quality-adjustment requirements of **ILO CPI Manual Chapter 6 (Section 6.42 - 6.58)**, our elementary aggregation strictly enforces non-stop direct flight matching (`stops == 0`, configured via `INDEX_DIRECT_FLIGHTS_ONLY=true`):
+* **Elimination of Multi-Stop Price Distortions:** 1-stop connecting itineraries on arterial domestic routes (e.g. DEL $\to$ BOM via IXU) introduce severe elapsed duration penalties (5–12 hours vs. 2 hours) and multi-leg yield management compounding. In unconstrained matching, connecting fares artificially inflate the headline index by over $+7.48$ index points.
+* **Constant Quality Specification:** By restricting price relatives to direct trunk itineraries ($n \ge 3$ per cell), the index tracks true like-for-like quality without conflating transit inconvenience with consumer inflation.
 
 ---
 
@@ -289,28 +295,37 @@ Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 🧪 Comprehensive Verification Suite (138 Tests Passing)
+## 🧪 Comprehensive Verification Suite (143 Tests Passing)
 
-The analytical and pipeline integrity of the engine is backed by **138 automated unit and integration tests** passing across all 19 test modules in build mode:
+The analytical and pipeline integrity of the engine is backed by **143 automated unit and integration tests** passing across all 20 test modules in build mode:
 
 ```bash
 cd backend
 pytest tests/ -q
-# Output: 138 passed, 99 warnings in 3.71s
+# Output: 143 passed, 104 warnings in 41.77s
 ```
 
-### ✅ Test Suite Breakdown (138/138 Passing):
+### ✅ Test Suite Breakdown (143/143 Passing):
+* **`tests/test_scrapers_fleet.py`:** Tests 15-channel scraper fleet registration, capability descriptors, `/api/v1/scrapers/health` observability endpoint contracts, on-demand live scraper probes (`POST /api/v1/scrapers/{source_id}/test`) with AERA statutory fee decomposition, and Scrapy item processing pipelines.
 * **`tests/test_live_portal_production.py`:** Tests Playwright multi-portal live card parsing, EaseMyTrip & Google Flights URL builders, block detection, eTLD+1 root domain rate-limiter inheritance, and commercial fail-closed kill-switch.
 * **`tests/test_source_governance_budget.py`:** Tests the 8 sovereign compliance gates, terms/robots.txt SHA-256 hash drift detection, daily/monthly request quota limits, and academic research prototype exemptions.
 * **`tests/test_audit_regressions.py`:** Verifies mathematical parity, prevents regression on tariff balances, and validates rate limiters.
 * **`tests/test_scraper_and_elasticity.py`:** Tests Playwright live scraper, 4 departure time bands (`classify_time_band`), fee decomposition (Base, GST, UDF, convenience fee), and booking horizon elasticity models.
 * **`tests/test_jevons.py`:** Mathematical proof of Jevons time-reversal invariance ($I_{0\to t} \times I_{t\to 0} = 1.0$), identity property, Winsorization fences, and formal proof of Carli upward bias.
-* **`tests/test_matched_jevons.py`:** Tests product churn handling, exact matched-pair filtering, and fare family substitution guards.
+* **`tests/test_matched_jevons.py`:** Tests product churn handling, exact matched-pair filtering, quality-constant direct flight filters (`stops == 0`), and fare family substitution guards.
 * **`tests/test_national_aggregation.py`:** DGCA passenger volume weighting, base period normalization, missing-route renormalization, and MoM change decompositions.
 * **`tests/test_validator.py`:** Price range bounding (₹500 to ₹80,000), statutory tax ratio checks, and Tukey IQR outlier fences.
 * **`tests/test_migration_guard.py`:** Alembic database schema verification, unversioned database rejection, and revision marker persistence (`20260903_0004`).
 * **`tests/test_operational_guards.py`:** Ingestion rate limiters, crawler quota safeguards, and pipeline error recovery.
 * **`tests/test_api_contract.py`:** Schema contract validation across all REST endpoints.
+* **`tests/test_pipeline_integration.py`:** End-to-end scraper to elementary index aggregation pipeline.
+* **`tests/test_persistence.py`:** Managed SQLite database transaction atomicity, WAL mode, and Alembic version integrity.
+* **`tests/test_horizons.py`:** Booking horizon stratification and polynomial elasticity weighting.
+* **`tests/test_dgca_backtest.py`:** 30-day DGCA passenger yield benchmark co-movement.
+* **`tests/test_festive_and_movers.py`:** Festival spike volatility and airline brand price mover tracking.
+* **`tests/test_scraper_web_runtime.py`:** Live Chromium browser environment lifecycle and error recovery.
+* **`tests/test_acquisition_method.py`:** Provenance audit trail attribution for web scrapers vs. GDS APIs.
+* **`tests/test_portal_parser_fixtures.py`:** Offline deterministic HTML fixture parsing and schema extraction.
 
 ---
 
@@ -361,6 +376,8 @@ FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8000/d
 | `GET` | `/api/v1/backtest/dgca` | 30-Day DGCA domestic yield benchmark back-test |
 | `GET` | `/api/v1/backtest/mospi` | MoSPI e-Sankhyiki 13-month benchmark, 41D lead time & nowcast |
 | `GET` | `/api/v1/analysis/festive-and-movers`| Seasonal festive spikes and carrier brand comparisons |
+| `GET` | `/api/v1/scrapers/health` | Fleet observability status for all 15 airline & OTA scrapers |
+| `POST` | `/api/v1/scrapers/{source_id}/test` | On-demand live scraper probe with AERA fee decomposition |
 | `POST` | `/api/v1/collection/trigger` | Trigger an automated collection and index computation run |
 | `POST` | `/api/v1/scraper/live-sweep` | Multi-source live scraper sweep across DGCA basket corridors |
 | `POST` | `/api/v1/copilot/ask` | AI Analyst grounded RAG assistant (Google Gemini) |
@@ -376,12 +393,12 @@ Airfare-CPI/
 │   ├── api/                  # REST API endpoints and serializers
 │   ├── db/                   # Async SQLAlchemy models & repositories
 │   ├── engine/               # Matched Jevons, elasticity, MoSPI benchmark
-│   ├── scraper/              # Playwright browser scraper & validation
-│   ├── tests/                # 126 unit and integration tests
+│   ├── scraper/              # Playwright browser scraper, fleet & validation
+│   ├── tests/                # 143 unit and integration tests (20 test modules)
 │   └── config.py             # Central application configuration
 ├── database/                 # Centralized database storage & schemas
-│   ├── airfare_cpi_managed.db# Active SQLite store (433,700+ fares, 9,800+ indices, Alembic: 20260903_0004)
-│   ├── airfare_cpi.db        # Historical baseline archive
+│   ├── airfare_cpi_managed.db# Active SQLite store (454,000+ fares, 9,820+ indices, Alembic: 20260903_0004)
+│   ├── airfare_cpi.db        # Historical baseline archive (858,480 observations)
 │   ├── schema.sql            # Master relational DDL
 │   ├── seed_routes.sql       # 25 core DGCA trunk corridors seed
 │   └── README.md             # Database architecture documentation

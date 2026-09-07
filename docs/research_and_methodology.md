@@ -59,6 +59,11 @@ $$W_r = \frac{\text{Annual Pax}_r}{\sum_{k \in \mathcal{R}_{\text{active}}} \tex
 
 If any corridor experiences temporary cancellation or data suppression, weights are dynamically renormalized across the active basket $\mathcal{R}_{\text{active}}$.
 
+### 2.4 Quality Adjustment: Direct Flight Specification (ILO CPI Manual Ch. 6)
+In index number theory and official CPI compilation (**ILO/IMF Consumer Price Index Manual 2020**, Chapter 6: *Quality Adjustment and Product Specification*), price comparisons must hold service quality constant to measure pure monetary inflation:
+* **Distortion of Multi-Stop Itineraries:** On high-density trunk corridors (e.g. DEL $\leftrightarrow$ BOM, DEL $\leftrightarrow$ BLR), airlines operate frequent non-stop direct flights with 1.5 to 2.5 hours duration. Inclusion of 1-stop or 2-stop connecting flights introduces significant service quality degradation (long transit layovers, 5 to 12 hour journey times, increased connection risk). Furthermore, multi-leg airline yield management prices connecting flights as cumulative sector sums, causing artificial pseudo-inflation (an unadjusted $+7.48$ index point upward distortion on trunk routes).
+* **Direct-Flight Constant Quality Filter:** Configured via `INDEX_DIRECT_FLIGHTS_ONLY=true` (default: `True`), elementary cells evaluate strictly non-stop flights (`stops == 0`) across monitored trunk routes ($n \ge 3$). This guarantees that elementary Jevons price relatives reflect pure like-for-like fare changes without conflating service inconvenience with inflation.
+
 ---
 
 ## 3. MoSPI e-Sankhyiki Integration & The 41-Day Advantage

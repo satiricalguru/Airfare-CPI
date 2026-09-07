@@ -1,34 +1,39 @@
 """
 SIH26056 — Source registrations.
 
-Importing this package registers every adapter with the shared registry. Adding a
-source means adding it here; nothing in the index engine changes.
-
-The registry intentionally contains disabled entries. ``GET /api/v1/sources`` exposes
-all of them with their reasons, so the answer to "why aren't you scraping MakeMyTrip?"
-is in the API rather than left to inference.
+Importing this package registers every adapter with the shared registry.
+Includes direct airline portals (IndiGo, Air India, SpiceJet, Akasa Air),
+online travel agencies (MakeMyTrip, Goibibo, Cleartrip, EaseMyTrip),
+high-speed RPC engine (FastFlights), metasearch (Skyscanner), and GDS APIs (Amadeus).
 """
 
 from __future__ import annotations
 
 from scraper.registry import registry
 from scraper.sources import (
+    air_india,
+    akasa,
     amadeus,
+    cleartrip,
     disabled_otas,
     easemytrip,
+    fast_flights_adapter,
+    goibibo,
+    indigo,
     live_portal_adapter,
+    makemytrip,
     offline_fixture,
     simulator,
+    skyscanner,
+    spicejet,
 )
 
 
 def _register_all() -> None:
-    # Guard against double registration when the module is re-imported (e.g. by
-    # tests that reload configuration).
     if registry.has(amadeus.SOURCE_NAME):
         return
 
-    # Live sources.
+    # Established Live sources
     registry.register(
         amadeus.SOURCE_NAME,
         factory=amadeus.create,
@@ -45,21 +50,68 @@ def _register_all() -> None:
         describe=easemytrip.describe,
     )
 
-    # Research instrument.
+    # Newly Enabled Indian Airlines & OTAs
+    registry.register(
+        makemytrip.SOURCE_NAME,
+        factory=makemytrip.create,
+        describe=makemytrip.describe,
+    )
+    registry.register(
+        goibibo.SOURCE_NAME,
+        factory=goibibo.create,
+        describe=goibibo.describe,
+    )
+    registry.register(
+        cleartrip.SOURCE_NAME,
+        factory=cleartrip.create,
+        describe=cleartrip.describe,
+    )
+    registry.register(
+        indigo.SOURCE_NAME,
+        factory=indigo.create,
+        describe=indigo.describe,
+    )
+    registry.register(
+        air_india.SOURCE_NAME,
+        factory=air_india.create,
+        describe=air_india.describe,
+    )
+    registry.register(
+        spicejet.SOURCE_NAME,
+        factory=spicejet.create,
+        describe=spicejet.describe,
+    )
+    registry.register(
+        akasa.SOURCE_NAME,
+        factory=akasa.create,
+        describe=akasa.describe,
+    )
+    registry.register(
+        skyscanner.SOURCE_NAME,
+        factory=skyscanner.create,
+        describe=skyscanner.describe,
+    )
+    registry.register(
+        fast_flights_adapter.SOURCE_NAME,
+        factory=fast_flights_adapter.create,
+        describe=fast_flights_adapter.describe,
+    )
+
+    # Research instrument
     registry.register(
         simulator.SOURCE_NAME,
         factory=simulator.create,
         describe=simulator.describe,
     )
 
-    # Fixture replay for CI and offline demonstration.
+    # Fixture replay for CI and offline demonstration
     registry.register(
         offline_fixture.SOURCE_NAME,
         factory=offline_fixture.create,
         describe=offline_fixture.describe,
     )
 
-    # Assessed-and-declined sources, registered so their reasons are discoverable.
+    # Assessed-and-declined affiliate sources
     for spec in disabled_otas.DISABLED_SOURCES:
         registry.register(
             spec.name,
@@ -71,4 +123,21 @@ def _register_all() -> None:
 _register_all()
 
 
-__all__ = ["amadeus", "easemytrip", "live_portal_adapter", "simulator", "offline_fixture", "disabled_otas", "registry"]
+__all__ = [
+    "air_india",
+    "akasa",
+    "amadeus",
+    "cleartrip",
+    "disabled_otas",
+    "easemytrip",
+    "fast_flights_adapter",
+    "goibibo",
+    "indigo",
+    "live_portal_adapter",
+    "makemytrip",
+    "offline_fixture",
+    "registry",
+    "simulator",
+    "skyscanner",
+    "spicejet",
+]
