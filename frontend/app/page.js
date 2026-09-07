@@ -99,6 +99,7 @@ import {
   apiGet,
   emptyDashboardState,
   loadDashboard,
+  loadMethodology,
   scrapeRouteFares,
   triggerCollection,
 } from "./lib/api";
@@ -383,7 +384,7 @@ export default function AirfareCPI() {
   useEffect(() => {
     if (tab !== "methodology" || methodology) return;
     let cancelled = false;
-    void apiGet("/api/v1/methodology").then((r) => {
+    void loadMethodology().then((r) => {
       if (!cancelled && r.ok) setMethodology(r.data);
     });
     return () => {

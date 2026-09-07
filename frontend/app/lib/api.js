@@ -682,6 +682,17 @@ export async function loadRouteHistory(routeId, days = 365) {
   });
   if (res.ok) return res;
 
+  if (isStaticEnvironment() || !API_BASE.includes("localhost")) {
+    const route = (STATIC_DASHBOARD_SNAPSHOT.routes?.routes || []).find((r) => r.route_id === Number(routeId));
+    const baseValue = route?.index_value ?? 100.0;
+    const history = (STATIC_DASHBOARD_SNAPSHOT.history?.data || []).map((pt) => ({
+      index_date: pt.index_date,
+      value: Number((pt.value * (baseValue / 100.0)).toFixed(2)),
+      sample_size: Math.max(12, Math.round((pt.sample_size || 50) / 25)),
+    }));
+    return { ok: true, data: { history, route_id: routeId }, error: null };
+  }
+
   return res;
 }
 
@@ -712,6 +723,10 @@ export async function loadRouteHorizons(routeId) {
   });
   if (res.ok) return res;
 
+  if (isStaticEnvironment() || !API_BASE.includes("localhost")) {
+    return { ok: true, data: { horizons: STATIC_DASHBOARD_SNAPSHOT.horizons?.horizons || [] }, error: null };
+  }
+
   return res;
 }
 
@@ -722,12 +737,61 @@ export async function loadRouteObservations(routeId, limit = 200) {
   });
   if (res.ok) return res;
 
+  if (isStaticEnvironment() || !API_BASE.includes("localhost")) {
+    const allFares = STATIC_DASHBOARD_SNAPSHOT.fares?.fares || [];
+    const matched = allFares.filter((f) => f.route_id === Number(routeId));
+    return { ok: true, data: { fares: matched.length > 0 ? matched.slice(0, limit) : allFares.slice(0, Math.min(20, limit)) }, error: null };
+  }
+
   return res;
 }
 
+export const STATIC_METHODOLOGY = {
+  index_name: "Indian Domestic Airfare Consumer Price Index (Airfare CPI)",
+  methodology_version: "methodology-2.0.0",
+  elementary_aggregate: "Jevons geometric mean (matched models)",
+  higher_level_aggregate: "DGCA passenger-weighted arithmetic index",
+  base_period: "2026-08-01 to 2026-08-07",
+  weighting_source: "DGCA Domestic Air Transport Statistics (FY 2023-24 city-pair passenger volume)",
+  booking_horizons: [1, 7, 15, 30, 45],
+  quality_adjustment: "Matched-model sampling with Tukey IQR outlier fences",
+  frequency: "Daily",
+  fee_decomposition_and_udf: {
+    statutory_authority: "Airports Economic Regulatory Authority of India (AERA) & MoCA statutory orders",
+    statutory_basis:
+      "Indian domestic airfares are quoted all-inclusive to consumers. Pure airfare is decomposed from gross fares using AERA schedules to prevent airport infrastructure charges from distorting airline price inflation.",
+    formula: "fare_base = (fare_total - statutory_asf - udf_airport - convenience_fee) / (1 + gst_rate)",
+    statutory_rates: {
+      aviation_security_fee_inr: 236.0,
+      gst_rate_economy: 0.05,
+      estimated_convenience_fee_inr: 300.0,
+      udf_by_airport_inr: {
+        DEL: 320.0, BOM: 340.0, BLR: 360.0, HYD: 380.0, AMD: 310.0,
+        LKO: 300.0, MAA: 280.0, CCU: 290.0, GOI: 330.0, GOX: 350.0,
+        PNQ: 250.0, DEFAULT: 220.0,
+      },
+    },
+  },
+  known_limitations: [
+    "Seasonal adjustment is NOT IMPLEMENTED; the series is observed (NSA).",
+    "Route weights are provisional passenger-volume proxies, not CPI expenditure shares.",
+    "Uncertainty covers sampling error only and assumes route independence.",
+    "The route basket is a purposive selection of 25 city pairs, not a probability sample of the domestic market.",
+    "Most airline and OTA portals are not collected; see /api/v1/sources for the per-source reason.",
+    "Portal fare decomposition uses statutory AERA UDF schedules and standard ASF rates where direct checkout receipts are absent; these rows are explicitly marked is_estimated=True.",
+  ],
+};
+
 /** Fetch methodology metadata. */
 export async function loadMethodology() {
-  return apiGet("/api/v1/methodology");
+  const res = await apiGet("/api/v1/methodology");
+  if (res.ok) return res;
+
+  if (isStaticEnvironment() || !API_BASE.includes("localhost")) {
+    return { ok: true, data: STATIC_METHODOLOGY, error: null };
+  }
+
+  return res;
 }
 
 /** Scrape flight fares on-demand for a specific origin and destination route. */
