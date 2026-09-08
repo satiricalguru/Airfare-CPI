@@ -702,7 +702,19 @@ export default function AirfareCPI() {
       });
     }
 
-    return list;
+    // Sort: publishable routes at top, suppressed routes at bottom
+    return [...list].sort((a, b) => {
+      const aPub = a.is_publishable ? 1 : 0;
+      const bPub = b.is_publishable ? 1 : 0;
+      if (aPub !== bPub) {
+        return bPub - aPub; // 1 (publishable) before 0 (suppressed)
+      }
+      // Secondary sort: highest weight first, then route_id
+      if ((b.weight ?? 0) !== (a.weight ?? 0)) {
+        return (b.weight ?? 0) - (a.weight ?? 0);
+      }
+      return (a.route_id ?? 0) - (b.route_id ?? 0);
+    });
   }, [
     state.routeIndices,
     routeFilterCategory,
