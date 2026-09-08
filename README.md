@@ -86,6 +86,60 @@ Air passenger transport is one of the most volatile and mathematically challengi
 
 ---
 
+## 📸 Platform Interface & Live System Screenshots
+
+A visual walkthrough of the operational platform running live at [satiricalguru.github.io/Airfare-CPI](https://satiricalguru.github.io/Airfare-CPI/):
+
+### 1. ✈️ Executive Overview & Headline Airfare CPI
+> **Real-time Headline Index:** **`122.78`** (Base: August 2025 = 100), **MoM:** `+13.35%`, **YoY:** `+6.98%` across 25 DGCA-weighted trunk corridors with 5,827 validated flight observations in the current active index.
+<p align="center">
+  <img src="docs/assets/screenshots/01_executive_hero_overview.png" alt="Executive Dashboard Overview" width="100%" />
+</p>
+
+### 2. 🗺️ Calibrated Satellite Radar Map of India
+> **Bharat-Sat Telemetry:** Space-view basemap demarcating **16 primary airport hubs** (`DEL`, `BOM`, `BLR`, `HYD`, `CCU`, `MAA`, `AMD`, `PNQ`, `GOI`, `COK`, `JAI`, `LKO`, `PAT`, `GAU`, `SXR`, `IXZ`) across **19 state borders** with live geodesic flight arcs, golden corridor chips, and real-time corridor volume telemetry.
+<p align="center">
+  <img src="docs/assets/screenshots/02_india_satellite_radar_map.png" alt="India Satellite Radar Map" width="100%" />
+</p>
+
+### 3. 📈 DGCA 30-Day Empirical Back-Testing & MoSPI Benchmark
+> **Empirical Validation:** 31-day evaluation against official DGCA monthly domestic yields with **4.92% MAPE error** (comfortably below the 5% international threshold) and a **41-day decision lead time advantage** ahead of official NSO survey release.
+<p align="center">
+  <img src="docs/assets/screenshots/03_dgca_backtest_validation.png" alt="DGCA Empirical Backtest Validation" width="100%" />
+</p>
+
+### 4. 📊 Matched-Model Jevons Price Index Analytics
+> **Econometric Decomposition:** Pure price relative tracking over identical product specifications (Route × Carrier × Time Band × Horizon), neutralizing compositional churn, with 7D/1M/3M/6M/1Y time-series historical inspection and Laspeyres/Carli comparative benchmarks.
+<p align="center">
+  <img src="docs/assets/screenshots/04_price_index_trend_analytics.png" alt="Price Index Trend Analytics" width="100%" />
+</p>
+
+### 5. 🛡️ 15-Channel Scraper Fleet Health & Observability
+> **Multi-Portal Fleet Diagnostics:** Real-time operational status (**13 of 15 channels active**), latency monitoring (ms), 24h reliability percentages, and on-demand interactive live test probes with statutory AERA fee breakdown.
+<p align="center">
+  <img src="docs/assets/screenshots/07_scraper_fleet_health_grid.png" alt="Scraper Fleet Monitoring Grid" width="100%" />
+</p>
+
+### 6. ⏳ Advance-Purchase Booking Horizons ($T+1 \to T+45$)
+> **Dynamic Pricing Stratification:** Stratified booking horizons isolating the 2.25x emergency walkup surge ($T+1$) from the 0.89x advance leisure anchor ($T+45$), ensuring compositional mix shifts do not distort monetary inflation.
+<p align="center">
+  <img src="docs/assets/screenshots/05_booking_horizons_elasticity.png" alt="Booking Horizons Stratification" width="100%" />
+</p>
+
+### 7. 🛫 Monitored Corridors & Dynamic Route Scraper
+> **Route Basket Matrix:** Top 25 DGCA passenger trunk routes and 58 interstate feeder routes, with on-demand custom route scraping and state-to-state filtering.
+<p align="center">
+  <img src="docs/assets/screenshots/06_aviation_corridors_routes.png" alt="Aviation Corridors and Routes" width="100%" />
+</p>
+
+### 8. 🧠 AI Analyst Copilot (Google Gemini RAG)
+> **Domain-Grounded Intelligence:** Built-in AI assistant grounded directly in server database statistics, offering instant econometric analysis and inflation interpretation without API credential leakage.
+<p align="center">
+  <img src="docs/assets/screenshots/08_ai_analyst_copilot.png" alt="AI Analyst Copilot Drawer" width="100%" />
+</p>
+
+---
+
 ## 🏛️ System Architecture
 
 ```mermaid
@@ -431,4 +485,14 @@ Airfare-CPI/
 * **Statistical References:** **ILO/IMF Consumer Price Index Manual (2020)** & **DGCA India Monthly Reports**
 
 ---
-*Built with statistical rigor, high-performance architecture, and modern engineering by Team Sprint Zero.*
+
+<div align="center">
+  <br />
+  <img src="docs/assets/sih_logo.png" alt="Smart India Hackathon 2026" width="130" />
+  <br />
+  <h3>Smart India Hackathon 2026</h3>
+  <p><strong>Ministry of Statistics and Programme Implementation (MoSPI)</strong><br />
+  <em>Problem Statement SIH26056: Real-Time Airfare Consumer Price Index (CPI) Augmentation</em></p>
+  <p><em>Built with statistical rigor, high-performance architecture, and modern engineering by Team Sprint Zero.</em></p>
+</div>
+

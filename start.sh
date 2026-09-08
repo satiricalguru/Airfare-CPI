@@ -66,9 +66,11 @@ cleanup() {
     echo ""
     echo "🛬 Shutting down Airfare CPI services..."
     if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+        pkill -P "$BACKEND_PID" 2>/dev/null || true
         kill "$BACKEND_PID" 2>/dev/null || true
     fi
     if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        pkill -P "$FRONTEND_PID" 2>/dev/null || true
         kill "$FRONTEND_PID" 2>/dev/null || true
     fi
     echo "✅ All services stopped."
